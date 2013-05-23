@@ -3,7 +3,8 @@ module AR where
 
 data System = 
     System {
-        root            :: Component
+        root            :: Component,
+        functions       :: [(FunName,Function)]
     }
     
 data Component =
@@ -20,12 +21,12 @@ data Component =
     }
     
 data Port =
-    SenderReceiver [(FieldName,Type)]   |
+    SenderReceiver [(VarName,Type)]   |
     ClientServer [(OpName,Operation)]
     
 data Operation =
     Operation {
-        arguments       :: [(ArgName,Argument)],
+        arguments       :: [(VarName,Argument)],
         errors          :: [Int]
     }
     
@@ -47,10 +48,10 @@ type PortName   = String
 type CompName   = String
 type FieldName  = String
 type OpName     = String
-type ArgName    = String
 type TagName    = String
 type VarName    = String
 type TypeName   = String
+type FunName    = String
 
 --------------------------------------------------------------
 
@@ -69,6 +70,33 @@ data Event =
 
 data Runnable =
     Runnable {
-        
+        args            :: [(VarName,Argument)],
+        implementation  :: [Stmt]
     }
 
+data Stmt =
+    SBind Type VarName Expr     |
+    SAssign VarName Expr        |
+    SSend PortName [Expr]       |
+    SInvoke VarName PortName OpName [Expr]   |
+    SIf Expr [Stmt] [Stmt]      |
+    SWhile Expr [Stmt]
+    
+data Function =
+    Function {
+        params          :: [(VarName,Type)],
+        result          :: Type,
+        body            :: Expr
+    }
+    
+data Expr =
+    EVar VarName                |
+    ECall FunName [Expr]        |
+    EArray [Expr]               |
+    EIndex Expr Expr            |
+    EStruct [(FieldName,Expr)]  |
+    ESelect Expr FieldName      |
+    EInt Int                    |
+    EChar Char                  |
+    EIf Expr Expr Expr          |
+    ELet Type VarName Expr Expr
