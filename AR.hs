@@ -110,47 +110,47 @@ connections  = undefined
 
 runnables :: env -> CompName -> [Runnable]
 runnables    = undefined
+
 data Msg = Msg CompName PortName Arguments deriving Eq
 
-{-
-reduce ::
-  t1
-  -> ([(CompName, Behavior)], [Msg], [(CompName, CompName)])
-  -> [(t, [Msg], [(CompName, CompName)], Observation)]
--}
+type ComponentLinks = [(CompName, CompName)]
+type MsgPool = [Msg]
+type State = (Map CompName Behavior, MsgPool, ComponentLinks)
+
+reduce :: env -> State -> [(State, Observation)]
 reduce env (bhvs, msgs, links) = 
 
-    [ (update c next bhvs, Msg c' p' args : msgs, links, Tau)
+    [ ((update c next bhvs, Msg c' p' args : msgs, links), Tau)
     | (c,Sending p args next) <- Map.assocs bhvs
     , Qual c' p' <- connections env c p
     ] ++
     
-    [ (update c (run svars args) bhvs, delete (Msg c p args) msgs, links, Tau) 
+    [ ((update c (run svars args) bhvs, delete (Msg c p args) msgs, links), Tau) 
     | (c,Idling svars) <- Map.assocs bhvs
     , DataReceived p run <- runnables env c
     , Msg c1 p1 args <- msgs
     , c == c1, p == p1
     ] ++
     
-    [ (update c' (run svars args) bhvs, msgs, (c,c'):links, Tau) 
+    [ ((update c' (run svars args) bhvs, msgs, (c,c'):links), Tau) 
     | (c,Invoking p op args cont) <- Map.assocs bhvs
     , (c',Idling svars) <- Map.assocs bhvs
     , OperationInvoked p' op' run <- runnables env c'
     , Qual c' p' `elem` connections env c p
     ] ++
     
-    [ (update c (cont resp) (update c' next bhvs), msgs, delete (c,c') links, Tau) 
+    [ ((update c (cont resp) (update c' next bhvs), msgs, delete (c,c') links), Tau) 
     | (c,Invoking p op args cont) <- Map.assocs bhvs
     , (c',Responding resp next) <- Map.assocs bhvs
     , (c,c') `elem` links
     ] ++
     
-    [ (update c next bhvs, msgs, links, Send (Ext p') args) 
+    [ ((update c next bhvs, msgs, links), Send (Ext p') args) 
     | (c,Sending p args next) <- Map.assocs bhvs
     , Ext p' <- connections env c p
     ] ++
 
-    [ (update c (Invoking p op args cont) bhvs, msgs, links, Invoke (Ext p') op args) 
+    [ ((update c (Invoking p op args cont) bhvs, msgs, links), Invoke (Ext p') op args) 
     | (c,Invoking p op args cont) <- Map.assocs bhvs
     , Ext p' <- connections env c p
     ] ++
