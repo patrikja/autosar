@@ -103,6 +103,45 @@ data Observation =
     |
     Tau
 
+update = undefined
+connections = undefined
+runnables = undefined
+data Msg = Msg CompName PortName Arguments deriving Eq
+
+reduce env (bhvs, msgs, links) = 
+    [ (update c next bhvs, Msg c' p' args : msgs, links, Tau) | 
+        (c,Sending p args next) <- bhvs,
+        Qual c' p' <- connections env c p
+    ] ++
+    [ (update c (run svars args) bhvs, delete (Msg c p args) msgs, links, Tau) |
+        (c,Idling svars) <- bhvs,
+        DataReceived p run <- runnables env c,
+        Msg c1 p1 args <- msgs,
+        c == c1, p == p1
+    ] ++
+    
+    [ (update c' (run svars args) bhvs, msgs, (c,c'):links, Tau) |
+        (c,Invoking p op args cont) <- bhvs,
+        (c',Idling svars) <- bhvs,
+        OperationInvoked p' op' run <- runnables env c',
+        Qual c' p' `elem` connections env c p
+    ] ++
+    [ (update c (cont resp) (update c' next bhvs), msgs, delete (c,c') links, Tau) |
+      (c,Invoking p op args cont) <- bhvs,
+      (c',Responding resp next) <- bhvs,
+      (c,c') `elem` links
+    ] ++
+    
+    [ (update c next, msgs, links, Send (Ext p') args) |
+        (c,Sending p args next) <- bhvs,
+        Ext p' <- connections env c p
+    ] ++
+    [ (update c (Invoking p op args cont) bhvs, msgs, links, Invoke (Ext p') op args) |
+        (c,Invoking p op args cont) <- bhvs,
+        Ext p' <- connections env c p
+    ] ++
+    [ ]
+
 --------------------------------------------------------------
             
 validComp partial (Atomic iface sig runns)
@@ -134,6 +173,7 @@ validConn ports (r,r')      = case (lookup r ports, lookup r' ports) of
                                 _ -> False
 
 
+------------------------------------------------------------------
 
 data Type =
     TInt                            |
