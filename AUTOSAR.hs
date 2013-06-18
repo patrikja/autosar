@@ -316,42 +316,55 @@ data RTEEvent_ = RTEEvent {
 
 data RTEEvent =
     AsynchronousServerCallReturnsEvent {
+        rteEvent                    :: RTEEvent_,
         eventSource_1               :: AsynchronousServerCallResultPoint    -- ref
     } |
     DataSendCompletedEvent {
+        rteEvent                    :: RTEEvent_,
         eventSource_2               :: VariableAccess                       -- ref
     } |
     DataWriteCompletedEvent {
+        rteEvent                    :: RTEEvent_,
         eventSource_3               :: VariableAccess                       -- ref
     } |
     DataReceivedEvent {
+        rteEvent                    :: RTEEvent_,
         data_1                      :: Maybe VariableDataPrototype          -- iref
     } |
     DataReceiveErrorEvent {
+        rteEvent                    :: RTEEvent_,
         data_2                      :: Maybe VariableDataPrototype          -- iref
     } |
     OperationInvokedEvent {
+        rteEvent                    :: RTEEvent_,
         operation_2                 :: Maybe ClientServerOperation          -- iref
     } |
     TimingEvent {
+        rteEvent                    :: RTEEvent_,
         period                      :: TimeValue
     } |
     BackGroundEvent {
+        rteEvent                    :: RTEEvent_
     } |
     SwcModeSwitchEvent {
+        rteEvent                    :: RTEEvent_,
         activation                  :: ModeActivationKind,
         mode                        :: (ModeDeclaration, Maybe ModeDeclaration)
     } |
     ModeSwitchAckEvent {
+        rteEvent                    :: RTEEvent_,
         eventSource_1               :: ModeSwitchPoint
     } |
     ExternalTriggerOccurredEvent {
+        rteEvent                    :: RTEEvent_,
         trigger_2                   :: Maybe Trigger
     } |
     InternalTriggerOccurredEvent {
+        rteEvent                    :: RTEEvent_,
         eventSource_4               :: InternalTriggeringPoint
     } |
     InitEvent {
+        rteEvent                    :: RTEEvent_
     }
 
 data ModeActivationKind             = OnEntry | OnExit | OnTransition
