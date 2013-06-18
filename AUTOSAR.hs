@@ -387,7 +387,7 @@ data RunnableEntity = RunnableEntity {
         executableEntity                    :: ExecutableEntity,
         argument_2                          :: [RunnableEntityArgument],    -- client/server only
         asynchronousServerCallResultPoint   :: [AsynchronousServerCallResultPoint],
-        canBeInvokedConcurrently            :: Bool,
+        canBeInvokedConcurrently            :: Bool, -- ^ concurrently with itself
         dataReadAccess                      :: [VariableAccess],    -- cat 1 only
         dataReceivePointByArgument          :: [VariableAccess],    -- send/rcv only
         dataReceivePointByValue             :: [VariableAccess],    -- send/rcv only

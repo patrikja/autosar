@@ -39,7 +39,7 @@ inverse (Provided p)    = Required p
 inverse (Required p)    = Provided p
 
 data Operation =
-    Op (Map VarName ArgType) [Int]  -- a product (tuple) of arguments, set of error codes
+    Op (Map VarName ArgType) [Int]  -- ^ a product (tuple) of arguments, set of error codes
 
 instance Eq Operation where
     Op args errs == Op args' errs'  = args == args' && errs == errs'
@@ -78,6 +78,12 @@ data Runnable =
   | Timing           Double           (Statevars -> Behavior)
     -- ^ repeated execution
 
+{- There are different classes of runnables. This type is not covering
+all of them. For example, in the full AUTOSAR standard, a runnable
+could have a set of waitPoints, but this simplified description
+assumes this set is empty.  -}
+
+
 -- | Observable effect of a |Runnable|
 data Behavior = 
     Sending   PortName Arguments Behavior 
@@ -85,7 +91,7 @@ data Behavior =
   | Invoking  PortName OpName Arguments (Response -> Behavior) 
     -- ^ Invoke operation (must check "port matching")
   | Responding Response Behavior
-    -- ^ Act. on a call
+    -- ^ Act. on a call (might be better to merge with Idling)
   | Idling Statevars
   | Crashed
   | Comp (Map CompName Behavior)
@@ -96,49 +102,56 @@ data Observation =
   | Respond Response
   | Tau
 
--- update :: k -> v -> Map k v -> Map k v
+update :: k -> v -> Map k v -> Map k v
 update       = undefined
 
--- connections :: Component -> [Connector]
+connections :: env -> CompName -> PortName -> [PortRef]
 connections  = undefined
 
+runnables :: env -> CompName -> [Runnable]
 runnables    = undefined
 data Msg = Msg CompName PortName Arguments deriving Eq
 
+{-
+reduce ::
+  t1
+  -> ([(CompName, Behavior)], [Msg], [(CompName, CompName)])
+  -> [(t, [Msg], [(CompName, CompName)], Observation)]
+-}
 reduce env (bhvs, msgs, links) = 
 
     [ (update c next bhvs, Msg c' p' args : msgs, links, Tau)
-    | (c,Sending p args next) <- bhvs
+    | (c,Sending p args next) <- Map.assocs bhvs
     , Qual c' p' <- connections env c p
     ] ++
     
     [ (update c (run svars args) bhvs, delete (Msg c p args) msgs, links, Tau) 
-    | (c,Idling svars) <- bhvs
+    | (c,Idling svars) <- Map.assocs bhvs
     , DataReceived p run <- runnables env c
     , Msg c1 p1 args <- msgs
     , c == c1, p == p1
     ] ++
     
     [ (update c' (run svars args) bhvs, msgs, (c,c'):links, Tau) 
-    | (c,Invoking p op args cont) <- bhvs
-    , (c',Idling svars) <- bhvs
+    | (c,Invoking p op args cont) <- Map.assocs bhvs
+    , (c',Idling svars) <- Map.assocs bhvs
     , OperationInvoked p' op' run <- runnables env c'
     , Qual c' p' `elem` connections env c p
     ] ++
     
     [ (update c (cont resp) (update c' next bhvs), msgs, delete (c,c') links, Tau) 
-    | (c,Invoking p op args cont) <- bhvs
-    , (c',Responding resp next) <- bhvs
+    | (c,Invoking p op args cont) <- Map.assocs bhvs
+    , (c',Responding resp next) <- Map.assocs bhvs
     , (c,c') `elem` links
     ] ++
     
-    [ (update c next, msgs, links, Send (Ext p') args) 
-    | (c,Sending p args next) <- bhvs
+    [ (update c next bhvs, msgs, links, Send (Ext p') args) 
+    | (c,Sending p args next) <- Map.assocs bhvs
     , Ext p' <- connections env c p
     ] ++
 
     [ (update c (Invoking p op args cont) bhvs, msgs, links, Invoke (Ext p') op args) 
-    | (c,Invoking p op args cont) <- bhvs
+    | (c,Invoking p op args cont) <- Map.assocs bhvs
     , Ext p' <- connections env c p
     ] ++
 
