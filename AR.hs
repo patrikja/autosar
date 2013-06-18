@@ -114,7 +114,10 @@ runnables    = undefined
 data Msg = Msg CompName PortName Arguments deriving Eq
 
 type ComponentLinks = [(CompName, CompName)]
-type MsgPool = [Msg]
+
+-- | perhaps a queue or at least timestamped messages
+type MsgPool = [Msg] 
+
 type State = (Map CompName Behavior, MsgPool, ComponentLinks)
 
 reduce :: env -> State -> [(State, Observation)]
@@ -218,12 +221,15 @@ data Value =
   | VUnion TagName Value
     deriving Eq
 
-hasType TInt (VInt _)               = True
-hasType TBool (VBool _)             = True
-hasType TChar (VChar _)             = True
-hasType (TArray t) (VArray vs)      = all (hasType t) vs
-hasType (TStruct ts) (VStruct fs)   = unique (dom fs) && dom ts `equal` dom fs &&
-                                      and [ hasTypeIn ts f v | (f,v) <- Map.assocs fs ]
-hasType (TUnion ts) (VUnion tag v)  = hasTypeIn ts tag v
+hasType TInt           (VInt _)        = True
+hasType TBool          (VBool _)       = True
+hasType TChar          (VChar _)       = True
+hasType (TArray t)     (VArray vs)     = all (hasType t) vs
+hasType (TStruct ts)   (VStruct fs)    = unique (dom fs) && dom ts `equal` dom fs &&
+                                         and [ hasTypeIn ts f v | (f,v) <- Map.assocs fs ]
+hasType (TUnion ts)    (VUnion tag v)  = hasTypeIn ts tag v
 
-hasTypeIn ts k v                    = case Map.lookup k ts of Just t -> hasType t v; _ -> False
+hasTypeIn ts k v = case Map.lookup k ts of 
+                     Just t  -> hasType t v; 
+                     _       -> False
+
