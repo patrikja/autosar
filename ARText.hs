@@ -3,7 +3,7 @@ module ARText where
 import Data.Map
 
 data Package        = Package {
-                            packagename     :: [Name],
+                            packagename     :: QualName,
                             imports         :: [Import],
                             typedefsApp     :: Map TypeName Type,
                             typedefsImpl    :: Map TypeName Type,
@@ -12,7 +12,8 @@ data Package        = Package {
                             constants       :: Map ConstName Constant,
                             interfaces      :: Map IfaceName Interface,
                             components      :: Map CompName Component,
-                            modegroups      :: Map GroupName ModeGroup
+                            modegroups      :: Map GroupName ModeGroup,
+                            compositions    :: Map CompName Composition
                         }
 
 type Name           = String
@@ -22,15 +23,29 @@ type ConstrName     = String
 type ConstName      = String
 type IfaceName      = String
 type CompName       = String
+type InstName       = String
+type ProtName       = String
 type GroupName      = String
+type ModeName       = String
 type PortName       = String
 type ErrName        = String
 type OpName         = String
 type ElemName       = String
 type VarName        = String
+type FieldName      = String
+type EnumName       = String
+type ParName        = String
+type ExclName       = String
+type RunName        = String
+type ShortName      = String
+type ParNameOrStar  = String
+type ElemNameOrStar = String
+type OpNameOrStar   = String
 
-data Import         = Import [Name] Name
-                    | ImportAll [Name]
+type QualName       = [Name]
+
+data Import         = Import QualName
+                    | ImportAll QualName
 
 -- Types --------------------------------------------------------------------------------
 
@@ -39,8 +54,8 @@ data Type           = TBool     InvalidValue Extends
                     | TReal     Min Max Encoding AllowNaN Unit InvalidValue Extends ConstraintRef
                     | TString   Length Encoding InvalidValue
                     | TArray    TypeName Int
-                    | TRecord   (Map Name TypeName)
-                    | TEnum     Min Max (Map Name (Maybe Int))
+                    | TRecord   (Map FieldName TypeName)
+                    | TEnum     Min Max (Map EnumName (Maybe Int))
                     | TFixed    Slope Bias Min Max Unit ConstraintRef InvalidValue Extends
 
 data Min            = Min Value Interval
@@ -53,7 +68,7 @@ data Interval       = Closed
                     | Open 
                     | Infinite
 
-data Unit           = Unit [Name]
+data Unit           = Unit QualName
                     | NoUnit
 
 data ConstraintRef  = ConstraintRef ConstrName
@@ -62,7 +77,7 @@ data ConstraintRef  = ConstraintRef ConstrName
 data InvalidValue   = InvalidValue Value
                     | NoInvalid
 
-data Extends        = Extends [Name]
+data Extends        = Extends QualName
                     | NoExtends
 
 data Encoding       = EncodingDouble
@@ -101,8 +116,8 @@ data Value          = VBool     Bool
                     | VReal     Double
                     | VString   String
                     | VArray    TypeName ArrayValue
-                    | VRecord   TypeName (Map Name Value)
-                    | VEnum     Name
+                    | VRecord   TypeName (Map FieldName Value)
+                    | VEnum     EnumName
                     | VRef      ConstName
 
 data ArrayValue     = Init      [Value]
@@ -112,8 +127,8 @@ data ArrayValue     = Init      [Value]
 
 data Interface      = SenderReceiver    Service (Map ElemName Data)
                     | ClientServer      Service (Map ErrName Int) (Map OpName Operation)
-                    | Param             Service (Map Name Param)
-                    | ModeSwitch        Service (Map Name GroupName)
+                    | Param             Service (Map ParName Param)
+                    | ModeSwitch        Service (Map ProtName GroupName)
 
 data Service        = IsService
                     | NotService
@@ -126,7 +141,7 @@ data Queued         = Queued
 data InitValue      = InitValue Value
                     | NoInitValue
                     
-data Operation      = Operation [ErrName] (Map Name Argument)
+data Operation      = Operation [ErrName] (Map ParName Argument)
 
 data Argument       = In        TypeName Policy
                     | InOut     TypeName Policy
@@ -145,20 +160,13 @@ data Component      = Application       (Map PortName Port) Behavior Implementat
                     | SensorActuator    (Map PortName Port) Behavior Implementation Hw
                     | Service           (Map PortName Port)
                     | Parameter         (Map PortName Port)
-                    | Composition       (Map PortName Port) (Map Name CompPrototype) [Connector]
 
 data Port           = SenderProvides    IfaceName (Map ElemName ComSpecS)
                     | ReceiverRequires  IfaceName (Map ElemName ComSpecR)
                     | ClientRequires    IfaceName (Map OpName ComSpec0)
                     | ServerProvides    IfaceName (Map OpName ComSpec1)
                     | ParamProvides     IfaceName
-                    | ParamRequires     IfaceName [(Name,PortName)]
-                    | DelegateProvides  IfaceName [(Name,PortName)]
-
-data CompPrototype  = Prototype CompName
-
-data Connector      = Connect           Name PortName Name PortName
-                    | AutoConnect       Name Name
+                    | ParamRequires     IfaceName
 
 data ComSpecS       = QueuedComSpecS    CanInvalidate InitValue E2EProtection OutOfRange
                     | UnQueuedComSpecS  E2EProtection OutOfRange
@@ -199,19 +207,19 @@ data EnableUpdate   = EnableUpdate Bool
 data NeverReceived  = HandleNeverReceived
                     | NoHandleNeverReceived
 
-data Hw             = Hw [Name]
+data Hw             = Hw QualName
 
 data Behavior       = InternalBehavior {
                             supportsMultipleInstantiation   :: Bool,
                             behaviorName                    :: Name,
                             forComponent                    :: CompName,
                             dataTypeMappings                :: [MapName],
-                            exclusiveAreas                  :: [Name],
+                            exclusiveAreas                  :: [ExclName],
                             interRunnableVariables          :: Map VarName Variable,
-                            calibrationParams               :: Map Name CalParam,
+                            calibrationParams               :: Map ParName CalParam,
                             perInstanceMemories             :: Map Name PerInstMem,
                             portAPIOptions                  :: [PortAPIOption],
-                            runnables                       :: Map Name Runnable
+                            runnables                       :: Map RunName Runnable
                         }
                     | NoInternalBehavior
                             
@@ -236,8 +244,8 @@ data TakeAddress    = EnableTakeAddress
 data Runnable       = Runnable {
                             concurrent              :: Bool,
                             minimumStartInterval    :: Double,
-                            inExclusiveAreas        :: [Name],
-                            usesExclusiveAreas      :: [Name],
+                            inExclusiveAreas        :: [ExclName],
+                            usesExclusiveAreas      :: [ExclName],
                             symbol                  :: Maybe String,
                             readVariables           :: [VarName],
                             writtenVariables        :: [VarName],
@@ -253,31 +261,31 @@ data Runnable       = Runnable {
                             waitPoints              :: [WaitPt]
                         }
 
-data Event          = DataSendCompletedEvent Name As Dis
+data Event          = DataSendCompletedEvent ShortName As Dis
                     | DataReceivedEvent PortName ElemName As Dis
                     | ReceiveErrorEvent PortName ElemName As Dis
                     | TimingEvent Double As Dis
-                    | ModeSwitchEvent Activation PortName GroupName Name As Dis
+                    | ModeSwitchEvent Activation PortName GroupName ModeName As Dis
                     | OperationInvokedEvent PortName OpName As Dis
                     
-data ParamAccess    = ParameterAccess Name As
-                    | ParamPortAccess PortName Name As
+data ParamAccess    = ParameterAccess ParName As
+                    | ParamPortAccess PortName ParNameOrStar As
 
-data DataRdAccess   = DataReadAccess PortName ElemName As
+data DataRdAccess   = DataReadAccess PortName ElemNameOrStar As
 
-data DataRcvPt      = DataReceivePoint PortName ElemName 
+data DataRcvPt      = DataReceivePoint PortName ElemNameOrStar 
 
-data DataSndPt      = DataSendPoint PortName ElemName As
+data DataSndPt      = DataSendPoint PortName ElemNameOrStar As
 
-data DataWrAccess   = DataWriteAccess PortName ElemName As
+data DataWrAccess   = DataWriteAccess PortName ElemNameOrStar As
 
-data ModeSwitchPt   = ModeSwitchPoint PortName Name As
+data ModeSwitchPt   = ModeSwitchPoint PortName ProtName As
 
 data ModeAccessPt   = ModeAccessPoint Activation PortName GroupName As
 
-data ServerCallPt   = ServerCallPoint SyncOrAsync TimeOut PortName OpName As
+data ServerCallPt   = ServerCallPoint SyncOrAsync TimeOut PortName OpNameOrStar As
 
-data WaitPt         = WaitPoint Name TimeOut [Name]
+data WaitPt         = WaitPoint ShortName TimeOut [ShortName]
 
 data SyncOrAsync    = Synchronous
                     | Asynchronous
@@ -285,10 +293,10 @@ data SyncOrAsync    = Synchronous
 data Activation     = Entry
                     | Exit
 
-data As             = As Name
+data As             = As ShortName
                     | NoName
 
-data Dis            = DisabledFor PortName GroupName Name
+data Dis            = DisabledFor PortName GroupName ModeName
                     | NoDis
                     
 data Implementation = Implementation {
@@ -323,8 +331,25 @@ data Compiler       = Compiler {
                         
 -- ModeGroups ------------------------------------------------------------------------------
 
-data ModeGroup      = ModeGroup Initial [Name]
+data ModeGroup      = ModeGroup Initial [ModeName]
 
-data Initial        = Initial Name
+data Initial        = Initial ModeName
                     | NoInitial
+
+-- Compositions ----------------------------------------------------------------------------
+
+data Composition    = Composition {
+                            ports           :: Map PortName Port,
+                            delegations     :: Map PortName Delegation,
+                            subcomponents   :: Map InstName CompPrototype,
+                            connectors      :: [Connector]
+                        }
+                        
+data CompPrototype  = Prototype CompName
+
+data Delegation     = DelegateRequires  IfaceName [(InstName,PortName)]
+                    | DelegateProvides  IfaceName [(InstName,PortName)]
+
+data Connector      = Connect           (InstName,PortName) (InstName,PortName)
+                    | AutoConnect       InstName InstName
 
