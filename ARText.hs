@@ -13,7 +13,8 @@ data Package        = Package {
                             interfaces      :: Map IfaceName Interface,
                             components      :: Map CompName Component,
                             modegroups      :: Map GroupName ModeGroup,
-                            compositions    :: Map CompName Composition
+                            compositions    :: Map CompName Composition,
+                            root            :: CompName
                         }
 
 type Name           = String
@@ -119,9 +120,11 @@ data Value          = VBool     Bool
                     | VRecord   TypeName (Map FieldName Value)
                     | VEnum     EnumName
                     | VRef      ConstName
+                    deriving (Eq,Ord)
 
 data ArrayValue     = Init      [Value]
                     | InitAll   Value
+                    deriving (Eq,Ord)
 
 -- Interfaces ----------------------------------------------------------------------------
 
@@ -233,7 +236,7 @@ data CalParam       = InstanceParam     TypeName String
                     
 data PerInstMem     = PerInstanceMemory String String
                     
-data PortAPIOption  = PortAPIOption IndirectAPI TakeAddress 
+data PortAPIOption  = PortAPIOption IndirectAPI TakeAddress PortName [(Type,Value)]
 
 data IndirectAPI    = IndirectAPI
                     | NoIndirectAPI
@@ -261,19 +264,38 @@ data Runnable       = Runnable {
                             waitPoints              :: [WaitPt]
                         }
 
-data Event          = DataSendCompletedEvent ShortName As Dis
-                    | DataReceivedEvent PortName ElemName As Dis
-                    | ReceiveErrorEvent PortName ElemName As Dis
-                    | TimingEvent Double As Dis
-                    | ModeSwitchEvent Activation PortName GroupName ModeName As Dis
+data Event          = DataReceivedEvent PortName ElemName As Dis
                     | OperationInvokedEvent PortName OpName As Dis
+                    | ModeSwitchEvent Activation PortName GroupName ModeName As Dis
+                    
+                    | InitEvent
+                    | BackgroundEvent
+                    | TimingEvent Double As Dis
+
+                    | DataSendCompletedEvent ShortName As Dis
+                    | DataWriteCompletedEvent PortName ElemName
+                    | AsynchronousServerCallReturnsEvent ServerCallPt
+                    | ModeSwitchAckEvent PortName GroupName
+
+                    | ReceiveErrorEvent PortName ElemName As Dis
+                    | ModeManagerErrorEvent
+
+                    | ExternalTriggerOccurredEvent
+                    | InternalTriggerOccurredEvent
+{-
+data WPEvent        = DataSendCompleted                 -- Rte_Feedback(PortName,ElemName)
+                    | DataReceived                      -- Rte_Receive(PortName,ElemName,...)
+                    | AsynchronousServerCallReturns     -- Rte_Result(PortName,OpName,...)
+                    | ModeSwitchAck                     -- Rte_SwitchAck(PortName,GroupName)
+                    
+-}
                     
 data ParamAccess    = ParameterAccess ParName As
                     | ParamPortAccess PortName ParNameOrStar As
 
 data DataRdAccess   = DataReadAccess PortName ElemNameOrStar As
 
-data DataRcvPt      = DataReceivePoint PortName ElemNameOrStar 
+data DataRcvPt      = DataReceivePoint PortName ElemNameOrStar As
 
 data DataSndPt      = DataSendPoint PortName ElemNameOrStar As
 
@@ -339,9 +361,8 @@ data Initial        = Initial ModeName
 -- Compositions ----------------------------------------------------------------------------
 
 data Composition    = Composition {
-                            ports           :: Map PortName Port,
-                            delegations     :: Map PortName Delegation,
                             subcomponents   :: Map InstName CompPrototype,
+                            delegations     :: Map PortName Delegation,
                             connectors      :: [Connector]
                         }
                         
