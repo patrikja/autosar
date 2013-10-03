@@ -17,31 +17,31 @@ data Package        = Package {
                             root            :: CompName
                         }
 
-type Name           = String
-type TypeName       = String
-type MapName        = String
-type ConstrName     = String
-type ConstName      = String
-type IfaceName      = String
-type CompName       = String
-type InstName       = String
-type ProtName       = String
-type GroupName      = String
-type ModeName       = String
-type PortName       = String
-type ErrName        = String
-type OpName         = String
-type ElemName       = String
-type VarName        = String
-type FieldName      = String
-type EnumName       = String
-type ParName        = String
-type ExclName       = String
-type RunName        = String
-type ShortName      = String
-type ParNameOrStar  = String
-type ElemNameOrStar = String
-type OpNameOrStar   = String
+type Name           = Int
+type TypeName       = Name
+type MapName        = Name
+type ConstrName     = Name
+type ConstName      = Name
+type IfaceName      = Name
+type CompName       = Name
+type InstName       = Name
+type ProtName       = Name
+type GroupName      = Name
+type ModeName       = Name
+type PortName       = Name
+type ErrName        = Name
+type OpName         = Name
+type ElemName       = Name
+type VarName        = Name
+type FieldName      = Name
+type EnumName       = Name
+type ParName        = Name
+type ExclName       = Name
+type RunName        = Name
+type ShortName      = Name
+type ParNameOrStar  = Name
+type ElemNameOrStar = Name
+type OpNameOrStar   = Name
 
 type QualName       = [Name]
 
@@ -112,19 +112,21 @@ data PhysInt        = Physical
 
 data Constant       = Const     TypeName Value
                     
-data Value          = VBool     Bool
+data Value          = Void                      --
+                    | VBool     Bool
                     | VInt      Int
                     | VReal     Double
                     | VString   String
-                    | VArray    TypeName ArrayValue
+                    | VArray    [Value]
+--                    | VArray    TypeName ArrayValue
                     | VRecord   TypeName (Map FieldName Value)
                     | VEnum     EnumName
                     | VRef      ConstName
-                    deriving (Eq,Ord)
+                    deriving (Eq,Ord,Show)
 
 data ArrayValue     = Init      [Value]
                     | InitAll   Value
-                    deriving (Eq,Ord)
+                    deriving (Eq,Ord,Show)
 
 -- Interfaces ----------------------------------------------------------------------------
 
@@ -370,7 +372,9 @@ data CompPrototype  = Prototype CompName
 
 data Delegation     = DelegateRequires  IfaceName [(InstName,PortName)]
                     | DelegateProvides  IfaceName [(InstName,PortName)]
+                    deriving (Eq)
 
 data Connector      = Connect           (InstName,PortName) (InstName,PortName)
                     | AutoConnect       InstName InstName
+                    deriving (Eq)
 
