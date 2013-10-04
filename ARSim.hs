@@ -11,6 +11,8 @@ module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
               simulation) where
 
+import Control.Concurrent
+import Data.List
 
 newtype RunM a          = RunM (Con a -> Code)
 
@@ -34,7 +36,15 @@ data Value      = Void
                 | VReal     Double
                 | VString   String
                 | VArray    [Value]
-                deriving (Eq,Ord,Show)
+                deriving (Eq,Ord)
+
+instance Show Value where
+        show (Void)             = "()"
+        show (VBool v)          = show v
+        show (VInt v)           = show v
+        show (VReal v)          = show v
+        show (VString v)        = show v
+        show (VArray v)         = show v
 
 class Valuable a where
         toVal                   :: a -> Value
@@ -125,9 +135,9 @@ requiredOperation       :: AR c (RO a b c)
 providedOperation       :: AR c (PO a b c)
 interRunnableVariable   :: Valuable a => a -> AR c (IV a c)
 exclusiveArea           :: AR c (EX c)
-runnable                :: Invocation -> [Trigger c] -> RunM (StdRet ()) -> AR c ()
+runnable                :: Invocation -> [Trigger c] -> RunM a -> AR c ()
 serverRunnable          :: (Valuable a, Valuable b) => 
-                           Invocation -> [PO a b c] -> (a -> RunM (StdRet b)) -> AR c ()
+                           Invocation -> [PO a b c] -> (a -> RunM b) -> AR c ()
 
 component               :: (forall c. AR c a) -> AR c a
 
@@ -221,10 +231,10 @@ data Code       = Send ElemName Value Cont
                 | Exit ExclName Cont
                 | Terminate StdReturn
                 
-type Con a              = a -> Code
+instance Show Code where
+        show (Send a v _)       = spacesep ["Send", show a, show v]
 
-runM                    :: (Valuable a, Valuable b) => (a -> RunM (StdRet b)) -> Value -> Code
-runM m v                = let RunM f = m (fromVal v) in f (\r -> Terminate (toStd r))
+type Con a              = a -> Code
 
 
 rte_send (PQ (_,e)) v       = RunM (\cont -> Send e (toVal v) (cont . fromStd))
@@ -309,16 +319,16 @@ component m             = do s <- get
 
 runnable inv tr m       = do a <- newName
                              mapM (addProc . Timer a 0.0) ts
-                             addProc (Run a 0.0 act 0 (static inv ns (runM mfun)))
+                             addProc (Run a 0.0 act 0 (static inv ns cont))
         where ns        = [ n | ReceiveE (RE n) <- tr ] ++ [ n | ReceiveQ (RQ n) <- tr ]
               ts        = [ t | Timed t <- tr ]
               act       = if null [ Init | Init <- tr ] then Idle else Pending
-              mfun      :: () -> RunM (StdRet ())
-              mfun _    = m
+              cont _    = let RunM f = m in f (\_ -> Terminate void)
 
 serverRunnable inv tr m = do a <- newName
-                             addProc (Run a 0.0 (Serving [] []) 0 (static inv ns (runM m)))
+                             addProc (Run a 0.0 (Serving [] []) 0 (static inv ns cont))
         where ns        = [ n | PO n <- tr ]
+              cont v    = let RunM f = m (fromVal v) in f (\r -> Terminate (Ok (toVal r)))
 
 requiredDataElement     = do a <- newName
                              addProc (DElem a False NO_DATA)
@@ -393,6 +403,19 @@ data Proc       = Run   (InstName, RunName) Time Act Int Static
                 | DElem (InstName, ElemName) Bool StdReturn
                 | Op    (InstName, OpName) [Value]
 
+spacesep        = concat . intersperse " "
+
+instance Show Proc where
+        show (Run a t act n s)  = spacesep ["Run", show a, show t, show act, show n]
+        show (RInst a c ex co)  = spacesep ["RInst", show a, show c, show ex, show co]
+        show (Excl a v)         = spacesep ["Excl", show a, show v]
+        show (Irv a v)          = spacesep ["Irv", show a, show v]
+        show (Timer a v t)      = spacesep ["Timer", show v, show t]
+        show (QElem a n vs)     = spacesep ["QElem", show a, show n, show vs]
+        show (DElem a v r)      = spacesep ["DElem", show a, show v, show r]
+        show (Op a vs)          = spacesep ["Op", show a, show vs]
+
+
 data Label      = ENTER (InstName, ExclName)
                 | EXIT  (InstName, ExclName)
                 | IRVR  (InstName, VarName) StdReturn
@@ -413,19 +436,29 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
-simulation n m          = do putStr trace 
+simulation n m          = putTrace trace 
   where (_,s)           = runAR m startState 
         trace           = simulate (scheduler n) (connected (conns s)) (procs s)
+
+putTrace []             = return ()
+putTrace (Left ps : ls) = do putStr ("## Dump: " ++ show ps ++ "\n")
+                             putTrace ls
+putTrace (Right l@(DELTA t) : ls)
+  | t > 0.1             = do putStr (show l ++ "\n")
+                             threadDelay (round (t*1000000))
+                             putTrace ls
+putTrace (Right l:ls)   = do putStr (show l ++ "\n")
+                             putTrace ls
 
 type Scheduler          = [(Label,[Proc])] -> (Label,[Proc])
 
 scheduler :: Int -> Scheduler
 scheduler 0             = head
 
-simulate :: Scheduler -> Connected -> [Proc] -> String
+simulate :: Scheduler -> Connected -> [Proc] -> [Either [Proc] Label]
 simulate sched conn procs     
-  | null next           = ""
-  | otherwise           = show l ++ "\n" ++ simulate sched conn procs'
+  | null next           = [Left procs]
+  | otherwise           = Right l : simulate sched conn procs'
   where next            = step conn procs
         (l,procs')      = sched next
 
@@ -520,7 +553,8 @@ may_hear conn (RES a res)    (Op b [])         | a==b           = RES a (max res
 may_hear conn (RET a v)      (Op b vs)         | a==b           = RET a v
 may_hear conn (TERM a)       (Run b _ _ _ _)   | a==b           = TERM a
 may_hear conn (TICK a)       (Run b _ _ _ _)   | a==b           = TICK a
-may_hear conn (DELTA d)      (Run _ t _ _ _)   | d <= t         = DELTA d
+may_hear conn (DELTA d)      (Run _ t _ _ _)   | t == 0         = DELTA d
+                                               | d <= t         = DELTA d
                                                | d > t          = PASS
 may_hear conn (DELTA d)      (Timer _ t _)     | d <= t         = DELTA d
                                                | d > t          = PASS
@@ -551,6 +585,7 @@ hear conn (RES a _)     (Op b [])          | a==b               = Op b []
 hear conn (RET a v)     (Op b vs)          | a==b               = Op b (vs++[v])
 hear conn (TERM a)      (Run b t act n s)  | a==b               = Run b t act (n-1) s
 hear conn (TICK a)      (Run b t _ n s)    | a==b               = Run b t Pending n s
+hear conn (DELTA d)     (Run b 0.0 act n s)                     = Run b 0.0 act n s
 hear conn (DELTA d)     (Run b t act n s)                       = Run b (t-d) act n s
 hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) t0
 hear conn label         proc                                    = proc
