@@ -5,7 +5,7 @@ module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
               rte_send, rte_receive, rte_write, rte_read, rte_isUpdated, rte_invalidate, 
               rte_call, rte_callAsync, rte_result, rte_irvWrite, rte_irvRead, rte_enter, rte_exit,
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
-              requiredDataElement, providedDataElement, requiredQueuedElement, providedQueuedElement,
+              requiredDataElement, providedDataElement, requiredQueueElement, providedQueueElement,
               requiredOperation, providedOperation, interRunnableVariable, exclusiveArea,
               Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
@@ -82,8 +82,8 @@ instance Functor StdRet where
         fmap f TIMEOUT           = TIMEOUT
         fmap f IN_EXCLUSIVE_AREA = IN_EXCLUSIVE_AREA
 
-rte_send        :: Valuable a => PE a c -> a -> RunM (StdRet ())
-rte_receive     :: Valuable a => RE a c -> RunM (StdRet a)
+rte_send        :: Valuable a => PQ a c -> a -> RunM (StdRet ())
+rte_receive     :: Valuable a => RQ a c -> RunM (StdRet a)
 rte_write       :: Valuable a => PE a c -> a -> RunM (StdRet ())
 rte_read        :: Valuable a => RE a c -> RunM (StdRet a)
 rte_isUpdated   :: Valuable a => RE a c -> RunM (StdRet Bool)
@@ -110,6 +110,7 @@ type Time               = Double
 data Trigger c          = forall a. ReceiveE (RE a c)
                         | forall a. ReceiveQ (RQ a c)
                         | Timed Time
+                        | Init
 
 data Invocation         = Concurrent
                         | MinInterval Time
@@ -118,8 +119,8 @@ data Invocation         = Concurrent
 
 requiredDataElement     :: AR c (RE a c)
 providedDataElement     :: AR c (PE a c)
-requiredQueuedElement   :: Int -> AR c (RQ a c)
-providedQueuedElement   :: AR c (PQ a c)
+requiredQueueElement    :: Int -> AR c (RQ a c)
+providedQueueElement    :: AR c (PQ a c)
 requiredOperation       :: AR c (RO a b c)
 providedOperation       :: AR c (PO a b c)
 interRunnableVariable   :: Valuable a => a -> AR c (IV a c)
@@ -160,7 +161,7 @@ seal5 (a1,a2,a3,a4,a5)          = (seal a1, seal a2, seal a3, seal a4, seal a5)
 seal6 (a1,a2,a3,a4,a5,a6)       = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6)
 seal7 (a1,a2,a3,a4,a5,a6,a7)    = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6, seal a7)
 
-class Connect a b | a -> b where
+class Connect a b | a -> b, b -> a where
         connect                 :: a -> b -> AR c ()
 
 instance Connect (PE a ()) (RE a ()) where
@@ -186,7 +187,7 @@ connect7 (a1,a2,a3,a4,a5,a6,a7) (b1,b2,b3,b4,b5,b6,b7)
                                 = do connect a1 b1; connect (a2,a3,a4,a5,a6,a7) (b2,b3,b4,b5,b6,b7)
 
  
-simulation :: Int -> (forall c. AR c a) -> String
+simulation :: Int -> (forall c. AR c a) -> IO ()
 
 
 -----------------------------------------------------------------------------------------------------
@@ -226,9 +227,9 @@ runM                    :: (Valuable a, Valuable b) => (a -> RunM (StdRet b)) ->
 runM m v                = let RunM f = m (fromVal v) in f (\r -> Terminate (toStd r))
 
 
-rte_send (PE (_,e)) v       = RunM (\cont -> Send e (toVal v) (cont . fromStd))
+rte_send (PQ (_,e)) v       = RunM (\cont -> Send e (toVal v) (cont . fromStd))
 
-rte_receive (RE (_,e))      = RunM (\cont -> Receive e (cont . fromStd))
+rte_receive (RQ (_,e))      = RunM (\cont -> Receive e (cont . fromStd))
 
 rte_write (PE (_,e)) v      = RunM (\cont -> Write e (toVal v) (cont . fromStd))
 
@@ -308,9 +309,10 @@ component m             = do s <- get
 
 runnable inv tr m       = do a <- newName
                              mapM (addProc . Timer a 0.0) ts
-                             addProc (Run a 0.0 Idle 0 (static inv ns (runM mfun)))
+                             addProc (Run a 0.0 act 0 (static inv ns (runM mfun)))
         where ns        = [ n | ReceiveE (RE n) <- tr ] ++ [ n | ReceiveQ (RQ n) <- tr ]
               ts        = [ t | Timed t <- tr ]
+              act       = if null [ Init | Init <- tr ] then Idle else Pending
               mfun      :: () -> RunM (StdRet ())
               mfun _    = m
 
@@ -325,11 +327,11 @@ requiredDataElement     = do a <- newName
 providedDataElement     = do a <- newName
                              return (PE a)
 
-requiredQueuedElement n = do a <- newName
+requiredQueueElement n  = do a <- newName
                              addProc (QElem a n [])
                              return (RQ a)
 
-providedQueuedElement   = do a <- newName
+providedQueueElement    = do a <- newName
                              return (PQ a)
 
 requiredOperation       = do a <- newName
@@ -347,30 +349,6 @@ exclusiveArea           = do a <- newName
                              addProc (Excl a True)
                              return (EX a)
 
---------------------------------------------------------------------------------
-
-r1 ppe                  = do rte_write ppe (123::Int)
-
-c1                      = do ppe <- providedDataElement
-                             rpe <- requiredDataElement
-                             runnable Concurrent [ReceiveE rpe] (r1 ppe)
-                             return (seal ppe)
-
-r2 False                = return (Ok True)
-r2 True                 = return (Ok False)
-
-c2                      = do p1 <- providedDataElement
-                             rpo1 <- providedOperation
-                             rpo2 <- providedOperation
-                             serverRunnable (MinInterval 0.3) [rpo1,rpo2] r2
-                             p2 <- requiredDataElement
-                             return (seal p1, seal p2)
-
-tsst                    = do ppe <- component c1
-                             (p1,p2) <- component c2
-                             connect ppe p2
-                             
---------------------------------------------------------------------------------
 
 type Client     = (InstName, OpName)
 
@@ -435,8 +413,9 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
-simulation n m          = let (_,s) = runAR m startState 
-                          in simulate (scheduler n) (connected (conns s)) (procs s)
+simulation n m          = do putStr trace 
+  where (_,s)           = runAR m startState 
+        trace           = simulate (scheduler n) (connected (conns s)) (procs s)
 
 type Scheduler          = [(Label,[Proc])] -> (Label,[Proc])
 
@@ -445,7 +424,7 @@ scheduler 0             = head
 
 simulate :: Scheduler -> Connected -> [Proc] -> String
 simulate sched conn procs     
-  | null next           = "\n"
+  | null next           = ""
   | otherwise           = show l ++ "\n" ++ simulate sched conn procs'
   where next            = step conn procs
         (l,procs')      = sched next
@@ -484,9 +463,9 @@ may_say (RInst (i,r) (Just a) ex (Terminate (Ok v)))  = RET   a v
 may_say (RInst (i,r) Nothing [] (Terminate _))        = TERM  (i,r)
 may_say (Run a 0.0 Pending n s)
   | n == 0 || invocation s == Concurrent              = NEW   a
-may_say (Run a t act n s)                             = DELTA t
+may_say (Run a t act n s) | t > 0.0                   = DELTA t
 may_say (Timer a 0.0 t)                               = TICK  a
-may_say (Timer a t t0)                                = DELTA t
+may_say (Timer a t t0) | t > 0.0                      = DELTA t
 may_say _                                             = PASS
 
 
