@@ -185,7 +185,7 @@ connect6 (a1,a2,a3,a4,a5,a6) (b1,b2,b3,b4,b5,b6)
 connect7 (a1,a2,a3,a4,a5,a6,a7) (b1,b2,b3,b4,b5,b6,b7)
                                 = do connect a1 b1; connect (a2,a3,a4,a5,a6,a7) (b2,b3,b4,b5,b6,b7)
 
-
+ 
 simulation :: Int -> (forall c. AR c a) -> String
 
 
@@ -278,8 +278,8 @@ data State              = State {
 startState              :: State
 startState              = State 0 0 [] []
 
-runAR                   :: (forall c. AR c a) -> State -> (a, [Proc], [Conn])
-runAR (AR m) s          = let (r,t) = m s in (r, procs t, conns t)
+runAR                   :: (forall c. AR c a) -> State -> (a, State)
+runAR (AR m) s          = m s
 
 get                     :: AR c State
 get                     = AR (\s -> (s,s))
@@ -302,8 +302,8 @@ addConn c               = do s <- get
 
 
 component m             = do s <- get
-                             let (r,ps,cs) = runAR m (s {inst = next s, next = 0})
-                             put (s {next = next s + 1, procs = ps, conns = cs})
+                             let (r,s') = runAR m (s {inst = next s, next = next s + 1})
+                             put (s' {inst = inst s})
                              return r
 
 runnable inv tr m       = do a <- newName
@@ -435,8 +435,8 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
-simulation n m          = let (_,ps,cs) = runAR m startState 
-                          in simulate (scheduler n) (connected cs) ps
+simulation n m          = let (_,s) = runAR m startState 
+                          in simulate (scheduler n) (connected (conns s)) (procs s)
 
 type Scheduler          = [(Label,[Proc])] -> (Label,[Proc])
 
