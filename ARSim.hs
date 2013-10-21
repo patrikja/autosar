@@ -197,8 +197,6 @@ connect7 (a1,a2,a3,a4,a5,a6,a7) (b1,b2,b3,b4,b5,b6,b7)
                                 = do connect a1 b1; connect (a2,a3,a4,a5,a6,a7) (b2,b3,b4,b5,b6,b7)
 
  
-simulation :: Int -> (forall c. AR c a) -> IO ()
-
 
 -----------------------------------------------------------------------------------------------------
 
@@ -436,10 +434,12 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
+simulation :: Int -> (forall c. AR c a) -> IO ()
 simulation n m          = putTrace trace 
   where (_,s)           = runAR m startState 
         trace           = simulate (scheduler n) (connected (conns s)) (procs s)
 
+putTrace :: Show a => [Either a Label] -> IO ()
 putTrace []             = return ()
 putTrace (Left ps : ls) = do putStr ("## Dump: " ++ show ps ++ "\n")
                              putTrace ls
