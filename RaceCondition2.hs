@@ -1,6 +1,7 @@
 module Main where
 
 import ARSim
+import System.Random
 
 r1 pqe          = do sequence_ $ replicate 10 $ rte_send pqe (1::Int)
 
@@ -26,4 +27,16 @@ test'           = do rqe <- component c2
                      pqe <- component c1
                      connect pqe rqe
                              
-main            = simulation 0 test'
+main            = putTrace $ simulationHead test'
+
+main1           = do rng <- newStdGen
+                     putStrLn $ "Using seed: " ++ show rng
+                     putTrace $ simulationRand rng test'
+                     
+-- Interesting example. It has two kinds of race conditions:
+-- * The queue should be empty, but sending messages to it
+--     does not trigger r2 when r2 is already Pending.
+-- * Different instances of r2 clash when they concurrently update
+--     the irv.
+example1 = putTrace $ simulationRand (read "651623791 2147483398") test'
+

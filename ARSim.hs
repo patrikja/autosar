@@ -9,10 +9,17 @@ module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
               requiredOperation, providedOperation, interRunnableVariable, exclusiveArea,
               Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
-              simulation) where
+              putTrace, simulation, simulationM, headSched, simulationHead,
+              randSched, simulationRand) where
 
+import Control.Monad (liftM)
+import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
+
+import System.Random (StdGen)
+import Test.QuickCheck (Gen, elements)
+import Test.QuickCheck.Gen (unGen)
 
 newtype RunM a          = RunM (Con a -> Code)
 
@@ -446,6 +453,11 @@ simulation n m          = putTrace trace
   where (_,s)           = runAR m startState 
         trace           = simulate (scheduler n) (connected (conns s)) (procs s)
 
+simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> m [Either [Proc] Label]
+simulationM sched m     = traceM
+  where (_,s)           = runAR m startState 
+        traceM          = simulateM sched (connected (conns s)) (procs s)
+
 putTrace :: Show a => [Either a Label] -> IO ()
 putTrace []             = return ()
 putTrace (Left ps : ls) = do putStr ("## Dump: " ++ show ps ++ "\n")
@@ -459,7 +471,19 @@ putTrace (Right l:ls)   = do putStr (show l ++ "\n")
 
 -- The list is not empty
 type Scheduler          = [(Label,[Proc])] -> (Label,[Proc])
---type Sched = StdGen -> [(Label,[Proc])] -> ((Label,[Proc]), StdGen)
+type SchedulerM m       = [(Label,[Proc])] -> m (Label,[Proc])
+
+headSched :: SchedulerM Identity
+headSched = return . head
+
+simulationHead :: (forall c. AR c a) -> [Either [Proc] Label]
+simulationHead = runIdentity . simulationM headSched
+
+randSched :: SchedulerM Gen
+randSched = elements
+
+simulationRand :: StdGen -> (forall c. AR c a) -> [Either [Proc] Label]
+simulationRand rng m = unGen (simulationM randSched m) rng 0
 
 scheduler :: Int -> Scheduler
 scheduler 0             = head
@@ -472,6 +496,14 @@ simulate sched conn procs
   | otherwise           = Right l : simulate sched conn procs'
   where next            = step conn procs
         (l,procs')      = sched next
+
+simulateM :: Monad m => SchedulerM m -> Connected -> [Proc] -> m [Either [Proc] Label]
+simulateM sched conn procs     
+  | null next           = return [Left procs]
+  | otherwise           = do
+      (l,procs') <- sched next
+      liftM (Right l :) $ simulateM sched conn procs'
+  where next            = step conn procs
 
 -- This provides all possible results, a "scheduler" then needs to pick one.
 step :: Connected -> [Proc] -> [(Label, [Proc])]
