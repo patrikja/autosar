@@ -112,6 +112,7 @@ rte_callAsync   :: (Valuable a, Valuable b) => RO a b c -> a -> RunM (StdRet b)
 rte_result      :: (Valuable a, Valuable b) => RO a b c -> RunM (StdRet b)
 rte_irvWrite    :: Valuable a => IV a c -> a -> RunM (StdRet ())
 rte_irvRead     :: Valuable a => IV a c -> RunM (StdRet a)
+-- Enter is blocking
 rte_enter       :: EX c -> RunM (StdRet ())
 rte_exit        :: EX c -> RunM (StdRet ())
 
@@ -226,6 +227,9 @@ type StdReturn  = StdRet Value
 
 type Cont       = StdReturn -> Code
 
+instance Show Cont where
+  show _ = "_"
+
 data Code       = Send ElemName Value Cont
                 | Receive ElemName Cont
                 | Write ElemName Value Cont
@@ -239,9 +243,10 @@ data Code       = Send ElemName Value Cont
                 | Enter ExclName Cont
                 | Exit ExclName Cont
                 | Terminate StdReturn
+  deriving (Show)
                 
-instance Show Code where
-        show (Send a v _)       = spacesep ["Send", show a, show v]
+--instance Show Code where
+--        show (Send a v _)       = spacesep ["Send", show a, show v]
 
 type Con a              = a -> Code
 
