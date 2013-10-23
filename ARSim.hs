@@ -21,6 +21,7 @@ import System.Random (StdGen)
 import Test.QuickCheck (Gen, elements)
 import Test.QuickCheck.Gen (unGen)
 
+-- | A monad for writing runnables
 newtype RunM a          = RunM (Con a -> Code)
 
 instance Monad RunM where
@@ -606,7 +607,8 @@ hear conn (UP a _)      (DElem b u v)      | a==b               = DElem b u v
 hear conn (INV a)       (DElem b _ _)      | a `conn` b         = DElem b True NO_DATA
 hear conn (CALL a v _)  (Run b t (Serving cs vs) n s)
         | trig conn a s && a `notElem` cs                       = Run b t (Serving (cs++[a]) (vs++[v])) n s
-        | trig conn a s                                         = Run b t (Serving cs vs) n s
+        | trig conn a s                                         = Run b t (Serving cs vs) n s 
+  -- ^ Note: silently ignoring the value |v| from the |CALL| if |a| is already being served
 hear conn (RES a _)     (Op b (v:vs))      | a==b               = Op b vs
 hear conn (RES a _)     (Op b [])          | a==b               = Op b []
 hear conn (RET a v)     (Op b vs)          | a==b               = Op b (vs++[v])
