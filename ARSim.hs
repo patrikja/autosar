@@ -93,6 +93,7 @@ instance Functor StdRet where
         fmap f IN_EXCLUSIVE_AREA = IN_EXCLUSIVE_AREA
 
 rte_send        :: Valuable a => PQ a c -> a -> RunM (StdRet ())
+-- Non-blocking receive. Returns NO_DATA if the queue is empty
 rte_receive     :: Valuable a => RQ a c -> RunM (StdRet a)
 rte_write       :: Valuable a => PE a c -> a -> RunM (StdRet ())
 rte_read        :: Valuable a => RE a c -> RunM (StdRet a)
@@ -129,6 +130,8 @@ data Invocation         = Concurrent
 
 requiredDataElement     :: AR c (RE a c)
 providedDataElement     :: AR c (PE a c)
+-- The queue is physically located on the 'required' side,
+-- which is why the receiver specifies the max queue length.
 requiredQueueElement    :: Int -> AR c (RQ a c)
 providedQueueElement    :: AR c (PQ a c)
 requiredOperation       :: AR c (RO a b c)
@@ -360,9 +363,13 @@ exclusiveArea           = do a <- newName
 
 type Client     = (InstName, OpName)
 
-data Act        = Idle
-                | Pending
-                | Serving [Client] [Value]
+-- Activation
+-- Current activation state
+data Act        = Idle -- Not activated
+                | Pending -- Ready to be run
+                | Serving [Client] [Value] -- Only applies to server runnables.
+                -- If an operation is called while its runnable is running, it is queued.
+                -- Server runnables are always in this state.
                 deriving (Eq, Ord, Show)
 
 data Static     = Static {
@@ -450,10 +457,14 @@ putTrace (Right l@(DELTA t) : ls)
 putTrace (Right l:ls)   = do putStr (show l ++ "\n")
                              putTrace ls
 
+-- The list is not empty
 type Scheduler          = [(Label,[Proc])] -> (Label,[Proc])
+--type Sched = StdGen -> [(Label,[Proc])] -> ((Label,[Proc]), StdGen)
 
 scheduler :: Int -> Scheduler
 scheduler 0             = head
+
+-- replay
 
 simulate :: Scheduler -> Connected -> [Proc] -> [Either [Proc] Label]
 simulate sched conn procs     
