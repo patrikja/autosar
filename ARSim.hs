@@ -9,7 +9,7 @@ module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
               requiredOperation, providedOperation, interRunnableVariable, exclusiveArea,
               Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
-              putTrace, simulation, simulationM, headSched, simulationHead,
+              putTrace, simulationM, headSched, simulationHead,
               randSched, simulationRand) where
 
 import Control.Monad (liftM)
@@ -448,11 +448,6 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
-simulation :: Int -> (forall c. AR c a) -> IO ()
-simulation n m          = putTrace trace 
-  where (_,s)           = runAR m startState 
-        trace           = simulate (scheduler n) (connected (conns s)) (procs s)
-
 simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> m [Either [Proc] Label]
 simulationM sched m     = traceM
   where (_,s)           = runAR m startState 
@@ -470,7 +465,6 @@ putTrace (Right l:ls)   = do putStr (show l ++ "\n")
                              putTrace ls
 
 -- The list is not empty
-type Scheduler          = [(Label,[Proc])] -> (Label,[Proc])
 type SchedulerM m       = [(Label,[Proc])] -> m (Label,[Proc])
 
 headSched :: SchedulerM Identity
@@ -485,17 +479,7 @@ randSched = elements
 simulationRand :: StdGen -> (forall c. AR c a) -> [Either [Proc] Label]
 simulationRand rng m = unGen (simulationM randSched m) rng 0
 
-scheduler :: Int -> Scheduler
-scheduler 0             = head
-
 -- replay
-
-simulate :: Scheduler -> Connected -> [Proc] -> [Either [Proc] Label]
-simulate sched conn procs     
-  | null next           = [Left procs]
-  | otherwise           = Right l : simulate sched conn procs'
-  where next            = step conn procs
-        (l,procs')      = sched next
 
 simulateM :: Monad m => SchedulerM m -> Connected -> [Proc] -> m [Either [Proc] Label]
 simulateM sched conn procs     
