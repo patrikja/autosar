@@ -143,6 +143,7 @@ providedDataElement     :: AR c (PE a c)
 -- which is why the receiver specifies the max queue length.
 requiredQueueElement    :: Int -> AR c (RQ a c)
 providedQueueElement    :: AR c (PQ a c)
+-- Operations are remote procedure calls
 requiredOperation       :: AR c (RO a b c)
 providedOperation       :: AR c (PO a b c)
 interRunnableVariable   :: Valuable a => a -> AR c (IV a c)
@@ -405,7 +406,7 @@ connected       :: [Conn] -> Connected
 connected cs    = \a b -> (a,b) `elem` cs
 
 trig :: Connected -> Name2 -> Static -> Bool
-trig conn a s   = or [ a `conn` b | b <- triggers s ]
+trig conn a s   = or [ b `conn` a | b <- triggers s ]
 
 -- PJ: Why pairs when there are newtypes RE, IV, etc. defined above? 
 -- JN: This is the untyped "machine" representation. RE, IV, et al. just add safety
@@ -529,7 +530,8 @@ may_say (RInst (i,r) (Just a) ex (Terminate (Ok v)))  = RET   a v
 may_say (RInst (i,r) Nothing [] (Terminate _))        = TERM  (i,r)
 may_say (Run a 0.0 Pending n s)
   | n == 0 || invocation s == Concurrent              = NEW   a
-may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)       = NEW   a
+may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
+  | n == 0 || invocation s == Concurrent              = NEW   a
 may_say (Run a t act n s) | t > 0.0                   = DELTA t
 may_say (Timer a 0.0 t)                               = TICK  a
 may_say (Timer a t t0) | t > 0.0                      = DELTA t
