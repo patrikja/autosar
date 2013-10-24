@@ -1,2 +1,5 @@
 http://studentarbeten.chalmers.se/publication/40043-control-strategies-for-electronically-controlled-limited-slip-differentials
 http://studentarbeten.chalmers.se/publication/125683-estimation-of-road-bank-and-slope-angle-for-enhanced-vehicle-stability-control
+
+Some info about time service:
+http://www.autosar.org/download/R4.1/AUTOSAR_SWS_TimeService.pdf
