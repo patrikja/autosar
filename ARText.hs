@@ -12,6 +12,8 @@ data Package        = Package {
                             constants       :: Map ConstName Constant,
                             interfaces      :: Map IfaceName Interface,
                             components      :: Map CompName Component,
+                            behaviors       :: Map BehName Behavior,
+                            implementations :: Map ImpName Implementation,
                             modegroups      :: Map GroupName ModeGroup,
                             compositions    :: Map CompName Composition,
                             root            :: CompName
@@ -24,6 +26,8 @@ type ConstrName     = Name
 type ConstName      = Name
 type IfaceName      = Name
 type CompName       = Name
+type BehName        = Name
+type ImpName        = Name
 type InstName       = Name
 type ProtName       = Name
 type GroupName      = Name
@@ -161,8 +165,8 @@ data Param          = TypeName String InitValue
 
 -- Components ---------------------------------------------------------------------------
 
-data Component      = Application       (Map PortName Port) Behavior Implementation
-                    | SensorActuator    (Map PortName Port) Behavior Implementation Hw
+data Component      = Application       (Map PortName Port)
+                    | SensorActuator    (Map PortName Port) Hw
                     | Service           (Map PortName Port)
                     | Parameter         (Map PortName Port)
 
@@ -216,7 +220,6 @@ data Hw             = Hw QualName
 
 data Behavior       = InternalBehavior {
                             supportsMultipleInstantiation   :: Bool,
-                            behaviorName                    :: Name,
                             forComponent                    :: CompName,
                             dataTypeMappings                :: [MapName],
                             exclusiveAreas                  :: [ExclName],
@@ -226,7 +229,6 @@ data Behavior       = InternalBehavior {
                             portAPIOptions                  :: [PortAPIOption],
                             runnables                       :: Map RunName Runnable
                         }
-                    | NoInternalBehavior
                             
 data Variable       = Var TypeName Explicit InitValue
 
@@ -324,15 +326,13 @@ data Dis            = DisabledFor PortName GroupName ModeName
                     | NoDis
                     
 data Implementation = Implementation {
-                            implName            :: Name,
-                            forBehavior         :: Name,
+                            forBehavior         :: BehName,
                             language            :: Language,
                             codeDescriptor      :: String,
                             codeGenerator       :: Maybe String,
                             requiredRTEVendor   :: RTEVendor,
                             compilers           :: [Compiler]
                         }
-                    | NoImplementation
 
 data Language       = C
                     | Cpp
