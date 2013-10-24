@@ -17,19 +17,22 @@ ticketDispenser = do pop <- providedOperation
 client :: AR c1 (RO () Int (), PQ Int ())
 client          = do rop <- requiredOperation
                      pqe <- providedQueueElement
-                     let r2 20 = return ()
-                         --r2 i  = do Ok v <- rte_call rop ()
-                         r2 i  = do rte_callAsync rop ()
-                                    Ok v <- rte_result rop
+                     let r2 1 = return ()
+                         r2 i  = do Ok v <- rte_call rop ()
                                     rte_send pqe v
                                     r2 (i+1)
+                         -- r2 i  = do rte_callAsync rop ()
+                         --           Ok v <- rte_result rop
+                         --           rte_send pqe v
+                         --           r2 (i+1)
                      runnable Concurrent [Init] (r2 0)
                      return (seal2 (rop, pqe))
 
 test            = do t <- ticketDispenser
                      (rop, pqe) <- client
-                     connect t rop
+                     connect rop t
 
+main = newStdGen >>= \g -> putTrace $ simulationRand g test
 {-
 
 mainRand :: (forall c. AR c (RQ Int ())) -> IO ()
