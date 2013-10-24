@@ -108,7 +108,7 @@ rte_read        :: Valuable a => RE a c -> RunM (StdRet a)
 rte_isUpdated   :: Valuable a => RE a c -> RunM (StdRet Bool)
 rte_invalidate  :: Valuable a => PE a c -> RunM (StdRet ())
 rte_call        :: (Valuable a, Valuable b) => RO a b c -> a -> RunM (StdRet b)
-rte_callAsync   :: (Valuable a, Valuable b) => RO a b c -> a -> RunM (StdRet b)
+rte_callAsync   :: (Valuable a, Valuable b) => RO a b c -> a -> RunM (StdRet ())
 rte_result      :: (Valuable a, Valuable b) => RO a b c -> RunM (StdRet b)
 rte_irvWrite    :: Valuable a => IV a c -> a -> RunM (StdRet ())
 rte_irvRead     :: Valuable a => IV a c -> RunM (StdRet a)
@@ -192,8 +192,8 @@ instance Connect (PE a ()) (RE a ()) where
 instance Connect (PQ a ()) (RQ a ()) where
         connect (PQ a) (RQ b)   = addConn (a,b)
         
-instance Connect (PO a b ()) (RO a b ()) where
-        connect (PO a) (RO b)   = addConn (a,b)
+instance Connect (RO a b ()) (PO a b ()) where
+        connect (RO a) (PO b)   = addConn (a,b)
         
 connect2 (a1,a2) (b1,b2)        
                                 = do connect a1 b1; connect a2 b2
@@ -529,6 +529,7 @@ may_say (RInst (i,r) (Just a) ex (Terminate (Ok v)))  = RET   a v
 may_say (RInst (i,r) Nothing [] (Terminate _))        = TERM  (i,r)
 may_say (Run a 0.0 Pending n s)
   | n == 0 || invocation s == Concurrent              = NEW   a
+may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)       = NEW   a
 may_say (Run a t act n s) | t > 0.0                   = DELTA t
 may_say (Timer a 0.0 t)                               = TICK  a
 may_say (Timer a t t0) | t > 0.0                      = DELTA t
@@ -582,7 +583,7 @@ may_hear conn (CALL a v res) (Run b t (Serving cs vs) n s)
         | trig conn a s && a `notElem` cs                       = CALL a v (max res void)
         | trig conn a s                                         = CALL a v (max res LIMIT)
 may_hear conn (RES a res)    (Op b (v:vs))     | a==b           = RES a (max res (Ok v))
-may_hear conn (RES a res)    (Op b [])         | a==b           = RES a (max res NO_DATA)
+--may_hear conn (RES a res)    (Op b [])         | a==b           = RES a (max res NO_DATA)
 may_hear conn (RET a v)      (Op b vs)         | a==b           = RET a v
 may_hear conn (TERM a)       (Run b _ _ _ _)   | a==b           = TERM a
 may_hear conn (TICK a)       (Run b _ _ _ _)   | a==b           = TICK a
