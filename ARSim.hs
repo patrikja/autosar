@@ -406,7 +406,7 @@ connected       :: [Conn] -> Connected
 connected cs    = \a b -> (a,b) `elem` cs
 
 trig :: Connected -> Name2 -> Static -> Bool
-trig conn a s   = or [ b `conn` a | b <- triggers s ]
+trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
 -- PJ: Why pairs when there are newtypes RE, IV, etc. defined above? 
 -- JN: This is the untyped "machine" representation. RE, IV, et al. just add safety
