@@ -8,15 +8,13 @@ module ARSim -- Lets design the interface later...
               rte_call, rte_callAsync, rte_result, rte_irvWrite, rte_irvRead, rte_enter, rte_exit,
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
               requiredDataElement, providedDataElement, requiredQueueElement, providedQueueElement,
-              requiredOperation, providedOperation, interRunnableVariable, exclusiveArea,
+              requiredOperation, providedOperation, interRunnableVariable, exclusiveArea, source, sink,
               Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
-              putTrace, simulationM, headSched, simulationHead,
-              randSched, simulationRand)
--}              
-              
-              where
+              TraceOpt(..), putTrace, simulationM, headSched, simulationHead,
+              randSched, simulationRand) -} where
 
+              
 import Control.Monad (liftM)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
@@ -158,6 +156,9 @@ serverRunnable          :: (Valuable a, Valuable b) =>
                            Invocation -> [PO a b c] -> (a -> RunM b) -> AR c ()
 
 component               :: (forall c. AR c a) -> AR c a
+
+source                  :: (Valuable a) => String -> [(Time,a)] -> AR c (PE a ())
+sink                    :: (Valuable a) => String -> AR c (RE a ())
 
 
 -- A hack to do some kind of subtype coercion. 
@@ -379,6 +380,13 @@ exclusiveArea           = do a <- newName
                              addProc (Excl a True)
                              return (EX a)
 
+source name vs          = do a <- newName
+                             addProc (Src a name [(t,toVal v)|(t,v)<-vs])
+                             return (PE a)
+
+sink name               = do a <- newName
+                             addProc (Sink a name 0.0 [])
+                             return (RE a)
 
 type Client     = (InstName, OpName)
 
@@ -426,6 +434,8 @@ data Proc       = Run   (InstName, RunName) Time Act Int Static
                 | QElem (InstName, ElemName) Int [Value]
                 | DElem (InstName, ElemName) Bool StdReturn
                 | Op    (InstName, OpName) [Value]
+                | Src   (InstName, ElemName) String [(Time,Value)]
+                | Sink  (InstName, ElemName) String Time [(Time,Value)]
 
 spacesep        = concat . intersperse " "
 
@@ -438,6 +448,8 @@ instance Show Proc where
         show (QElem a n vs)     = spacesep ["QElem", show a, show n, show vs]
         show (DElem a v r)      = spacesep ["DElem", show a, show v, show r]
         show (Op a vs)          = spacesep ["Op", show a, show vs]
+        show (Src a n vs)       = spacesep ["Src", show a, show n, show vs]
+        show (Sink a n t vs)    = spacesep ["Sink", show a, show n, show t, show vs]
 
 
 data Label      = ENTER (InstName, ExclName)
@@ -463,16 +475,29 @@ labelName :: Label -> Maybe (Name,Name)
 labelName (SND n _ _) = Just n
 labelName _           = Nothing
 
-putTrace :: Show a => [Either a Label] -> IO ()
-putTrace []             = return ()
-putTrace (Left ps : ls) = do putStr ("## Dump: " ++ show ps ++ "\n")
-                             putTrace ls
-putTrace (Right l@(DELTA t) : ls)
-  | t > 0.1             = do putStr (show l ++ "\n")
+
+data TraceOpt           = Labels | States | First | Last | Hold
+                        deriving (Eq,Show)
+
+putTrace :: [TraceOpt] -> [Either [Proc] Label] -> IO ()
+putTrace opt []         = return ()
+putTrace opt [Left ps]
+  | Last `elem` opt     = putStr ("## " ++ show ps ++ "\n")
+putTrace opt (Left ps : ls) 
+  | First `elem` opt    = do putStr ("## " ++ show ps ++ "\n")
+                             putTrace (opt\\[First]) ls
+putTrace opt (Left ps : ls) 
+  | States `elem` opt   = do putStr ("## " ++ show ps ++ "\n")
+                             putTrace opt ls
+putTrace opt (Right l@(DELTA t) : ls)
+  | t > 0.1 && Hold `elem` opt     
+                        = do if Labels `elem` opt then putStr (show l ++ "\n") else return ()
                              threadDelay (round (t*1000000))
-                             putTrace ls
-putTrace (Right l:ls)   = do putStr (show l ++ "\n")
-                             putTrace ls
+                             putTrace opt ls
+putTrace opt (Right l:ls)
+  | Labels `elem` opt   = do putStr (show l ++ "\n")
+                             putTrace opt ls
+putTrace opt (_ : ls)   = putTrace opt ls
 
                              
 sendsTo :: [(Name, Name)] -> [Either a Label] -> [Label]
@@ -506,8 +531,7 @@ simulateM sched conn procs
   | null next           = return [Left procs]
   | otherwise           = do
       (l,procs') <- sched next
---      liftM (\t -> Right l : Left procs' : t) $ simulateM sched conn procs'
-      liftM (Right l :) $ simulateM sched conn procs'
+      liftM (\t -> Right l : Left procs' : t) $ simulateM sched conn procs'
   where next            = step conn procs
 
 -- This provides all possible results, a "scheduler" then needs to pick one.
@@ -549,6 +573,8 @@ may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
 may_say (Run a t act n s) | t > 0.0                   = DELTA t
 may_say (Timer a 0.0 t)                               = TICK  a
 may_say (Timer a t t0) | t > 0.0                      = DELTA t
+may_say (Src a n ((0.0,v):vs))                        = WR    a v
+may_say (Src a n ((t,v):vs)) | t > 0.0                = DELTA t
 may_say _                                             = PASS
 
 
@@ -574,6 +600,8 @@ say (NEW _)        (Run a _ (Serving (c:cs) (v:vs)) n s) = [Run a (minstart s) (
 say (DELTA d)      (Run a t act n s)                     = [Run a (t-d) act n s]
 say (TICK _)       (Timer a _ t)                         = [Timer a t t]
 say (DELTA d)      (Timer a t t0)                        = [Timer a (t-d) t0]
+say (WR _ _)       (Src a n (_:vs))                      = [Src a n vs]
+say (DELTA d)      (Src a n ((t,v):vs))                  = [Src a n ((t-d,v):vs)]
 
 
 may_hear :: Connected -> Label -> Proc -> Label
@@ -609,6 +637,8 @@ may_hear conn (DELTA d)      (Run _ t _ _ _)   | t == 0         = DELTA d
                                                | d > t          = PASS
 may_hear conn (DELTA d)      (Timer _ t _)     | d <= t         = DELTA d
                                                | d > t          = PASS
+may_hear conn (WR a v)       (Sink b _ _ _)    | a `conn` b     = WR a v
+may_hear conn (DELTA d)      (Sink _ _ _ _)                     = DELTA d
 may_hear conn label _                                           = label
 
 
@@ -640,5 +670,7 @@ hear conn (TICK a)      (Run b t _ n s)    | a==b               = Run b t Pendin
 hear conn (DELTA d)     (Run b 0.0 act n s)                     = Run b 0.0 act n s
 hear conn (DELTA d)     (Run b t act n s)                       = Run b (t-d) act n s
 hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) t0
+hear conn (WR a v)      (Sink b n t vs)    | a `conn` b         = Sink b n 0.0 ((t,v):vs)
+hear conn (DELTA d)     (Sink b n t vs)                         = Sink b n (t+d) vs
 hear conn label         proc                                    = proc
 

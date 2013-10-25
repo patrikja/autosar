@@ -72,7 +72,7 @@ main            = mainRand consumer
 mainRand :: (forall c. AR c (RQ Int ())) -> IO ()
 mainRand consumerx  = do rng <- newStdGen
                          putStrLn $ "Using seed: " ++ show rng
-                         putTrace $ fst $ simulationRand rng (test consumerx)
+                         putTrace [Labels] $ fst $ simulationRand rng (test consumerx)
 
 --
-main1            = putTrace $ fst $ simulationHead (test consumer)
+main1            = putTrace [Labels] $ fst $ simulationHead (test consumer)
