@@ -25,4 +25,4 @@ test            = do src <- source "A" [(0.0,5),(0.0,7::Int)]
                      connect src re
                      connect pe snk
                              
-main            = do s <- newStdGen; putTrace [Labels,States] (simulationRand s test)
+main            = do s <- newStdGen; putTrace [Labels,States] (fst (simulationRand s test))

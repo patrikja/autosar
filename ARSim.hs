@@ -469,11 +469,6 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
-simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> m [Either [Proc] Label]
-simulationM sched m     = liftM (Left (procs s):) traceM
-  where (_,s)           = runAR m startState 
-        traceM          = simulateM sched (connected (conns s)) (procs s)
-
 data TraceOpt           = Labels | States | First | Last | Hold
                         deriving (Eq,Show)
 
@@ -516,7 +511,7 @@ simulationRand rng m = (unGen g rng 0, a)
 -- replay
 
 simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m [Either [Proc] Label], a)
-simulationM sched m     = (traceM, x)
+simulationM sched m     = (liftM (Left (procs s):) traceM, x)
   where (x,s)           = runAR m startState 
         traceM          = simulateM sched (connected (conns s)) (procs s)
 
