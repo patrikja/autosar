@@ -493,6 +493,7 @@ simulateM sched conn procs
   | null next           = return [Left procs]
   | otherwise           = do
       (l,procs') <- sched next
+--      liftM (\t -> Right l : Left procs' : t) $ simulateM sched conn procs'
       liftM (Right l :) $ simulateM sched conn procs'
   where next            = step conn procs
 
@@ -586,6 +587,7 @@ may_hear conn (CALL a v res) (Run b t (Serving cs vs) n s)
         | trig conn a s                                         = CALL a v (max res LIMIT)
 may_hear conn (RES a res)    (Op b (v:vs))     | a==b           = RES a (max res (Ok v))
 --may_hear conn (RES a res)    (Op b [])         | a==b           = RES a (max res NO_DATA)
+may_hear conn (RES a res)    (Op b [])         | a==b           = PASS
 may_hear conn (RET a v)      (Op b vs)         | a==b           = RET a v
 may_hear conn (TERM a)       (Run b _ _ _ _)   | a==b           = TERM a
 may_hear conn (TICK a)       (Run b _ _ _ _)   | a==b           = TICK a
