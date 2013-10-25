@@ -455,11 +455,6 @@ data Label      = ENTER (InstName, ExclName)
                 | PASS
                 deriving (Eq, Ord, Show)
 
-simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> m [Either [Proc] Label]
-simulationM sched m     = traceM
-  where (_,s)           = runAR m startState 
-        traceM          = simulateM sched (connected (conns s)) (procs s)
-
 putTrace :: Show a => [Either a Label] -> IO ()
 putTrace []             = return ()
 putTrace (Left ps : ls) = do putStr ("## Dump: " ++ show ps ++ "\n")
@@ -477,16 +472,22 @@ type SchedulerM m       = [(Label,[Proc])] -> m (Label,[Proc])
 headSched :: SchedulerM Identity
 headSched = return . head
 
-simulationHead :: (forall c. AR c a) -> [Either [Proc] Label]
-simulationHead = runIdentity . simulationM headSched
+simulationHead :: (forall c. AR c a) -> ([Either [Proc] Label], a)
+simulationHead m = (runIdentity m', a) 
+  where (m', a) = simulationM headSched m
 
 randSched :: SchedulerM Gen
 randSched = elements
 
-simulationRand :: StdGen -> (forall c. AR c a) -> [Either [Proc] Label]
-simulationRand rng m = unGen (simulationM randSched m) rng 0
-
+simulationRand :: StdGen -> (forall c. AR c a) -> ([Either [Proc] Label], a)
+simulationRand rng m = (unGen g rng 0, a)
+  where (g, a) = simulationM randSched m
 -- replay
+
+simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m [Either [Proc] Label], a)
+simulationM sched m     = (traceM, x)
+  where (x,s)           = runAR m startState 
+        traceM          = simulateM sched (connected (conns s)) (procs s)
 
 simulateM :: Monad m => SchedulerM m -> Connected -> [Proc] -> m [Either [Proc] Label]
 simulateM sched conn procs     

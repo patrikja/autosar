@@ -6,7 +6,8 @@ import System.Random
 
 
 ticketDispenser :: AR c (PO () Int ())
-ticketDispenser = do pop <- providedOperation
+ticketDispenser = component $
+                  do pop <- providedOperation
                      irv <- interRunnableVariable (0 :: Int)
                      let r1 = do Ok v <- rte_irvRead irv
                                  rte_irvWrite irv (v+1)
@@ -14,8 +15,9 @@ ticketDispenser = do pop <- providedOperation
                      serverRunnable Concurrent [pop] (\() -> r1)
                      return (seal pop)
 
-client :: AR c1 (RO () Int (), PQ Int ())
-client          = do rop <- requiredOperation
+client :: AR c (RO () Int (), PQ Int ())
+client          = component $
+                  do rop <- requiredOperation
                      pqe <- providedQueueElement
                      let r2 1 = return ()
                          r2 i  = do Ok v <- rte_call rop ()
@@ -29,10 +31,15 @@ client          = do rop <- requiredOperation
                      return (seal2 (rop, pqe))
 
 test            = do t <- ticketDispenser
-                     (rop, pqe) <- client
-                     connect rop t
+                     (rop1, pqe1) <- client
+                     (rop2, pqe2) <- client
+                     connect rop1 t
+                     connect rop2 t
+                     return (pqe1, pqe2)
 
-main = newStdGen >>= \g -> putTrace $ simulationRand g test
+main = do rng <- newStdGen
+          let (t, p) = simulationRand rng test
+          putTrace t
 {-
 
 mainRand :: (forall c. AR c (RQ Int ())) -> IO ()

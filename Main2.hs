@@ -18,4 +18,4 @@ test            = do rop <- component c1
                      pop <- component c2
                      connect rop pop
                              
-main            = putTrace (simulationHead test)
+main            = putTrace $ fst $ (simulationHead test)

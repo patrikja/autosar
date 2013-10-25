@@ -29,4 +29,4 @@ test            = do pqe <- component c1
                      connect pqe rqe
                              
 -- | Run the simulation of this test program, showing a trace of the execution
-main            = putTrace (simulationHead test)
+main            = putTrace $ fst $ (simulationHead test)
