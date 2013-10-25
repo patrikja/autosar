@@ -1,7 +1,9 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies,
              Rank2Types, ExistentialQuantification #-}
 
-module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
+module ARSim -- Lets design the interface later...
+{-
+              (RunM, RE, PE, RQ, PQ(..), RO, PO, IV, EX, Value, Valuable, StdRet(..),
               rte_send, rte_receive, rte_write, rte_read, rte_isUpdated, rte_invalidate, 
               rte_call, rte_callAsync, rte_result, rte_irvWrite, rte_irvRead, rte_enter, rte_exit,
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
@@ -10,7 +12,10 @@ module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
               Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
               putTrace, simulationM, headSched, simulationHead,
-              randSched, simulationRand) where
+              randSched, simulationRand)
+-}              
+              
+              where
 
 import Control.Monad (liftM)
 import Control.Monad.Identity (Identity, runIdentity)
@@ -454,6 +459,9 @@ data Label      = ENTER (InstName, ExclName)
                 | DELTA Time
                 | PASS
                 deriving (Eq, Ord, Show)
+labelName :: Label -> Maybe (Name,Name)
+labelName (SND n _ _) = Just n
+labelName _           = Nothing
 
 putTrace :: Show a => [Either a Label] -> IO ()
 putTrace []             = return ()
@@ -465,6 +473,10 @@ putTrace (Right l@(DELTA t) : ls)
                              putTrace ls
 putTrace (Right l:ls)   = do putStr (show l ++ "\n")
                              putTrace ls
+
+                             
+sendsTo :: [(Name, Name)] -> [Either a Label] -> [Label]
+sendsTo ns ts = [ l | Right l <- ts, Just n' <- [labelName l], n' `elem` ns ]
 
 -- The list is not empty
 type SchedulerM m       = [(Label,[Proc])] -> m (Label,[Proc])

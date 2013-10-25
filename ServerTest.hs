@@ -3,7 +3,10 @@ module Main where
 
 import ARSim
 import System.Random
+import Test.QuickCheck
+import Test.QuickCheck.Gen
 
+import Data.List(nub)
 
 ticketDispenser :: AR c (PO () Int ())
 ticketDispenser = component $
@@ -19,7 +22,7 @@ client :: AR c (RO () Int (), PQ Int ())
 client          = component $
                   do rop <- requiredOperation
                      pqe <- providedQueueElement
-                     let r2 1 = return ()
+                     let r2 4 = return ()
                          r2 i  = do Ok v <- rte_call rop ()
                                     rte_send pqe v
                                     r2 (i+1)
@@ -38,15 +41,8 @@ test            = do t <- ticketDispenser
                      return (pqe1, pqe2)
 
 main = do rng <- newStdGen
-          let (t, p) = simulationRand rng test
-          putTrace t
-{-
+          let (t, (PQ a, PQ b)) = simulationRand rng test
+              labs = sendsTo [a,b] t
+              tickets = [x|SND _ x _ <- labs]
+          mapM_ print tickets
 
-mainRand :: (forall c. AR c (RQ Int ())) -> IO ()
-mainRand consumerx  = do rng <- newStdGen
-                         putStrLn $ "Using seed: " ++ show rng
-                         putTrace $ simulationRand rng (test consumerx)
-
---
-main1            = putTrace $ simulationHead (test consumer)
--}
