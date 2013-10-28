@@ -3,7 +3,7 @@
 
 module ARSim -- Lets design the interface later...
 {-
-              (RunM, RE, PE, RQ, PQ(..), RO, PO, IV, EX, Value(..), Valuable(..), StdRet(..),
+              (RunM, RE, PE, RQ, PQ(..), RO, PO, IV, EX, Value, Valuable, StdRet(..),
               rte_send, rte_receive, rte_write, rte_read, rte_isUpdated, rte_invalidate, 
               rte_call, rte_callAsync, rte_result, rte_irvWrite, rte_irvRead, rte_enter, rte_exit,
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
