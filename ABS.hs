@@ -3,92 +3,168 @@ module ABS where
 import ARSim
 import System.Random
 
-data SeqState =
-        Stopped |
-        Open Int Int |
-        Closed Int Int
+instance (Valuable a, Valuable b) => Valuable (a,b) where
+        toVal (a,b)             = VArray [toVal a, toVal b]
+        fromVal (VArray [a, b]) = (fromVal a, fromVal b)
+
+data SeqState = Stopped | Running Int Int Int
 
 instance Valuable SeqState where
         toVal Stopped           = Void
-        toVal (Open c l)        = VArray [VBool True, VInt c, VInt l]
-        toVal (Closed c l)      = VArray [VBool False, VInt c, VInt l]
+        toVal (Running t l a)   = VArray [VInt t, VInt l, VInt a]
         fromVal Void            = Stopped
-        fromVal (VArray [VBool True, VInt c, VInt l])
-                                = Open c l
-        fromVal (VArray [VBool False, VInt c, VInt l])
-                                = Closed c l
+        fromVal (VArray [VInt t, VInt l, VInt a])
+                                = Running t l a
         
-relief_tick excl state valve wheelacc = do
+seq_tick step excl state = do
         rte_enter excl
         Ok s <- rte_irvRead state
-        case s of
-                Stopped                            -> rte_irvWrite state s
-                Open count limit   | count < limit -> rte_irvWrite state (Open (count+1) limit)
-                                   | otherwise     -> relief_close state valve
-                Closed count limit | count < limit -> rte_irvWrite state (Closed (count+1) limit)
-                                   | otherwise     -> relief_open state valve wheelacc
+        s' <- case s of
+                Stopped                 -> return s
+                Running ticks limit a 
+                        | ticks < limit -> return (Running (ticks+1) limit a)
+                        | otherwise     -> step a
+        rte_irvWrite state s'
         rte_exit excl
 
-relief_close state valve = do
-        rte_write valve False
-        rte_irvWrite state (Closed 0 5)
-
-relief_open state valve wheelacc = do
-        rte_write valve True
-        Ok a <- rte_call wheelacc ()
-        rte_irvWrite state (if a < 0 then Open 0 (-a*10) else Closed 0 5)
-
-relief_stop excl state valve () = do
+seq_ctrl step excl state on = do
         rte_enter excl
-        rte_write valve False
-        rte_irvWrite state Stopped
+        s <- step (if on then 0 else -1)
+        rte_irvWrite state s
         rte_exit excl
         return ()
 
-relief_start excl state valve wheelacc () = do
-        rte_enter excl
-        relief_open state valve wheelacc
-        rte_exit excl
-        return ()
-
-
-relief = do
+sequencer step = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
+        runnable (MinInterval 0) [Timed 0.001] (seq_tick step excl state)
+        ctrl <- providedOperation
+        serverRunnable (MinInterval 0) [ctrl] (seq_ctrl step excl state)
+        return (seal ctrl)
+
+
+
+relief_step valve wheelacc 0 = do
+        Ok a <- rte_read wheelacc
+        if a < 0 then do
+                rte_write valve True
+                return (Running 0 (-(round a)*10) 1)
+         else
+                return (Running 0 5 0)
+relief_step valve wheelacc 1 = do
+        rte_write valve False
+        return (Running 0 5 0)
+relief_step valve wheelacc n = do
+        rte_write valve False
+        return Stopped
+
+relief :: AR c (PE Bool (), RE Double (), PO Bool () ())
+relief = component $ do
         valve <- providedDataElement
-        wheelacc <- requiredOperation
-        runnable (MinInterval 0.0) [Timed 0.001] (relief_tick excl state valve wheelacc)
-        start <- providedOperation
-        stop <- providedOperation
-        serverRunnable (MinInterval 0) [start] (relief_start excl state valve wheelacc)
-        serverRunnable (MinInterval 0) [stop] (relief_stop excl state valve)
-        return (seal valve, seal wheelacc, seal start, seal stop)
+        wheelacc <- requiredDataElement
+        ctrl <- sequencer $ relief_step valve wheelacc
+        return (seal valve, seal wheelacc, ctrl)
 
-{-
-pressure_tick state valve wheelacc = do
-        Ok s <- rte_irvRead state
-        case s of
-                Stopped                            -> rte_irvWrite state s
-                Open count limit   | count < limit -> rte_irvWrite state (Open (count+1) limit)
-                                   | otherwise     -> pressure_close state valve
-                Closed count limit | count < limit -> rte_irvWrite state (Closed (count+1) limit)
-                                   | otherwise     -> pressure_open state valve wheelacc
-
-pressure_close state valve = do
-        rte_write valve False
-        rte_irvWrite state (Closed 0 20)
-
-pressure_open state valve wheelacc = do
+pressure_step valve wheelacc 0 = do
         rte_write valve True
-        Ok a <- rte_call wheelacc ()
-        rte_irvWrite state (if a > 0 then Open 0 (a*50) else Stopped)
-
-pressure_stop state valve = do
-        rte_write valve False
-        rte_irvWrite state Stopped
-
-pressure_start state valve wheelacc = do
+        return (Running 0 100 1)
+pressure_step valve wheelacc 20 = do
         rte_write valve True
-        rte_irvWrite state (Open 0 100)
+        return Stopped
+pressure_step valve wheelacc n | even n = do
+        rte_write valve True
+        Ok a <- rte_read wheelacc
+        return (Running 0 (round a*50) (n+1))
+pressure_step valve wheelacc n | odd n = do
+        rte_write valve False
+        return (Running 0 20 (n+1))
+pressure_step valve wheelacc n | n < 0 = do
+        rte_write valve False
+        return Stopped
 
--}
+pressure :: AR c (PE Bool (), RE Double (), PO Bool () ())
+pressure = component $ do
+        valve <- providedDataElement
+        wheelacc <- requiredDataElement
+        ctrl <- sequencer $ pressure_step valve wheelacc
+        return (seal valve, seal wheelacc, ctrl)
+
+
+control mem pressure_seq relief_seq param = do
+        Ok slip <- rte_receive param
+        Ok slip' <- rte_irvRead mem
+        case (slip < 0.8, slip' < 0.8) of
+                (True, False) -> do
+                        rte_call pressure_seq False
+                        rte_call relief_seq True
+                        return ()
+                (False, True) -> do
+                        rte_call relief_seq False
+                        rte_call pressure_seq True
+                        return ()
+                _ ->    return ()
+        rte_irvWrite mem slip
+
+controller :: AR c (RO Bool () (), RO Bool () (), RQ Double ())
+controller = component $ do
+        mem <- interRunnableVariable 1.0
+        pressure_seq <- requiredOperation
+        relief_seq <- requiredOperation
+        param <- requiredQueueElement 10
+        runnable (MinInterval 0) [ReceiveQ param] (control mem pressure_seq relief_seq param)
+        return (seal pressure_seq, seal relief_seq, seal param)
+
+loop velocities controllers = do
+        velos <- mapM (\w -> do Ok v <- rte_read w; return v) velocities
+        let v0 = minimum velos
+        mapM (\(v,c) -> rte_send c (v/v0)) (velos `zip` controllers)
+
+main_loop :: AR c ([RE Double ()], [PQ Double ()])
+main_loop = component $ do
+        velocities <- mapM (const requiredDataElement) [1..4]
+        controllers <- mapM (const providedQueueElement) [1..4]
+        runnable (MinInterval 0) [Timed 0.01] (loop velocities controllers)
+        return (map seal velocities, map seal controllers)
+        
+sensor n = do
+        vel <- source ("V" ++ show n) (vel_sim n)
+        acc <- source ("A" ++ show n) (acc_sim n)
+        return (vel, acc)
+        
+actuator n = do
+        rlf_v <- sink ("R" ++ show n)
+        prs_v <- sink ("P" ++ show n)
+        return (rlf_v, prs_v)
+
+wheel :: Int -> AR c (PO Bool () (), PO Bool () (), PE Double ())        
+wheel n = do
+        (rlf_valve, rlf_acc, rlf_ctrl) <- relief
+        (prs_valve, prs_acc, prs_ctrl) <- pressure
+        (vel, acc) <- sensor n
+        (rlf_v, prs_v) <- actuator n
+        connect rlf_valve rlf_v
+        connect prs_valve prs_v
+        connect acc rlf_acc
+        connect acc prs_acc
+        return (prs_ctrl, rlf_ctrl, vel)
+
+system = do
+        ws <- mapM wheel [1..4]
+        cs <- mapM (const controller) [1..4]
+        let (prov_rlf_seqs, prov_prs_seqs, prov_vels) = unzip3 ws
+            (reqd_rlf_seqs, reqd_prs_seqs, reqd_ctrls) = unzip3 cs
+        (reqd_vels, prov_ctrls) <- main_loop
+        mapM (uncurry connect) (reqd_rlf_seqs `zip` prov_rlf_seqs)
+        mapM (uncurry connect) (reqd_prs_seqs `zip` prov_prs_seqs)
+        mapM (uncurry connect) (prov_vels `zip` reqd_vels)
+        mapM (uncurry connect) (prov_ctrls `zip` reqd_ctrls)
+        
+vel_sim 1 = []
+vel_sim 2 = []
+vel_sim 3 = []
+vel_sim 4 = []
+
+acc_sim 1 = []
+acc_sim 2 = []
+acc_sim 3 = []
+acc_sim 4 = []
