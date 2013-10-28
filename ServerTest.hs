@@ -36,46 +36,60 @@ client          = component $
                      return (seal2 (rop, pqe))
 
 test            = do t <- ticketDispenser
-                     (rop1, pqe1) <- client
-                     (rop2, pqe2) <- client
-                     (rop3, pqe3) <- client
-                     (rop4, pqe4) <- client
+                     (rop1, pqe1@(PQ p1)) <- client
+                     (rop2, pqe2@(PQ p2)) <- client
+                     (rop3, pqe3@(PQ p3)) <- client
+                     (rop4, pqe4@(PQ p4)) <- client
                      connect rop1 t
                      connect rop2 t
                      connect rop3 t
                      connect rop4 t
-                     return [pqe1, pqe2, pqe3, pqe4]
+                     return [p1, p2, p3, p4]
 
 
 
 
--- Takes a simulation returning a list of queue-ports and returns all values
---  sent to those ports.
-tickets :: Int -> (forall c. AR c [PQ a c1]) -> Schedule -> [Value]
-tickets limit code sch =
-          let (t, pqs) = simulationSched sch code
-              labs     = sendsTo [a | PQ a <- pqs] (fmap (take limit) t)
-          in [x|SND _ (x) _ <- labs]
+         
+-- A simulation trace along with a list of ports to observe
+newtype Sim = Sim ((Trace, [Int]), [(Name,Name)])
+instance Show Sim where
+  show (Sim ((t,_),_)) = unlines (map show $ traceLabels t)
 
--- Checks that there 
+-- Taka a finite initial part of the simulation trace
+cutSim :: Int -> Sim -> Sim
+cutSim n (Sim ((t,ns),xs)) = Sim ((fmap (take n) t, take n ns), xs)
+
+-- Shrink the simulation trace and rerun it
+-- This would work much better if the trace was a tree, branching on new processes.
+shrinkSim :: (forall c. AR c [(Name,Name)]) -> Sim -> [Sim]
+shrinkSim code (Sim (trc, _)) = [rerun tn'| tn' <- shrnk trc ] where
+  rerun tns = Sim $ simulationRerun tns code
+  shrnk ((init,t),ns) = fmap (\t' -> ((init,t'),[])) $ shrinkList shrinkNothing t
+  
+-- Checks that there are no duplicate tickets being issued.
 prop_norace :: Property
 prop_norace = sized $ \n -> do
   let code  = test
       limit = (1+n*10)
-      shrnk :: Schedule -> [Schedule]
-      shrnk = shrinkSchedule limit (\g -> fst (simulationLoggingRand g code))
-  forAllShrink genSchedule shrnk $ \sched -> 
-    let ts = tickets limit code sched in ts == nub ts
+      gen :: Gen Sim
+      gen = fmap (cutSim limit . Sim) $ simulationLoggingRandG code
+      shrnk :: Sim -> [Sim]
+      shrnk = shrinkSim code
+            -- shrinkNothing -- Disable shrinking
+      
+      prop :: Sim -> Bool
+      prop (Sim ((t,_),ps)) = let ticks = [x |SND _ x _ <- sendsTo ps t] in ticks == nub ticks
+  forAllShrink gen shrnk prop
 
 
 -- Just tests that the rerun scheduler works with unmodified traces.    
 testRerun = do
-  g <- return $ (read "1968150254 2092437132")
+  g <- newStdGen
   let (t,a) = simulationLoggingRand g test
       ls    = t
-  mapM_ print (traceLabels $ fst t)
+  mapM_ print (take 100 $ traceLabels $ fst t)
   putStrLn ""
-  let (x,_) = simulationRerun t test
-  mapM_ print (traceLabels x)
-  print $ traceLabels (fst t) == traceLabels x
+  let ((x,_),_) = simulationRerun t test
+  mapM_ print (take 100 $  traceLabels x)
+  print $ take 100 (traceLabels (fst t)) == (take 100 $ traceLabels x)
     

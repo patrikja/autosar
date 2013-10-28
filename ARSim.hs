@@ -480,6 +480,7 @@ labelName _           = Nothing
 
 
 -- An initial state, and all intermediate states
+-- JD: Maybe the initial state is not even needed, it can be recomputed easily for a given program.
 type Trace = ([Proc], Steps)
 type Steps = [(Label,[Proc])]
 traceLabels :: Trace -> [Label]
@@ -557,17 +558,23 @@ loggingRandSched _ ls = do
   W.tell [ix]
   return $ Just (ls !! ix)
 
-simulationLoggingRand :: StdGen -> (forall c. AR c a) -> ((Trace, [Int]), a)
-simulationLoggingRand rng m = ((v, w),a)
-  where (v, w) = unGen (W.runWriterT g) rng 0
+simulationLoggingRandG :: (forall c. AR c a) -> Gen ((Trace, [Int]), a)
+simulationLoggingRandG m = do
+  t <- v
+  return (t,a)
+  where v      = W.runWriterT g
         (g, a) = simulationM loggingRandSched m
+  
+simulationLoggingRand :: StdGen -> (forall c. AR c a) -> ((Trace, [Int]), a)
+simulationLoggingRand rng m = unGen (simulationLoggingRandG m) rng 0
   
 -- A trace along with the index of each choice the scheduler made. 
 newtype IndexTrace = IndexTrace (Trace,[Int])
 instance Show IndexTrace where 
   show (IndexTrace ((ps,xs), _)) = unlines (map (show . fst) xs) 
      ++ show (last (ps : map snd xs))
-    
+  
+{-  
 -- Scheduler based on either a random seed or a finite list of labels
 data Schedule = Random StdGen
               | Rerun IndexTrace deriving Show
@@ -589,7 +596,7 @@ shrinkSchedule limit f (Random rng) = [Rerun (IndexTrace $ g $ f rng)]
   where g ((a,t),ns) = ((a,take limit t),ns)
 shrinkSchedule limit f (Rerun (IndexTrace ((init,steps),ns))) = 
   map (\x -> Rerun (IndexTrace ((init,x),ns))) $ shrinkList shrinkNothing steps
-              
+-}            
 
 -- Scheduler that reruns a trace. The only difficult part is what to do if there are several
 --   labels in the choice list (ls) that match the next label from the rerun trace.
@@ -602,20 +609,21 @@ rerunSched n ls = do
   case steps of 
     []         -> return Nothing -- Terminate
     ((rr,rrps):rrs')  -> do 
-      S.put ((init, rrs'),tail ns)
+      S.put ((init, rrs'),drop 1 ns)
       -- Slightly relaxed equality on labels, ignores return values and such.
-      let expandSearch = case [x | x <- take (head ns+1) ls, fst x `similarLabel` rr] of
-                            []     -> rerunSched n ls 
+      
+      let limitls = if null ns then ls else reverse $ take (head ns+1) ls
+          expandSearch = case [x | x <- limitls, fst x `similarLabel` rr] of
+                            []     -> rerunSched n ls -- Just ignore this trace and use the next one.
                             [x]    -> return $ Just $ x
-                            xs     -> return $ Just $ last xs
-      case [x | x <- take (head ns+1) ls, fst x == rr] of
+                            (x:xs) -> return $ Just $ x -- Possibly not the 'intended' choice
+      case [x | x <- limitls, fst x == rr] of
         []     -> expandSearch
-        [x]    -> return $ Just $ x  -- Possibly this trace is just an artifact of 
-                                     -- a now redundant process, ignore it
-        xs     -> return $ Just $ last xs -- Take the label that's closest to the original choice
+        [x]    -> return $ Just $ x
+        (x:xs) -> return $ Just $ x -- Take the label that's closest to the original choice
 
-simulationRerun :: (Trace,[Int]) -> (forall c. AR c a) -> (Trace, a)
-simulationRerun lsns m = (S.evalState m' lsns, a)
+simulationRerun :: (Trace,[Int]) -> (forall c. AR c a) -> ((Trace,[Int]), a)
+simulationRerun lsns m = ((S.evalState m' lsns,[] {- Should give actual indexes -}), a)
     where (m',a) = simulationM rerunSched m
 
 similarLabel :: Label -> Label -> Bool
