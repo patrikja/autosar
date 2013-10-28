@@ -1,7 +1,9 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies,
              Rank2Types, ExistentialQuantification #-}
 
-module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
+module ARSim -- Lets design the interface later...
+{-
+              (RunM, RE, PE, RQ, PQ(..), RO, PO, IV, EX, Value(..), Valuable(..), StdRet(..),
               rte_send, rte_receive, rte_write, rte_read, rte_isUpdated, rte_invalidate, 
               rte_call, rte_callAsync, rte_result, rte_irvWrite, rte_irvRead, rte_enter, rte_exit,
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
@@ -10,16 +12,20 @@ module ARSim (RunM, RE, PE, RQ, PQ, RO, PO, IV, EX, Value, Valuable, StdRet(..),
               Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
               TraceOpt(..), putTrace, simulationM, headSched, simulationHead,
-              randSched, simulationRand) where
+              randSched, simulationRand) -} where
 
+              
 import Control.Monad (liftM)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
 
 import System.Random (StdGen)
-import Test.QuickCheck (Gen, elements)
-import Test.QuickCheck.Gen (unGen)
+import Test.QuickCheck (Gen, elements, choose, shrinkNothing)
+import Test.QuickCheck.Arbitrary (shrinkList)
+import Test.QuickCheck.Gen (Gen(..))
+import qualified Control.Monad.Writer as W
+import qualified Control.Monad.State as S
 
 -- | A monad for writing runnables
 newtype RunM a          = RunM (Con a -> Code)
@@ -434,7 +440,7 @@ data Proc       = Run   (InstName, RunName) Time Act Int Static
                 | Src   (InstName, ElemName) String [(Time,Value)]
                 | Sink  (InstName, ElemName) String Time [(Time,Value)]
 
-spacesep        = concat . intersperse " "
+spacesep        = concat . intersperse " " -- JD: Same as unwords from prelude?
 
 instance Show Proc where
         show (Run a t act n s)  = spacesep ["Run", show a, show t, show act, show n]
@@ -468,13 +474,42 @@ data Label      = ENTER (InstName, ExclName)
                 | DELTA Time
                 | PASS
                 deriving (Eq, Ord, Show)
+labelName :: Label -> Maybe (Name,Name)
+labelName (SND n _ _) = Just n
+labelName _           = Nothing
 
+
+-- An initial state, and all intermediate states
+-- JD: Maybe the initial state is not even needed, it can be recomputed easily for a given program.
+type Trace = ([Proc], Steps)
+type Steps = [(Label,[Proc])]
+traceLabels :: Trace -> [Label]
+traceLabels (_,xs) = map fst xs
+
+traceSteps :: Trace -> Steps
+traceSteps = snd
+
+finalState :: Trace -> [Proc]
+finalState (_,xs) = snd $ last xs
+
+putTrace, putTraceLabels :: Trace -> IO ()
+-- Outputs the labels and the final state
+putTrace x = putTraceLabels x >> print (finalState x)
+
+-- TODO: implement time DELTA.
+putTraceLabels = mapM_ printLabel . traceLabels where
+  printLabel l@(DELTA t) = print l >> threadDelay (round (t*1000000))
+  printLabel l           = print l
+
+
+{- -- This needs to be adapted to the new trace type or replaced with a more modular approach
 data TraceOpt           = Labels | States | First | Last | Hold
                         deriving (Eq,Show)
 
-putTrace :: [TraceOpt] -> [Either [Proc] Label] -> IO ()
-putTrace opt []         = return ()
-putTrace opt [Left ps]
+putTrace :: [TraceOpt] -> Trace -> IO ()
+putTrace opt (init, trc) do
+  if First `elem` opt 
+    then do putStr ("## " ++ show ps ++ "\n")    putTrace (opt\\[First]) ls
   | Last `elem` opt     = putStr ("## " ++ show ps ++ "\n")
 putTrace opt (Left ps : ls) 
   | First `elem` opt    = do putStr ("## " ++ show ps ++ "\n")
@@ -491,37 +526,134 @@ putTrace opt (Right l:ls)
   | Labels `elem` opt   = do putStr (show l ++ "\n")
                              putTrace opt ls
 putTrace opt (_ : ls)   = putTrace opt ls
+-}
+                             
+sendsTo :: [(Name, Name)] -> Trace -> [Label]
+sendsTo ns (_,ls) = [ l | l <- map fst ls, Just n' <- [labelName l], n' `elem` ns ]
 
--- The list is not empty
-type SchedulerM m       = [(Label,[Proc])] -> m (Label,[Proc])
+-- The list is not empty. 
+-- The Int is the number of choices made so far (not really needed perhaps).
+type SchedulerM m       = Int -> [(Label,[Proc])] -> m (Maybe (Label,[Proc]))
 
 headSched :: SchedulerM Identity
-headSched = return . head
+headSched _ = return . Just . head
 
-simulationHead :: (forall c. AR c a) -> ([Either [Proc] Label], a)
+simulationHead :: (forall c. AR c a) -> (Trace, a)
 simulationHead m = (runIdentity m', a) 
   where (m', a) = simulationM headSched m
 
 randSched :: SchedulerM Gen
-randSched = elements
+randSched _ = fmap Just . elements
 
-simulationRand :: StdGen -> (forall c. AR c a) -> ([Either [Proc] Label], a)
+simulationRand :: StdGen -> (forall c. AR c a) -> (Trace, a)
 simulationRand rng m = (unGen g rng 0, a)
   where (g, a) = simulationM randSched m
--- replay
 
-simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m [Either [Proc] Label], a)
-simulationM sched m     = (liftM (Left (procs s):) traceM, x)
+-- A random scheduler that also logs the indexes of all choices. 
+-- This is used to when rerunning the trace.
+loggingRandSched :: SchedulerM (W.WriterT [Int] Gen)
+loggingRandSched _ ls = do 
+  let chooseLabel = choose (0,length ls - 1)
+  ix <- W.lift chooseLabel
+  W.tell [ix]
+  return $ Just (ls !! ix)
+
+simulationLoggingRandG :: (forall c. AR c a) -> Gen ((Trace, [Int]), a)
+simulationLoggingRandG m = do
+  t <- v
+  return (t,a)
+  where v      = W.runWriterT g
+        (g, a) = simulationM loggingRandSched m
+  
+simulationLoggingRand :: StdGen -> (forall c. AR c a) -> ((Trace, [Int]), a)
+simulationLoggingRand rng m = unGen (simulationLoggingRandG m) rng 0
+  
+-- A trace along with the index of each choice the scheduler made. 
+newtype IndexTrace = IndexTrace (Trace,[Int])
+instance Show IndexTrace where 
+  show (IndexTrace ((ps,xs), _)) = unlines (map (show . fst) xs) 
+     ++ show (last (ps : map snd xs))
+  
+{-  
+-- Scheduler based on either a random seed or a finite list of labels
+data Schedule = Random StdGen
+              | Rerun IndexTrace deriving Show
+
+simulationSched :: Schedule -> (forall c. AR c a) -> (Trace, a)
+simulationSched (Random s)               = fmap (\((a,b),c) -> (a,c)) $ simulationLoggingRand s
+simulationSched (Rerun (IndexTrace ls)) = simulationRerun ls
+
+
+
+-- Random Generator for schedules
+genSchedule :: Gen Schedule
+genSchedule = MkGen (\s _ -> Random s)
+       
+-- Shrinks a schedule by replacing a random seed with a list of choices, using a supplied
+--  run-function. Or tries to shrink a list by removing elements from it.       
+shrinkSchedule :: Int -> (StdGen -> (Trace,[Int])) -> Schedule -> [Schedule]
+shrinkSchedule limit f (Random rng) = [Rerun (IndexTrace $ g $ f rng)]
+  where g ((a,t),ns) = ((a,take limit t),ns)
+shrinkSchedule limit f (Rerun (IndexTrace ((init,steps),ns))) = 
+  map (\x -> Rerun (IndexTrace ((init,x),ns))) $ shrinkList shrinkNothing steps
+-}            
+
+-- Scheduler that reruns a trace. The only difficult part is what to do if there are several
+--   labels in the choice list (ls) that match the next label from the rerun trace.
+-- Currently it uses a list of indexes of the original choices to guarantee that rerunning an 
+--   exact trace gives identical result, however if elements have been  removed from the trace it  
+--   may still fail to identify the "correct" choice from the list.
+rerunSched :: SchedulerM (S.State (Trace,[Int]))
+rerunSched n ls = do
+  ((init,steps),ns) <- S.get
+  case steps of 
+    []         -> return Nothing -- Terminate
+    ((rr,rrps):rrs')  -> do 
+      S.put ((init, rrs'),drop 1 ns)
+      -- Slightly relaxed equality on labels, ignores return values and such.
+      
+      let limitls = if null ns then ls else reverse $ take (head ns+1) ls
+          expandSearch = case [x | x <- limitls, fst x `similarLabel` rr] of
+                            []     -> rerunSched n ls -- Just ignore this trace and use the next one.
+                            [x]    -> return $ Just $ x
+                            (x:xs) -> return $ Just $ x -- Possibly not the 'intended' choice
+      case [x | x <- limitls, fst x == rr] of
+        []     -> expandSearch
+        [x]    -> return $ Just $ x
+        (x:xs) -> return $ Just $ x -- Take the label that's closest to the original choice
+
+simulationRerun :: (Trace,[Int]) -> (forall c. AR c a) -> ((Trace,[Int]), a)
+simulationRerun lsns m = ((S.evalState m' lsns,[] {- Should give actual indexes -}), a)
+    where (m',a) = simulationM rerunSched m
+
+similarLabel :: Label -> Label -> Bool
+similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
+similarLabel (IRVW n1 _)   (IRVW n2 _)   = n1 == n2
+similarLabel (RES n1 _)    (RES n2 _)    = n1 == n2
+similarLabel (RET n1 _)    (RET n2 _)    = n1 == n2
+similarLabel (RCV n1 _)    (RCV n2 _)    = n1 == n2
+similarLabel (SND n1 _ _)  (SND n2 _ _)  = n1 == n2
+-- Several more cases could be added.
+similarLabel a             b             = a == b
+  
+  
+  
+  
+simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
+simulationM sched m     = (liftM (\ss -> (procs s, ss)) traceM, x)
   where (x,s)           = runAR m startState 
         traceM          = simulateM sched (connected (conns s)) (procs s)
 
-simulateM :: Monad m => SchedulerM m -> Connected -> [Proc] -> m [Either [Proc] Label]
-simulateM sched conn procs     
-  | null next           = return [Left procs]
-  | otherwise           = do
-      (l,procs') <- sched next
-      liftM (\t -> Right l : Left procs' : t) $ simulateM sched conn procs'
-  where next            = step conn procs
+simulateM :: Monad m => SchedulerM m -> Connected -> [Proc] -> m Steps
+simulateM = go 0 where
+  go k sched conn procs
+    | null next           = return []
+    | otherwise           = do
+      maysched <- sched k next
+      case maysched of
+        Nothing               -> return []
+        Just trans@(l,procs') -> liftM (\plss -> trans:plss) $ go (k+1) sched conn procs'
+    where next            = step conn procs
 
 -- This provides all possible results, a "scheduler" then needs to pick one.
 step :: Connected -> [Proc] -> [(Label, [Proc])]
