@@ -127,7 +127,7 @@ main_loop = component $ do
         runnable (MinInterval 0) [Timed 0.01] (loop velostreams slipstreams)
         return (map seal velostreams, map seal slipstreams)
         
-system = do
+abs_system = do
         (velostreams_in, slipstreams_out) <- main_loop
         (slipstreams_in, onoffs_r_out, onoffs_p_out) <- fmap unzip3 $ mapM (const controller) [1..4]
         (accels_r_in, onoffs_r_in, valves_r_out) <- fmap unzip3 $ mapM (const relief) [1..4]
@@ -137,33 +137,25 @@ system = do
         connectAll onoffs_r_out onoffs_r_in
         connectAll onoffs_p_out onoffs_p_in
         
-        return (accels_r_in, accels_p_in, velostreams_in, valves_r_out, valves_p_out)
+        return (velostreams_in, accels_r_in, accels_p_in, valves_r_out, valves_p_out)
         
-test = do
-        (accels_r_in, accels_p_in, velos_in, valves_r_out, valves_p_out) <- system
+test vel_sim acc_sim = do
+        (velos_in, accels_r_in, accels_p_in, valves_r_out, valves_p_out) <- abs_system
 
-        v_sensors <- mapM (sensor "V" vel_sim) [1..4]
+        v_sensors <- sources vel_sim [1..4]
+        a_sensors <- sources acc_sim [1..4]
         connectAll v_sensors velos_in
-
-        a_sensors <- mapM (sensor "A" acc_sim) [1..4]
         connectAll a_sensors accels_r_in
         connectAll a_sensors accels_p_in
         
-        r_actuators <- mapM (sink . ("R"++) . show) [1..4]
+        r_actuators <- sinks [1..4]
+        p_actuators <- sinks [1..4]
         connectAll valves_r_out r_actuators
-        
-        p_actuators <- mapM (sink . ("P"++) . show) [1..4]
         connectAll valves_p_out p_actuators
 
-sensor v table n =
-        source (v ++ show n) (table n)
-        
-vel_sim 1 = []
-vel_sim 2 = []
-vel_sim 3 = []
-vel_sim 4 = []
+sources table nums =
+        mapM (source . table) nums
 
-acc_sim 1 = []
-acc_sim 2 = []
-acc_sim 3 = []
-acc_sim 4 = []
+sinks nums =
+        mapM (const sink) nums
+

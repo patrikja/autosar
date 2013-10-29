@@ -17,8 +17,8 @@ c2              = do pop <- providedOperation
                      serverRunnable Concurrent [pop] r2
                      return (seal pop)
 
-test            = do src <- source "A" [(0.0,5),(0.0,7::Int)]
-                     snk <- sink "B"
+test            = do src <- source [(0.0,5),(0.0,7::Int)]
+                     snk <- sink
                      (re,rop,pe) <- component c1
                      pop <- component c2
                      connect rop pop

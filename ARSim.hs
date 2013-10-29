@@ -167,8 +167,8 @@ serverRunnable          :: (Valuable a, Valuable b) =>
 
 component               :: (forall c. AR c a) -> AR c a
 
-source                  :: (Valuable a) => String -> [(Time,a)] -> AR c (PE a ())
-sink                    :: (Valuable a) => String -> AR c (RE a ())
+source                  :: (Valuable a) => [(Time,a)] -> AR c (PE a ())
+sink                    :: (Valuable a) => AR c (RE a ())
 
 
 -- A hack to do some kind of subtype coercion. 
@@ -394,12 +394,12 @@ exclusiveArea           = do a <- newName
                              addProc (Excl a True)
                              return (EX a)
 
-source name vs          = do a <- newName
-                             addProc (Src a name [(t,toVal v)|(t,v)<-vs])
+source vs               = do a <- newName
+                             addProc (Src a [(t,toVal v)|(t,v)<-vs])
                              return (PE a)
 
-sink name               = do a <- newName
-                             addProc (Sink a name 0.0 [])
+sink                    = do a <- newName
+                             addProc (Sink a 0.0 [])
                              return (RE a)
 
 type Client     = (InstName, OpName)
@@ -448,8 +448,8 @@ data Proc       = Run   (InstName, RunName) Time Act Int Static
                 | QElem (InstName, ElemName) Int [Value]
                 | DElem (InstName, ElemName) Bool StdReturn
                 | Op    (InstName, OpName) [Value]
-                | Src   (InstName, ElemName) String [(Time,Value)]
-                | Sink  (InstName, ElemName) String Time [(Time,Value)]
+                | Src   (InstName, ElemName) [(Time,Value)]
+                | Sink  (InstName, ElemName) Time [(Time,Value)]
 
 spacesep        = concat . intersperse " " -- JD: Same as unwords from prelude?
 
@@ -462,8 +462,32 @@ instance Show Proc where
         show (QElem a n vs)     = spacesep ["QElem", show a, show n, show vs]
         show (DElem a v r)      = spacesep ["DElem", show a, show v, show r]
         show (Op a vs)          = spacesep ["Op", show a, show vs]
-        show (Src a n vs)       = spacesep ["Src", show a, show n, show vs]
-        show (Sink a n t vs)    = spacesep ["Sink", show a, show n, show t, show vs]
+        show (Src a vs)         = spacesep ["Src", show a, show vs]
+        show (Sink a t vs)      = spacesep ["Sink", show a, show t, show vs]
+
+shortProc :: Proc -> String
+shortProc (Run a t act n s)  = spacesep ["Run", show a]
+shortProc (RInst a c ex co)  = spacesep ["RInst", show a]
+shortProc (Excl a v)         = spacesep ["Excl", show a]
+shortProc (Irv a v)          = spacesep ["Irv", show a]
+shortProc (Timer a v t)      = spacesep ["Timer", show a]
+shortProc (QElem a n vs)     = spacesep ["QElem", show a]
+shortProc (DElem a v r)      = spacesep ["DElem", show a]
+shortProc (Op a vs)          = spacesep ["Op", show a]
+shortProc (Src a n vs)       = spacesep ["Src", show a]
+shortProc (Sink a n t vs)    = spacesep ["Sink", show a]
+
+shortProc :: Proc -> String
+shortProc (Run a t act n s)  = spacesep ["Run", show a]
+shortProc (RInst a c ex co)  = spacesep ["RInst", show a]
+shortProc (Excl a v)         = spacesep ["Excl", show a]
+shortProc (Irv a v)          = spacesep ["Irv", show a]
+shortProc (Timer a v t)      = spacesep ["Timer", show a]
+shortProc (QElem a n vs)     = spacesep ["QElem", show a]
+shortProc (DElem a v r)      = spacesep ["DElem", show a]
+shortProc (Op a vs)          = spacesep ["Op", show a]
+shortProc (Src a n vs)       = spacesep ["Src", show a]
+shortProc (Sink a n t vs)    = spacesep ["Sink", show a]
 
 shortProc :: Proc -> String
 shortProc (Run a t act n s)  = spacesep ["Run", show a]
@@ -708,8 +732,8 @@ may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
 may_say (Run a t act n s) | t > 0.0                   = DELTA t
 may_say (Timer a 0.0 t)                               = TICK  a
 may_say (Timer a t t0) | t > 0.0                      = DELTA t
-may_say (Src a n ((0.0,v):vs))                        = WR    a v
-may_say (Src a n ((t,v):vs)) | t > 0.0                = DELTA t
+may_say (Src a ((0.0,v):vs))                          = WR    a v
+may_say (Src a ((t,v):vs)) | t > 0.0                  = DELTA t
 may_say _                                             = PASS
 
 
@@ -735,8 +759,8 @@ say (NEW _)        (Run a _ (Serving (c:cs) (v:vs)) n s) = [Run a (minstart s) (
 say (DELTA d)      (Run a t act n s)                     = [Run a (t-d) act n s]
 say (TICK _)       (Timer a _ t)                         = [Timer a t t]
 say (DELTA d)      (Timer a t t0)                        = [Timer a (t-d) t0]
-say (WR _ _)       (Src a n (_:vs))                      = [Src a n vs]
-say (DELTA d)      (Src a n ((t,v):vs))                  = [Src a n ((t-d,v):vs)]
+say (WR _ _)       (Src a (_:vs))                        = [Src a vs]
+say (DELTA d)      (Src a ((t,v):vs))                    = [Src a ((t-d,v):vs)]
 
 
 may_hear :: Connected -> Label -> Proc -> Label
@@ -772,8 +796,8 @@ may_hear conn (DELTA d)      (Run _ t _ _ _)   | t == 0         = DELTA d
                                                | d > t          = PASS
 may_hear conn (DELTA d)      (Timer _ t _)     | d <= t         = DELTA d
                                                | d > t          = PASS
-may_hear conn (WR a v)       (Sink b _ _ _)    | a `conn` b     = WR a v
-may_hear conn (DELTA d)      (Sink _ _ _ _)                     = DELTA d
+may_hear conn (WR a v)       (Sink b _ _)      | a `conn` b     = WR a v
+may_hear conn (DELTA d)      (Sink _ _ _)                       = DELTA d
 may_hear conn label _                                           = label
 
 
