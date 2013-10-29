@@ -149,10 +149,8 @@ wheel n = do
         return (prs_ctrl, rlf_ctrl, vel)
 
 system = do
-        ws <- mapM wheel [1..4]
-        cs <- mapM (const controller) [1..4]
-        let (prov_rlf_seqs, prov_prs_seqs, prov_vels) = unzip3 ws
-            (reqd_rlf_seqs, reqd_prs_seqs, reqd_ctrls) = unzip3 cs
+        (prov_rlf_seqs, prov_prs_seqs, prov_vels) <- fmap unzip3 $ mapM wheel [1..4]
+        (reqd_rlf_seqs, reqd_prs_seqs, reqd_ctrls) <- fmap unzip3 $ mapM (const controller) [1..4]
         (reqd_vels, prov_ctrls) <- main_loop
         mapM (uncurry connect) (reqd_rlf_seqs `zip` prov_rlf_seqs)
         mapM (uncurry connect) (reqd_prs_seqs `zip` prov_prs_seqs)

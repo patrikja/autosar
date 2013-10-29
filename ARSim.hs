@@ -30,6 +30,9 @@ import qualified Control.Monad.State as S
 -- | A monad for writing runnables
 newtype RunM a          = RunM (Con a -> Code)
 
+instance Functor RunM where
+        fmap f (RunM g) = RunM (\cont -> g (cont . f))
+        
 instance Monad RunM where
         RunM f >>= b    = RunM (\cont -> f (\x -> let RunM g = b x in g cont))
         return r        = RunM (\cont -> cont r)
@@ -127,6 +130,9 @@ rte_exit        :: EX c -> RunM (StdRet ())
 -- ProcessSoup building up.
 newtype AR c a          = AR (State -> (a,State))
 
+instance Functor (AR c) where
+        fmap f (AR g)   = AR (\s -> let (x,s') = g s in (f x, s'))
+        
 instance Monad (AR c) where
         AR f >>= b      = AR (\s -> let (x,t) = f s; AR g = b x in g t)
         return x        = AR (\s -> (x,s))
