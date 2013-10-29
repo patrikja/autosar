@@ -20,6 +20,7 @@ import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
 import Data.Tree
+import Data.Function(on)
 
 import System.Random (StdGen)
 import Test.QuickCheck (Gen, elements, choose, shrinkNothing)
@@ -38,7 +39,7 @@ instance Monad RunM where
         RunM f >>= b    = RunM (\cont -> f (\x -> let RunM g = b x in g cont))
         return r        = RunM (\cont -> cont r)
 
--- Phatom type arguments to make the use more type safe
+-- Phantom type arguments to make the use more type safe
 newtype RE a c          = RE (InstName, ElemName)
 newtype PE a c          = PE (InstName, ElemName)
 newtype RQ a c          = RQ (InstName, ElemName)
@@ -462,7 +463,7 @@ trig conn a s   = or [ a `conn` b | b <- triggers s ]
 -- though, since every Proc element might require a distinct type. And I don't think
 -- we want to enclose each Proc behind an existential quantifier.
 data Proc       = Run   (InstName, RunName) Time Act Int Static
-                | RInst (InstName, RunName) (Maybe Client) [ExclName] Code
+                | RInst (InstName, RunName) Int (Maybe Client) [ExclName] Code
                 | Excl  (InstName, ExclName) Bool
                 | Irv   (InstName, VarName) Value
                 | Timer (InstName, RunName) Time Time
@@ -476,7 +477,7 @@ spacesep        = concat . intersperse " " -- JD: Same as unwords from prelude?
 
 instance Show Proc where
         show (Run a t act n s)  = spacesep ["Run", show a, show t, show act, show n]
-        show (RInst a c ex co)  = spacesep ["RInst", show a, show c, show ex, show co]
+        show (RInst a n c ex d) = spacesep ["RInst", show a, show n, show c, show ex, show d]
         show (Excl a v)         = spacesep ["Excl", show a, show v]
         show (Irv a v)          = spacesep ["Irv", show a, show v]
         show (Timer a v t)      = spacesep ["Timer", show v, show t]
@@ -488,7 +489,7 @@ instance Show Proc where
 
 shortProc :: Proc -> String
 shortProc (Run a t act n s)  = spacesep ["Run", show a]
-shortProc (RInst a c ex co)  = spacesep ["RInst", show a]
+shortProc (RInst a n c _ _)  = spacesep ["RInst", show a++"-"++show n]
 shortProc (Excl a v)         = spacesep ["Excl", show a]
 shortProc (Irv a v)          = spacesep ["Irv", show a]
 shortProc (Timer a v t)      = spacesep ["Timer", show a]
@@ -589,7 +590,8 @@ toForest :: Trace -> Forest (Int,Proc,Label)
 toForest (ps,tc)= toForest' (-1) indexed where
   indexed = (zip tc [0..])
   toForest' :: Int -> [(SchedulerOption,Int)] -> Forest (Int,Proc,Label)
-  toForest' par sos = [toTree ix so|(so,ix) <- sos, fst (optionParent so) == par]
+  toForest' par sos = map snd $ sortBy (compare `on` fst)
+    [(snd (optionParent so),toTree ix so)|(so,ix) <- sos, fst (optionParent so) == par]
   toTree :: Int -> SchedulerOption -> Tree (Int,Proc,Label)
   toTree ix so = Node (ix, orphan $ optionSpeaker so, optionLabel so) (toForest' ix indexed) 
                               -- could drop ix from indexed to optimise 
@@ -708,20 +710,20 @@ commit conn l pre p post k       = (l, (p, commit' l pre (adopts k (say l $ orph
         commit' l (p:pre) post   = commit' l pre (hear conn l k p : post)
 
 may_say :: Proc -> Label
-may_say (RInst (i,r) c ex (Enter x cont))             = ENTER (i,x)
-may_say (RInst (i,r) c (x:ex) (Exit y cont)) | x==y   = EXIT  (i,x)
-may_say (RInst (i,r) c ex (IrvRead s cont))           = IRVR  (i,s) void
-may_say (RInst (i,r) c ex (IrvWrite s v cont))        = IRVW  (i,s) v
-may_say (RInst (i,r) c ex (Receive e cont))           = RCV   (i,e) void
-may_say (RInst (i,r) c ex (Send e v cont))            = SND   (i,e) v void
-may_say (RInst (i,r) c ex (Read e cont))              = RD    (i,e) void
-may_say (RInst (i,r) c ex (Write e v cont))           = WR    (i,e) v
-may_say (RInst (i,r) c ex (IsUpdated e cont))         = UP    (i,e) void
-may_say (RInst (i,r) c ex (Invalidate e cont))        = INV   (i,e)
-may_say (RInst (i,r) c ex (Call o v cont))            = CALL  (i,o) v void
-may_say (RInst (i,r) c ex (Result o cont))            = RES   (i,o) void
-may_say (RInst (i,r) (Just a) ex (Terminate (Ok v)))  = RET   a v
-may_say (RInst (i,r) Nothing [] (Terminate _))        = TERM  (i,r)
+may_say (RInst (i,r) _ c ex (Enter x cont))             = ENTER (i,x)
+may_say (RInst (i,r) _ c (x:ex) (Exit y cont)) | x==y   = EXIT  (i,x)
+may_say (RInst (i,r) _ c ex (IrvRead s cont))           = IRVR  (i,s) void
+may_say (RInst (i,r) _ c ex (IrvWrite s v cont))        = IRVW  (i,s) v
+may_say (RInst (i,r) _ c ex (Receive e cont))           = RCV   (i,e) void
+may_say (RInst (i,r) _ c ex (Send e v cont))            = SND   (i,e) v void
+may_say (RInst (i,r) _ c ex (Read e cont))              = RD    (i,e) void
+may_say (RInst (i,r) _ c ex (Write e v cont))           = WR    (i,e) v
+may_say (RInst (i,r) _ c ex (IsUpdated e cont))         = UP    (i,e) void
+may_say (RInst (i,r) _ c ex (Invalidate e cont))        = INV   (i,e)
+may_say (RInst (i,r) _ c ex (Call o v cont))            = CALL  (i,o) v void
+may_say (RInst (i,r) _ c ex (Result o cont))            = RES   (i,o) void
+may_say (RInst (i,r) _ (Just a) ex (Terminate (Ok v)))  = RET   a v
+may_say (RInst (i,r) _ Nothing [] (Terminate _))        = TERM  (i,r)
 may_say (Run a 0.0 Pending n s)
   | n == 0 || invocation s == Concurrent              = NEW   a
 may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
@@ -735,29 +737,30 @@ may_say _                                             = PASS
 
 
 say :: Label -> Proc -> [Proc]
-say (ENTER _)      (RInst a c ex (Enter x cont))         = [RInst a c (x:ex) (cont void)]
-say (EXIT _)       (RInst a c (_:ex) (Exit x cont))      = [RInst a c ex (cont void)]
-say (IRVR _ res)   (RInst a c ex (IrvRead _ cont))       = [RInst a c ex (cont res)]
-say (IRVW _ _)     (RInst a c ex (IrvWrite _ _ cont))    = [RInst a c ex (cont void)]
-say (RCV _ res)    (RInst a c ex (Receive _ cont))       = [RInst a c ex (cont res)]
-say (SND _ _ res)  (RInst a c ex (Send _ _ cont))        = [RInst a c ex (cont res)]
-say (RD _ res)     (RInst a c ex (Read _ cont))          = [RInst a c ex (cont res)]
-say (WR _ _)       (RInst a c ex (Write _ _ cont))       = [RInst a c ex (cont void)]
-say (UP _ res)     (RInst a c ex (IsUpdated _ cont))     = [RInst a c ex (cont res)]
-say (INV _)        (RInst a c ex (Invalidate _ cont))    = [RInst a c ex (cont void)]
-say (CALL _ _ res) (RInst a c ex (Call o _ cont))        = [RInst a c ex (cont res)]
-say (RES _ res)    (RInst a c ex (Result o cont))        = [RInst a c ex (cont res)]
-say (RET _ _)      (RInst a _ ex (Terminate _))          = [RInst a Nothing ex (Terminate void)]
-say (TERM _)       (RInst _ _ _ _)                       = []
+say (ENTER _)      (RInst a n c ex (Enter x cont))       = [RInst a n c (x:ex) (cont void)]
+say (EXIT _)       (RInst a n c (_:ex) (Exit x cont))    = [RInst a n c ex (cont void)]
+say (IRVR _ res)   (RInst a n c ex (IrvRead _ cont))     = [RInst a n c ex (cont res)]
+say (IRVW _ _)     (RInst a n c ex (IrvWrite _ _ cont))  = [RInst a n c ex (cont void)]
+say (RCV _ res)    (RInst a n c ex (Receive _ cont))     = [RInst a n c ex (cont res)]
+say (SND _ _ res)  (RInst a n c ex (Send _ _ cont))      = [RInst a n c ex (cont res)]
+say (RD _ res)     (RInst a n c ex (Read _ cont))        = [RInst a n c ex (cont res)]
+say (WR _ _)       (RInst a n c ex (Write _ _ cont))     = [RInst a n c ex (cont void)]
+say (UP _ res)     (RInst a n c ex (IsUpdated _ cont))   = [RInst a n c ex (cont res)]
+say (INV _)        (RInst a n c ex (Invalidate _ cont))  = [RInst a n c ex (cont void)]
+say (CALL _ _ res) (RInst a n c ex (Call o _ cont))      = [RInst a n c ex (cont res)]
+say (RES _ res)    (RInst a n c ex (Result o cont))      = [RInst a n c ex (cont res)]
+say (RET _ _)      (RInst a n _ ex (Terminate _))        = [RInst a n Nothing ex (Terminate void)]
+say (TERM _)       (RInst _ _ _ _ _)                     = []
 say (NEW _)        (Run a _ Pending n s)                 = [Run a (minstart s) Idle (n+1) s,
-                                                            RInst a Nothing [] (implementation s Void)]
+                                                            RInst a n Nothing [] (implementation s Void)]
 say (NEW _)        (Run a _ (Serving (c:cs) (v:vs)) n s) = [Run a (minstart s) (Serving cs vs) (n+1) s,
-                                                            RInst a (Just c) [] (implementation s v)]
+                                                            RInst a n (Just c) [] (implementation s v)]
 say (DELTA d)      (Run a t act n s)                     = [Run a (t-d) act n s]
 say (TICK _)       (Timer a _ t)                         = [Timer a t t]
 say (DELTA d)      (Timer a t t0)                        = [Timer a (t-d) t0]
 say (WR _ _)       (Src a (_:vs))                        = [Src a vs]
 say (DELTA d)      (Src a ((t,v):vs))                    = [Src a ((t-d,v):vs)]
+
 
 
 may_hear :: Connected -> Label -> Proc -> Label
@@ -798,11 +801,11 @@ may_hear conn (DELTA d)      (Sink _ _ _)                       = DELTA d
 may_hear conn label _                                           = label
 
 
--- Not sure if a change here should actually cause adopt or not.
--- It depends on if 
+-- Not sure if a change here should actually cause adopt or not, currently it does not.
+-- Probably it should not. The process-parent (and the scheduler as a whole) only keep tracks of who speaks.
 hear :: Connected -> Label -> Int -> ParentProc -> ParentProc
-hear conn l par pp = maybe pp (\p' -> adopt par p') (hear' conn l (orphan pp))
-
+hear conn l par pp = maybe pp (\p' -> adopt (fst $ processParent pp) p') (hear' conn l (orphan pp))
+                                    -- adopt par p'
 hear' :: Connected -> Label -> Proc -> Maybe Proc
 hear' conn (ENTER a)     (Excl b True)      | a==b               = Just $ Excl b False
 hear' conn (EXIT a)      (Excl b False)     | a==b               = Just $ Excl b True

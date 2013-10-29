@@ -6,6 +6,7 @@ import System.Random
 import Test.QuickCheck
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Arbitrary
+
 import Control.Monad.State.Lazy as S
 import Control.Monad.Error
 
@@ -75,7 +76,15 @@ shrinkSim :: (forall c. AR c [Tag]) -> Sim -> [Sim]
 shrinkSim code (Sim (trc,_)) = [rerun tn'| tn' <- shrinkTrace trc ] where
   rerun tns = Sim $ simulationRerun tns code
 
-  
+shrink2 shrnk x =
+    [ y | y <- shrnk_x ] ++
+    [ z
+    | y <- shrnk_x
+    , z <- shrnk y
+    ]
+   where
+    shrnk_x = shrnk x  
+
 -- Checks that there are no duplicate tickets being issued.
 prop_norace :: Property
 (prop_norace,prop) = (\x -> (x,prop)) $ sized $ \n -> do
@@ -84,7 +93,7 @@ prop_norace :: Property
       gen :: Gen Sim
       gen = fmap (cutSim limit . Sim) $ simulationRandG code
       shrnk :: Sim -> [Sim]
-      shrnk = shrinkSim code
+      shrnk = shrink2 $ shrinkSim code
               -- shrinkNothing -- Disable shrinking
       
       prop :: Sim -> Bool
@@ -95,13 +104,14 @@ prop_norace :: Property
 -- Just tests that the rerun scheduler works with unmodified traces.    
 testRerun = do
   g <- newStdGen
-  let (t,a) = simulationRand g test
-      ls    = t
-  mapM_ print (take 100 $ traceLabels t)
+  print g
+  let s@(Sim (t,a)) = cutSim 20 $ Sim $ simulationRand g test
+  mapM_ print (traceLabelParents t)
+  putTraceForest t
   putStrLn ""
   let ((x,_)) = simulationRerun t test
-  mapM_ print (take 100 $  traceLabels x)
-  print $ take 100 (traceLabels t) == (take 100 $ traceLabels x)
+  mapM_ print (take 100 $  traceLabelParents x)
+  print $ take 100 (traceLabelParents t) == (take 100 $ traceLabelParents x)
     
 
 {- -- Some code for debugging the shrinker     
