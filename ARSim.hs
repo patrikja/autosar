@@ -834,7 +834,7 @@ hear' conn (TICK a)      (Run b t _ n s)    | a==b               = Just $ Run b 
 hear' conn (DELTA d)     (Run b 0.0 act n s)                     = Nothing -- Just $ Run b 0.0 act n s
 hear' conn (DELTA d)     (Run b t act n s)                       = Just $ Run b (t-d) act n s
 hear' conn (DELTA d)     (Timer b t t0)                          = Just $ Timer b (t-d) t0
-hear' conn (WR a v)      (Sink b n t vs)    | a `conn` b         = Just $ Sink b n 0.0 ((t,v):vs)
-hear' conn (DELTA d)     (Sink b n t vs)                         = Just $ Sink b n (t+d) vs
+hear' conn (WR a v)      (Sink b t vs)    | a `conn` b           = Just $ Sink b 0.0 ((t,v):vs)
+hear' conn (DELTA d)     (Sink b t vs)                           = Just $ Sink b (t+d) vs
 hear' conn label         proc                                    = Nothing
 
