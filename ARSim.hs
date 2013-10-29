@@ -19,6 +19,7 @@ import Control.Monad (liftM)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
+import Data.Tree
 
 import System.Random (StdGen)
 import Test.QuickCheck (Gen, elements, choose, shrinkNothing)
@@ -464,6 +465,18 @@ instance Show Proc where
         show (Src a n vs)       = spacesep ["Src", show a, show n, show vs]
         show (Sink a n t vs)    = spacesep ["Sink", show a, show n, show t, show vs]
 
+shortProc :: Proc -> String
+shortProc (Run a t act n s)  = spacesep ["Run", show a]
+shortProc (RInst a c ex co)  = spacesep ["RInst", show a]
+shortProc (Excl a v)         = spacesep ["Excl", show a]
+shortProc (Irv a v)          = spacesep ["Irv", show a]
+shortProc (Timer a v t)      = spacesep ["Timer", show a]
+shortProc (QElem a n vs)     = spacesep ["QElem", show a]
+shortProc (DElem a v r)      = spacesep ["DElem", show a]
+shortProc (Op a vs)          = spacesep ["Op", show a]
+shortProc (Src a n vs)       = spacesep ["Src", show a]
+shortProc (Sink a n t vs)    = spacesep ["Sink", show a]
+
 
 data Label      = ENTER (InstName, ExclName)
                 | EXIT  (InstName, ExclName)
@@ -489,61 +502,83 @@ labelName (SND n _ _) = Just n
 labelName _           = Nothing
 
 
+
+
 -- An initial state, and all intermediate states
 -- JD: Maybe the initial state is not even needed, it can be recomputed easily for a given program.
-type Trace = ([Proc], Steps)
-type Steps = [(Label,[Proc])]
+type Trace = ([ParentProc], [SchedulerOption])
+type ParentProc = (Proc,(Int,Int)) -- The first Int is an index in the trace (the parent)
+                                   -- The second is which child of the parent this is, with 0
+                                   --   signifying that it runs in the same thread as the parent.
+
+-- The list is not empty. 
+-- The single process in each choice is the one speaking.
+-- The Int is the number of choices made so far (not really needed perhaps).
+type SchedulerOption    = (Label, (ParentProc, [ParentProc]))
+type SchedulerM m       = Int -> [SchedulerOption] -> m (Maybe SchedulerOption)
+
+orphan :: ParentProc -> Proc
+orphan (p,_) = p
+orphans      = map orphan
+
+adopt :: Int -> Proc -> ParentProc
+adopt i p = (p,(i,0))
+adopts :: Int -> [Proc] -> [ParentProc]
+adopts i ps = [(p,(i,k)) | (p,k) <- zip ps [0..]]
+
+siblingTo :: ParentProc -> ParentProc -> Bool
+(_,x) `siblingTo` (_,y) = x == y -- This is more like "identical twins" than siblings.
+
+processParent :: ParentProc -> (Int,Int)
+processParent (_,x) = x
+
+optionSpeaker :: SchedulerOption -> ParentProc
+optionSpeaker (_,(p,_)) = p
+
+optionParent :: SchedulerOption -> (Int,Int)
+optionParent = processParent . optionSpeaker
+
+optionLabel :: SchedulerOption -> Label
+optionLabel = fst
+
 traceLabels :: Trace -> [Label]
 traceLabels (_,xs) = map fst xs
 
-traceSteps :: Trace -> Steps
+traceLabelParents :: Trace -> [(Int, (Int,Int), Label)]
+traceLabelParents (_,xs) = map (\(ix,(l,((_,x),_))) -> (ix,x,l)) (zip [0..] xs)
+
+traceSteps :: Trace -> [SchedulerOption]
 traceSteps = snd
 
 finalState :: Trace -> [Proc]
-finalState (_,xs) = snd $ last xs
+finalState (_,xs) = orphans $ snd $ snd $ last xs
 
 putTrace, putTraceLabels :: Trace -> IO ()
 -- Outputs the labels and the final state
 putTrace x = putTraceLabels x >> print (finalState x)
 
--- TODO: implement time DELTA.
 putTraceLabels = mapM_ printLabel . traceLabels where
   printLabel l@(DELTA t) = print l >> threadDelay (round (t*1000000))
   printLabel l           = print l
 
 
-{- -- This needs to be adapted to the new trace type or replaced with a more modular approach
-data TraceOpt           = Labels | States | First | Last | Hold
-                        deriving (Eq,Show)
+putTraceForest :: Trace -> IO ()
+putTraceForest = putStrLn . drawForest . map (fmap showNode) . toForest
 
-putTrace :: [TraceOpt] -> Trace -> IO ()
-putTrace opt (init, trc) do
-  if First `elem` opt 
-    then do putStr ("## " ++ show ps ++ "\n")    putTrace (opt\\[First]) ls
-  | Last `elem` opt     = putStr ("## " ++ show ps ++ "\n")
-putTrace opt (Left ps : ls) 
-  | First `elem` opt    = do putStr ("## " ++ show ps ++ "\n")
-                             putTrace (opt\\[First]) ls
-putTrace opt (Left ps : ls) 
-  | States `elem` opt   = do putStr ("## " ++ show ps ++ "\n")
-                             putTrace opt ls
-putTrace opt (Right l@(DELTA t) : ls)
-  | t > 0.1 && Hold `elem` opt     
-                        = do if Labels `elem` opt then putStr (show l ++ "\n") else return ()
-                             threadDelay (round (t*1000000))
-                             putTrace opt ls
-putTrace opt (Right l:ls)
-  | Labels `elem` opt   = do putStr (show l ++ "\n")
-                             putTrace opt ls
-putTrace opt (_ : ls)   = putTrace opt ls
--}
+toForest :: Trace -> Forest (Int,Proc,Label)
+toForest (ps,tc)= toForest' (-1) indexed where
+  indexed = (zip tc [0..])
+  toForest' :: Int -> [(SchedulerOption,Int)] -> Forest (Int,Proc,Label)
+  toForest' par sos = [toTree ix so|(so,ix) <- sos, fst (optionParent so) == par]
+  toTree :: Int -> SchedulerOption -> Tree (Int,Proc,Label)
+  toTree ix so = Node (ix, orphan $ optionSpeaker so, optionLabel so) (toForest' ix indexed) 
+                              -- could drop ix from indexed to optimise 
+showNode (ix,p,l) = show ix ++ ": " ++ shortProc p ++ " !!! " ++ show l
+
+
                              
 sendsTo :: [(Name, Name)] -> Trace -> [Label]
 sendsTo ns (_,ls) = [ l | l <- map fst ls, Just n' <- [labelName l], n' `elem` ns ]
-
--- The list is not empty. 
--- The Int is the number of choices made so far (not really needed perhaps).
-type SchedulerM m       = Int -> [(Label,[Proc])] -> m (Maybe (Label,[Proc]))
 
 headSched :: SchedulerM Identity
 headSched _ = return . Just . head
@@ -555,85 +590,53 @@ simulationHead m = (runIdentity m', a)
 randSched :: SchedulerM Gen
 randSched _ = fmap Just . elements
 
+simulationRandG :: (forall c. AR c a) -> Gen (Trace, a)
+simulationRandG m = do
+  let (g, a) = simulationM randSched m
+  x <- g
+  return (x,a)
+
 simulationRand :: StdGen -> (forall c. AR c a) -> (Trace, a)
 simulationRand rng m = (unGen g rng 0, a)
   where (g, a) = simulationM randSched m
 
--- A random scheduler that also logs the indexes of all choices. 
--- This is used to when rerunning the trace.
-loggingRandSched :: SchedulerM (W.WriterT [Int] Gen)
-loggingRandSched _ ls = do 
-  let chooseLabel = choose (0,length ls - 1)
-  ix <- W.lift chooseLabel
-  W.tell [ix]
-  return $ Just (ls !! ix)
 
-simulationLoggingRandG :: (forall c. AR c a) -> Gen ((Trace, [Int]), a)
-simulationLoggingRandG m = do
-  t <- v
-  return (t,a)
-  where v      = W.runWriterT g
-        (g, a) = simulationM loggingRandSched m
-  
-simulationLoggingRand :: StdGen -> (forall c. AR c a) -> ((Trace, [Int]), a)
-simulationLoggingRand rng m = unGen (simulationLoggingRandG m) rng 0
-  
--- A trace along with the index of each choice the scheduler made. 
-newtype IndexTrace = IndexTrace (Trace,[Int])
-instance Show IndexTrace where 
-  show (IndexTrace ((ps,xs), _)) = unlines (map (show . fst) xs) 
-     ++ show (last (ps : map snd xs))
-  
-{-  
--- Scheduler based on either a random seed or a finite list of labels
-data Schedule = Random StdGen
-              | Rerun IndexTrace deriving Show
-
-simulationSched :: Schedule -> (forall c. AR c a) -> (Trace, a)
-simulationSched (Random s)               = fmap (\((a,b),c) -> (a,c)) $ simulationLoggingRand s
-simulationSched (Rerun (IndexTrace ls)) = simulationRerun ls
-
-
-
--- Random Generator for schedules
-genSchedule :: Gen Schedule
-genSchedule = MkGen (\s _ -> Random s)
-       
--- Shrinks a schedule by replacing a random seed with a list of choices, using a supplied
---  run-function. Or tries to shrink a list by removing elements from it.       
-shrinkSchedule :: Int -> (StdGen -> (Trace,[Int])) -> Schedule -> [Schedule]
-shrinkSchedule limit f (Random rng) = [Rerun (IndexTrace $ g $ f rng)]
-  where g ((a,t),ns) = ((a,take limit t),ns)
-shrinkSchedule limit f (Rerun (IndexTrace ((init,steps),ns))) = 
-  map (\x -> Rerun (IndexTrace ((init,x),ns))) $ shrinkList shrinkNothing steps
--}            
 
 -- Scheduler that reruns a trace. The only difficult part is what to do if there are several
 --   labels in the choice list (ls) that match the next label from the rerun trace.
 -- Currently it uses a list of indexes of the original choices to guarantee that rerunning an 
 --   exact trace gives identical result, however if elements have been  removed from the trace it  
 --   may still fail to identify the "correct" choice from the list.
-rerunSched :: SchedulerM (S.State (Trace,[Int]))
+rerunSched :: SchedulerM (S.State Trace)
 rerunSched n ls = do
-  ((init,steps),ns) <- S.get
+  (init,steps) <- S.get
   case steps of 
     []         -> return Nothing -- Terminate
-    ((rr,rrps):rrs')  -> do 
-      S.put ((init, rrs'),drop 1 ns)
-      -- Slightly relaxed equality on labels, ignores return values and such.
-      
-      let limitls = if null ns then ls else reverse $ take (head ns+1) ls
-          expandSearch = case [x | x <- limitls, fst x `similarLabel` rr] of
-                            []     -> rerunSched n ls -- Just ignore this trace and use the next one.
-                            [x]    -> return $ Just $ x
-                            (x:xs) -> return $ Just $ x -- Possibly not the 'intended' choice
-      case [x | x <- limitls, fst x == rr] of
-        []     -> expandSearch
+    (rr,(gpar,_)):rrs'  -> do 
+      S.put (init, rrs')
+      case [x | x@(lab, (gparx,_)) <- ls, (lab `similarLabel` rr) && (gpar `siblingTo` gparx)] of
+        []     -> rerunSched n ls
         [x]    -> return $ Just $ x
         (x:xs) -> return $ Just $ x -- Take the label that's closest to the original choice
 
-simulationRerun :: (Trace,[Int]) -> (forall c. AR c a) -> ((Trace,[Int]), a)
-simulationRerun lsns m = ((S.evalState m' lsns,[] {- Should give actual indexes -}), a)
+shrinkTrace :: Trace -> [Trace]
+shrinkTrace (init,t) = [(init,t')|t' <- removeSingle 0 t] where
+
+
+removeSingle _ [] = []
+removeSingle _ [x] = [[]]
+removeSingle k (x:xs) = fixReferences (k+1) [k] xs : map (x:) (removeSingle (k+1) xs)
+
+fixReferences :: Int -> [Int] -> [SchedulerOption] -> [SchedulerOption]
+fixReferences k ds []     = []
+fixReferences k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds 
+  then fixReferences (k+1) (ds ++ [k]) xs
+  else let skips = length (takeWhile (< n) ds) in 
+    (x1,((x2,(n-skips,x3)),x4)) : fixReferences (k+1) ds xs
+
+
+simulationRerun :: Trace -> (forall c. AR c a) -> (Trace, a)
+simulationRerun tc m = (S.evalState m' tc, a)
     where (m',a) = simulationM rerunSched m
 
 similarLabel :: Label -> Label -> Bool
@@ -645,16 +648,17 @@ similarLabel (RCV n1 _)    (RCV n2 _)    = n1 == n2
 similarLabel (SND n1 _ _)  (SND n2 _ _)  = n1 == n2
 -- Several more cases could be added.
 similarLabel a             b             = a == b
-  
-  
-  
-  
-simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
-simulationM sched m     = (liftM (\ss -> (procs s, ss)) traceM, x)
-  where (x,s)           = runAR m startState 
-        traceM          = simulateM sched (connected (conns s)) (procs s)
 
-simulateM :: Monad m => SchedulerM m -> Connected -> [Proc] -> m Steps
+
+
+
+simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
+simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, x)
+  where (x,s)           = runAR m startState 
+        traceM          = simulateM sched (connected (conns s)) procs_s
+        procs_s         = zip (procs s) $ map (\x -> (-1,x)) [0..]
+
+simulateM :: Monad m => SchedulerM m -> Connected -> [ParentProc] -> m [SchedulerOption]
 simulateM = go 0 where
   go k sched conn procs
     | null next           = return []
@@ -662,25 +666,25 @@ simulateM = go 0 where
       maysched <- sched k next
       case maysched of
         Nothing               -> return []
-        Just trans@(l,procs') -> liftM (\plss -> trans:plss) $ go (k+1) sched conn procs'
-    where next            = step conn procs
+        Just trans@(l,(_,procs')) -> liftM (\plss -> trans:plss) $ go (k+1) sched conn procs'
+    where next            = step conn procs k
 
 -- This provides all possible results, a "scheduler" then needs to pick one.
-step :: Connected -> [Proc] -> [(Label, [Proc])]
-step conn procs                         = explore conn [] labels1 procs
-  where labels0                         = map may_say procs
-        labels1                         = map (respond procs) labels0
-        respond procs label             = foldl (may_hear conn) label procs
+step :: Connected -> [ParentProc] -> Int -> [SchedulerOption]
+step conn procs k                       = explore conn [] labels1 procs k
+  where labels0                         = map may_say (orphans procs)
+        labels1                         = map respond labels0
+        respond label                   = foldl (may_hear conn) label (orphans procs)
 
-explore :: Connected -> [Proc] -> [Label] -> [Proc] -> [(Label, [Proc])]
-explore conn pre (PASS:labels) (p:post) = explore conn (p:pre) labels post
-explore conn pre (l:labels) (p:post)    = commit conn l pre p post : explore conn (p:pre) labels post
-explore conn _ _ _                      = []
+explore :: Connected -> [ParentProc] -> [Label] -> [ParentProc] -> Int -> [SchedulerOption]
+explore conn pre (PASS:labels) (p:post) k = explore conn (p:pre) labels post k
+explore conn pre (l:labels)    (p:post) k = commit conn l pre p post k : explore conn (p:pre) labels post k
+explore conn _ _ _ _                      = []
 
-commit :: Connected -> Label -> [Proc] -> Proc -> [Proc] -> (Label, [Proc])
-commit conn l pre p post                = (l, commit' l pre (say l p ++ map (hear conn l) post))
-  where commit' l [] post               = post
-        commit' l (p:pre) post          = commit' l pre (hear conn l p : post)
+commit :: Connected -> Label -> [ParentProc] -> ParentProc -> [ParentProc] -> Int -> SchedulerOption
+commit conn l pre p post k       = (l, (p, commit' l pre (adopts k (say l $ orphan p) ++ map (hear conn l k) post)))
+  where commit' l [] post        = post
+        commit' l (p:pre) post   = commit' l pre (hear conn l k p : post)
 
 may_say :: Proc -> Label
 may_say (RInst (i,r) c ex (Enter x cont))             = ENTER (i,x)
@@ -773,35 +777,40 @@ may_hear conn (DELTA d)      (Sink _ _ _ _)                     = DELTA d
 may_hear conn label _                                           = label
 
 
-hear :: Connected -> Label -> Proc -> Proc
-hear conn (ENTER a)     (Excl b True)      | a==b               = Excl b False
-hear conn (EXIT a)      (Excl b False)     | a==b               = Excl b True
-hear conn (IRVR a _)    (Irv b v)          | a==b               = Irv b v
-hear conn (IRVW a v)    (Irv b _)          | a==b               = Irv b v
-hear conn (RCV a _)     (QElem b n (v:vs)) | a==b               = QElem b n vs
-hear conn (RCV a _)     (QElem b n [])     | a==b               = QElem b n []
-hear conn (SND a v _)   (QElem b n vs) 
-        | a `conn` b && length vs < n                           = QElem b n (vs++[v])
-        | a `conn` b                                            = QElem b n vs
-hear conn (SND a _ _)   (Run b t _ n s)    | trig conn a s      = Run b t Pending n s
-hear conn (RD a _)      (DElem b _ v)      | a==b               = DElem b False v
-hear conn (WR a v)      (DElem b _ _)      | a `conn` b         = DElem b True (Ok v)
-hear conn (WR a _)      (Run b t _ n s)    | trig conn a s      = Run b t Pending n s
-hear conn (UP a _)      (DElem b u v)      | a==b               = DElem b u v
-hear conn (INV a)       (DElem b _ _)      | a `conn` b         = DElem b True NO_DATA
-hear conn (CALL a v _)  (Run b t (Serving cs vs) n s)
-        | trig conn a s && a `notElem` cs                       = Run b t (Serving (cs++[a]) (vs++[v])) n s
-        | trig conn a s                                         = Run b t (Serving cs vs) n s 
+-- Not sure if a change here should actually cause adopt or not.
+-- It depends on if 
+hear :: Connected -> Label -> Int -> ParentProc -> ParentProc
+hear conn l par pp = maybe pp (\p' -> adopt par p') (hear' conn l (orphan pp))
+
+hear' :: Connected -> Label -> Proc -> Maybe Proc
+hear' conn (ENTER a)     (Excl b True)      | a==b               = Just $ Excl b False
+hear' conn (EXIT a)      (Excl b False)     | a==b               = Just $ Excl b True
+hear' conn (IRVR a _)    (Irv b v)          | a==b               = Nothing -- Just $ Irv b v
+hear' conn (IRVW a v)    (Irv b _)          | a==b               = Just $ Irv b v
+hear' conn (RCV a _)     (QElem b n (v:vs)) | a==b               = Just $ QElem b n vs
+hear' conn (RCV a _)     (QElem b n [])     | a==b               = Nothing -- Just $ QElem b n []
+hear' conn (SND a v _)   (QElem b n vs) 
+        | a `conn` b && length vs < n                            = Just $ QElem b n (vs++[v])
+        | a `conn` b                                             = Nothing -- Just $ QElem b n vs
+hear' conn (SND a _ _)   (Run b t _ n s)    | trig conn a s      = Just $ Run b t Pending n s
+hear' conn (RD a _)      (DElem b _ v)      | a==b               = Just $ DElem b False v
+hear' conn (WR a v)      (DElem b _ _)      | a `conn` b         = Just $ DElem b True (Ok v)
+hear' conn (WR a _)      (Run b t _ n s)    | trig conn a s      = Just $ Run b t Pending n s
+hear' conn (UP a _)      (DElem b u v)      | a==b               = Nothing -- Just $ DElem b u v
+hear' conn (INV a)       (DElem b _ _)      | a `conn` b         = Just $ DElem b True NO_DATA
+hear' conn (CALL a v _)  (Run b t (Serving cs vs) n s)
+        | trig conn a s && a `notElem` cs                        = Just $ Run b t (Serving (cs++[a]) (vs++[v])) n s
+        | trig conn a s                                          = Just $ Run b t (Serving cs vs) n s 
   -- ^ Note: silently ignoring the value |v| from the |CALL| if |a| is already being served
-hear conn (RES a _)     (Op b (v:vs))      | a==b               = Op b vs
-hear conn (RES a _)     (Op b [])          | a==b               = Op b []
-hear conn (RET a v)     (Op b vs)          | a==b               = Op b (vs++[v])
-hear conn (TERM a)      (Run b t act n s)  | a==b               = Run b t act (n-1) s
-hear conn (TICK a)      (Run b t _ n s)    | a==b               = Run b t Pending n s
-hear conn (DELTA d)     (Run b 0.0 act n s)                     = Run b 0.0 act n s
-hear conn (DELTA d)     (Run b t act n s)                       = Run b (t-d) act n s
-hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) t0
-hear conn (WR a v)      (Sink b n t vs)    | a `conn` b         = Sink b n 0.0 ((t,v):vs)
-hear conn (DELTA d)     (Sink b n t vs)                         = Sink b n (t+d) vs
-hear conn label         proc                                    = proc
+hear' conn (RES a _)     (Op b (v:vs))      | a==b               = Just $ Op b vs
+hear' conn (RES a _)     (Op b [])          | a==b               = Nothing -- Just $ Op b []
+hear' conn (RET a v)     (Op b vs)          | a==b               = Just $ Op b (vs++[v])
+hear' conn (TERM a)      (Run b t act n s)  | a==b               = Just $ Run b t act (n-1) s
+hear' conn (TICK a)      (Run b t _ n s)    | a==b               = Just $ Run b t Pending n s
+hear' conn (DELTA d)     (Run b 0.0 act n s)                     = Nothing -- Just $ Run b 0.0 act n s
+hear' conn (DELTA d)     (Run b t act n s)                       = Just $ Run b (t-d) act n s
+hear' conn (DELTA d)     (Timer b t t0)                          = Just $ Timer b (t-d) t0
+hear' conn (WR a v)      (Sink b n t vs)    | a `conn` b         = Just $ Sink b n 0.0 ((t,v):vs)
+hear' conn (DELTA d)     (Sink b n t vs)                         = Just $ Sink b n (t+d) vs
+hear' conn label         proc                                    = Nothing
 
