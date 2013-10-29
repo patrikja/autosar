@@ -27,7 +27,7 @@ seq_tick step excl state = do
         rte_irvWrite state s'
         rte_exit excl
 
-seq_ctrl step excl state on = do
+seq_onoff step excl state on = do
         rte_enter excl
         s <- step (if on then 0 else -1)
         rte_irvWrite state s
@@ -38,124 +38,125 @@ sequencer step = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
         runnable (MinInterval 0) [Timed 0.001] (seq_tick step excl state)
-        ctrl <- providedOperation
-        serverRunnable (MinInterval 0) [ctrl] (seq_ctrl step excl state)
-        return (seal ctrl)
+        onoff <- providedOperation
+        serverRunnable (MinInterval 0) [onoff] (seq_onoff step excl state)
+        return (seal onoff)
 
 
 
-relief_step valve wheelacc 0 = do
-        Ok a <- rte_read wheelacc
+relief_step valve accel 0 = do
+        Ok a <- rte_read accel
         if a < 0 then do
                 rte_write valve True
                 return (Running 0 (-(round a)*10) 1)
          else
                 return (Running 0 5 0)
-relief_step valve wheelacc 1 = do
+relief_step valve accel 1 = do
         rte_write valve False
         return (Running 0 5 0)
-relief_step valve wheelacc n = do
+relief_step valve accel n = do
         rte_write valve False
         return Stopped
 
-relief :: AR c (PE Bool (), RE Double (), PO Bool () ())
+relief :: AR c (RE Double (), PO Bool () (), PE Bool ())
 relief = component $ do
         valve <- providedDataElement
-        wheelacc <- requiredDataElement
-        ctrl <- sequencer $ relief_step valve wheelacc
-        return (seal valve, seal wheelacc, ctrl)
+        accel <- requiredDataElement
+        ctrl <- sequencer $ relief_step valve accel
+        return (seal accel, ctrl, seal valve)
 
-pressure_step valve wheelacc 0 = do
+pressure_step valve accel 0 = do
         rte_write valve True
         return (Running 0 100 1)
-pressure_step valve wheelacc 20 = do
+pressure_step valve accel 20 = do
         rte_write valve True
         return Stopped
-pressure_step valve wheelacc n | even n = do
+pressure_step valve accel n | even n = do
         rte_write valve True
-        Ok a <- rte_read wheelacc
+        Ok a <- rte_read accel
         return (Running 0 (round a*50) (n+1))
-pressure_step valve wheelacc n | odd n = do
+pressure_step valve accel n | odd n = do
         rte_write valve False
         return (Running 0 20 (n+1))
-pressure_step valve wheelacc n | n < 0 = do
+pressure_step valve accel n | n < 0 = do
         rte_write valve False
         return Stopped
 
-pressure :: AR c (PE Bool (), RE Double (), PO Bool () ())
+pressure :: AR c (RE Double (), PO Bool () (), PE Bool ())
 pressure = component $ do
         valve <- providedDataElement
-        wheelacc <- requiredDataElement
-        ctrl <- sequencer $ pressure_step valve wheelacc
-        return (seal valve, seal wheelacc, ctrl)
+        accel <- requiredDataElement
+        ctrl <- sequencer $ pressure_step valve accel
+        return (seal accel, ctrl, seal valve)
 
 
-control mem pressure_seq relief_seq param = do
-        Ok slip <- rte_receive param
-        Ok slip' <- rte_irvRead mem
+control memo onoff_pressure onoff_relief slipstream = do
+        Ok slip <- rte_receive slipstream
+        Ok slip' <- rte_irvRead memo
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
-                        rte_call pressure_seq False
-                        rte_call relief_seq True
+                        rte_call onoff_pressure False
+                        rte_call onoff_relief True
                         return ()
                 (False, True) -> do
-                        rte_call relief_seq False
-                        rte_call pressure_seq True
+                        rte_call onoff_relief False
+                        rte_call onoff_pressure True
                         return ()
                 _ ->    return ()
-        rte_irvWrite mem slip
+        rte_irvWrite memo slip
 
-controller :: AR c (RO Bool () (), RO Bool () (), RQ Double ())
+controller :: AR c (RQ Double (), RO Bool () (), RO Bool () ())
 controller = component $ do
-        mem <- interRunnableVariable 1.0
-        pressure_seq <- requiredOperation
-        relief_seq <- requiredOperation
-        param <- requiredQueueElement 10
-        runnable (MinInterval 0) [ReceiveQ param] (control mem pressure_seq relief_seq param)
-        return (seal pressure_seq, seal relief_seq, seal param)
+        memo <- interRunnableVariable 1.0
+        onoff_pressure <- requiredOperation
+        onoff_relief <- requiredOperation
+        slipstream <- requiredQueueElement 10
+        runnable (MinInterval 0) [ReceiveQ slipstream] 
+                (control memo onoff_pressure onoff_relief slipstream)
+        return (seal slipstream, seal onoff_pressure, seal onoff_relief)
 
-loop velocities controllers = do
-        velos <- mapM (\w -> do Ok v <- rte_read w; return v) velocities
+loop velostreams slipstreams = do
+        velos <- mapM (\re -> do Ok v <- rte_read re; return v) velostreams
         let v0 = minimum velos
-        mapM (\(v,c) -> rte_send c (v/v0)) (velos `zip` controllers)
+        mapM (\(v,pe) -> rte_send pe (v/v0)) (velos `zip` slipstreams)
 
 main_loop :: AR c ([RE Double ()], [PQ Double ()])
 main_loop = component $ do
-        velocities <- mapM (const requiredDataElement) [1..4]
-        controllers <- mapM (const providedQueueElement) [1..4]
-        runnable (MinInterval 0) [Timed 0.01] (loop velocities controllers)
-        return (map seal velocities, map seal controllers)
+        velostreams <- mapM (const requiredDataElement) [1..4]
+        slipstreams <- mapM (const providedQueueElement) [1..4]
+        runnable (MinInterval 0) [Timed 0.01] (loop velostreams slipstreams)
+        return (map seal velostreams, map seal slipstreams)
         
-sensor n = do
-        vel <- source ("V" ++ show n) (vel_sim n)
-        acc <- source ("A" ++ show n) (acc_sim n)
-        return (vel, acc)
-        
-actuator n = do
-        rlf_v <- sink ("R" ++ show n)
-        prs_v <- sink ("P" ++ show n)
-        return (rlf_v, prs_v)
-
-wheel :: Int -> AR c (PO Bool () (), PO Bool () (), PE Double ())        
-wheel n = do
-        (rlf_valve, rlf_acc, rlf_ctrl) <- relief
-        (prs_valve, prs_acc, prs_ctrl) <- pressure
-        (vel, acc) <- sensor n
-        (rlf_v, prs_v) <- actuator n
-        connect rlf_valve rlf_v
-        connect prs_valve prs_v
-        connect acc rlf_acc
-        connect acc prs_acc
-        return (prs_ctrl, rlf_ctrl, vel)
-
 system = do
-        (prov_r_seqs, prov_p_seqs, prov_vels) <- fmap unzip3 $ mapM wheel [1..4]
-        (reqd_r_seqs, reqd_p_seqs, reqd_ctrls) <- fmap unzip3 $ mapM (const controller) [1..4]
-        (reqd_vels, prov_ctrls) <- main_loop
-        connectAll reqd_r_seqs prov_r_seqs
-        connectAll reqd_p_seqs prov_p_seqs
-        connectAll prov_vels reqd_vels
-        connectAll prov_ctrls reqd_ctrls
+        (velostreams_in, slipstreams_out) <- main_loop
+        (slipstreams_in, onoffs_r_out, onoffs_p_out) <- fmap unzip3 $ mapM (const controller) [1..4]
+        (accels_r_in, onoffs_r_in, valves_r_out) <- fmap unzip3 $ mapM (const relief) [1..4]
+        (accels_p_in, onoffs_p_in, valves_p_out) <- fmap unzip3 $ mapM (const pressure) [1..4]
+        
+        connectAll slipstreams_out slipstreams_in
+        connectAll onoffs_r_out onoffs_r_in
+        connectAll onoffs_p_out onoffs_p_in
+        
+        return (accels_r_in, accels_p_in, velostreams_in, valves_r_out, valves_p_out)
+        
+test = do
+        (accels_r_in, accels_p_in, velos_in, valves_r_out, valves_p_out) <- system
+
+        v_sensors <- mapM (sensor "V" vel_sim) [1..4]
+        connectAll v_sensors velos_in
+
+        a_sensors <- mapM (sensor "A" acc_sim) [1..4]
+        connectAll a_sensors accels_r_in
+        connectAll a_sensors accels_p_in
+        
+        r_actuators <- mapM (sink . ("R"++) . show) [1..4]
+        connectAll valves_r_out r_actuators
+        
+        p_actuators <- mapM (sink . ("P"++) . show) [1..4]
+        connectAll valves_p_out p_actuators
+
+sensor v table n =
+        source (v ++ show n) (table n)
         
 vel_sim 1 = []
 vel_sim 2 = []
