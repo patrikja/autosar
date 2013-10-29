@@ -37,15 +37,15 @@ client          = component $
                      return (seal2 (rop, pqe))
 
 test            = do t <- ticketDispenser
-                     (rop1, pqe1@(PQ p1)) <- client
-                     (rop2, pqe2@(PQ p2)) <- client
-                     (rop3, pqe3@(PQ p3)) <- client
-                     (rop4, pqe4@(PQ p4)) <- client
+                     (rop1, pqe1) <- client
+                     (rop2, pqe2) <- client
+                     (rop3, pqe3) <- client
+                     (rop4, pqe4) <- client
                      connect rop1 t
                      connect rop2 t
                      connect rop3 t
                      connect rop4 t
-                     return [p1, p2, p3, p4]
+                     return (tag [pqe1, pqe2, pqe3, pqe4])
 
 
 
@@ -61,7 +61,7 @@ parentSort (Sim ((x,t),z)) = Sim ((x,t'),z) where
   t' = sortBy (compare `on` (snd . fst . snd)) t
          
 -- A simulation trace along with a list of ports to observe
-newtype Sim = Sim (Trace, [(Name,Name)])
+newtype Sim = Sim (Trace, [Tag])
 instance Show Sim where
   show (Sim (t,_)) = drawForest (map (fmap showNode) $ toForest t) where
    
@@ -71,7 +71,7 @@ cutSim n (Sim (t,xs)) = Sim (fmap (take n) t, xs)
 
 -- Shrink the simulation trace and rerun it
 -- This would work much better if the trace was a tree, branching on new processes.
-shrinkSim :: (forall c. AR c [(Name,Name)]) -> Sim -> [Sim]
+shrinkSim :: (forall c. AR c [Tag]) -> Sim -> [Sim]
 shrinkSim code (Sim (trc,_)) = [rerun tn'| tn' <- shrinkTrace trc ] where
   rerun tns = Sim $ simulationRerun tns code
 
@@ -88,7 +88,7 @@ prop_norace :: Property
               -- shrinkNothing -- Disable shrinking
       
       prop :: Sim -> Bool
-      prop (Sim (t,ps)) = let ticks = [x |SND _ x _ <- sendsTo ps t] in ticks == nub ticks
+      prop (Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
   forAllShrink gen shrnk prop
 
 

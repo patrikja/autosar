@@ -9,10 +9,10 @@ module ARSim -- Lets design the interface later...
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
               requiredDataElement, providedDataElement, requiredQueueElement, providedQueueElement,
               requiredOperation, providedOperation, interRunnableVariable, exclusiveArea, source, sink,
-              Seal(..), seal2, seal3, seal4, seal5, seal6, seal7, sealAll,
+              Seal(..), seal2, seal3, seal4, seal5, seal6, seal7, sealAll, Tag, Taggable(..),
               Connect(..), connect2, connect3, connect4, connect5, connect6, connect7, connectAll,
-              TraceOpt(..), putTrace, simulationM, headSched, simulationHead,
-              randSched, simulationRand) -} where
+              traceLabels, putTraceLabels, putTrace, simulationM, headSched, simulationHead, 
+              simulationRerun, randSched, simulationRand, sendsTo) -} where
 
               
 import Control.Monad (liftM)
@@ -229,8 +229,29 @@ connect6 (a1,a2,a3,a4,a5,a6) (b1,b2,b3,b4,b5,b6)
 connect7 (a1,a2,a3,a4,a5,a6,a7) (b1,b2,b3,b4,b5,b6,b7)
                                 = do connect a1 b1; connect (a2,a3,a4,a5,a6,a7) (b2,b3,b4,b5,b6,b7)
 
- 
+newtype Tag                     = Tag Name2
 
+class Taggable a where
+        tag                     :: [a] -> [Tag]
+
+instance Taggable (PE a ()) where
+        tag xs                  = [ Tag n | PE n <- xs ]
+
+instance Taggable (RE a ()) where
+        tag xs                  = [ Tag n | RE n <- xs ]
+        
+instance Taggable (PQ a ()) where
+        tag xs                  = [ Tag n | PQ n <- xs ]
+
+instance Taggable (RQ a ()) where
+        tag xs                  = [ Tag n | RQ n <- xs ]
+        
+instance Taggable (PO a b ()) where
+        tag xs                  = [ Tag n | PO n <- xs ]
+
+instance Taggable (RO a b ()) where
+        tag xs                  = [ Tag n | RO n <- xs ]
+        
 -----------------------------------------------------------------------------------------------------
 
 type Name       = Int
@@ -576,26 +597,27 @@ showNode (ix,p,l) = show ix ++ ": " ++ shortProc p ++ " !!! " ++ show l
 
 
                              
-sendsTo :: [(Name, Name)] -> Trace -> [Label]
-sendsTo ns (_,ls) = [ l | l <- map fst ls, Just n' <- [labelName l], n' `elem` ns ]
+sendsTo :: [Tag] -> Trace -> [Value]
+sendsTo tags (_,ls) = [ v | SND a v _ <- map fst ls, a `elem` ns ]
+  where ns = [ n | Tag n <- tags ]
 
 headSched :: SchedulerM Identity
 headSched _ = return . Just . head
 
-simulationHead :: (forall c. AR c a) -> (Trace, a)
+simulationHead :: (forall c. AR c [Tag]) -> (Trace, [Tag])
 simulationHead m = (runIdentity m', a) 
   where (m', a) = simulationM headSched m
 
 randSched :: SchedulerM Gen
 randSched _ = fmap Just . elements
 
-simulationRandG :: (forall c. AR c a) -> Gen (Trace, a)
+simulationRandG :: (forall c. AR c [Tag]) -> Gen (Trace, [Tag])
 simulationRandG m = do
   let (g, a) = simulationM randSched m
   x <- g
   return (x,a)
 
-simulationRand :: StdGen -> (forall c. AR c a) -> (Trace, a)
+simulationRand :: StdGen -> (forall c. AR c [Tag]) -> (Trace, [Tag])
 simulationRand rng m = (unGen g rng 0, a)
   where (g, a) = simulationM randSched m
 
@@ -634,7 +656,7 @@ fixReferences k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds
     (x1,((x2,(n-skips,x3)),x4)) : fixReferences (k+1) ds xs
 
 
-simulationRerun :: Trace -> (forall c. AR c a) -> (Trace, a)
+simulationRerun :: Trace -> (forall c. AR c [Tag]) -> (Trace, [Tag])
 simulationRerun tc m = (S.evalState m' tc, a)
     where (m',a) = simulationM rerunSched m
 
@@ -651,7 +673,7 @@ similarLabel a             b             = a == b
 
 
 
-simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
+simulationM :: Monad m => SchedulerM m -> (forall c. AR c [Tag]) -> (m Trace, [Tag])
 simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, x)
   where (x,s)           = runAR m startState 
         traceM          = simulateM sched (connected (conns s)) procs_s

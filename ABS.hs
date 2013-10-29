@@ -142,20 +142,15 @@ abs_system = do
 test vel_sim acc_sim = do
         (velos_in, accels_r_in, accels_p_in, valves_r_out, valves_p_out) <- abs_system
 
-        v_sensors <- sources vel_sim [1..4]
-        a_sensors <- sources acc_sim [1..4]
+        v_sensors <- mapM (source . vel_sim) [1..4]
+        a_sensors <- mapM (source . acc_sim) [1..4]
         connectAll v_sensors velos_in
         connectAll a_sensors accels_r_in
         connectAll a_sensors accels_p_in
         
-        r_actuators <- sinks [1..4]
-        p_actuators <- sinks [1..4]
+        r_actuators <- mapM (const sink) [1..4]
+        p_actuators <- mapM (const sink) [1..4]
         connectAll valves_r_out r_actuators
         connectAll valves_p_out p_actuators
-
-sources table nums =
-        mapM (source . table) nums
-
-sinks nums =
-        mapM (const sink) nums
-
+        
+        return $ tag v_sensors ++ tag a_sensors ++ tag r_actuators ++ tag p_actuators
