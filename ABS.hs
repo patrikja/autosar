@@ -7,23 +7,38 @@ instance (Valuable a, Valuable b) => Valuable (a,b) where
         toVal (a,b)             = VArray [toVal a, toVal b]
         fromVal (VArray [a, b]) = (fromVal a, fromVal b)
 
+
+--------------------------------------------------------------
+-- A generic skeleton for creating sequencer components; i.e., 
+-- components that produce sequences of observable effects at
+-- programmable points in time. The skeleton is parametric in 
+-- the actual step function, which takes takes a step index as
+-- a parameter, performs any observable effects, and returns a
+-- new sequencer state. A sequencer state is either Stopped or 
+-- (Running ticks limit index), where limit is the step size in
+-- milliseconds, ticks is the time in milliseconds since the 
+-- last step, and index is the new step index. A sequencer 
+-- can be started and stopped by means of an exported boolean
+-- service operation.
+--------------------------------------------------------------
+
 data SeqState = Stopped | Running Int Int Int
 
 instance Valuable SeqState where
         toVal Stopped           = Void
-        toVal (Running t l a)   = VArray [VInt t, VInt l, VInt a]
+        toVal (Running t l i)   = VArray [VInt t, VInt l, VInt i]
         fromVal Void            = Stopped
-        fromVal (VArray [VInt t, VInt l, VInt a])
-                                = Running t l a
+        fromVal (VArray [VInt t, VInt l, VInt i])
+                                = Running t l i
         
 seq_tick step excl state = do
         rte_enter excl
         Ok s <- rte_irvRead state
         s' <- case s of
                 Stopped                 -> return s
-                Running ticks limit a 
-                        | ticks < limit -> return (Running (ticks+1) limit a)
-                        | otherwise     -> step a
+                Running ticks limit i 
+                        | ticks < limit -> return (Running (ticks+1) limit i)
+                        | otherwise     -> step i
         rte_irvWrite state s'
         rte_exit excl
 
@@ -42,7 +57,14 @@ sequencer step = do
         serverRunnable (MinInterval 0) [onoff] (seq_onoff step excl state)
         return (seal onoff)
 
-
+--------------------------------------------------------------
+-- A relief component is a sequencer for toggling a brake relief
+-- valve in an ABS system. It requires a data element for reading
+-- wheel acceleration values (of type Double) and pulses the valve
+-- in lengths proportional to acceleration, as long as this value
+-- stays negative. It provides a boolean on/off control operation
+-- as well as a boolean data element producing valve settings.
+--------------------------------------------------------------
 
 relief_step valve accel 0 = do
         Ok a <- rte_read accel
@@ -64,6 +86,15 @@ relief = component $ do
         accel <- requiredDataElement
         ctrl <- sequencer $ relief_step valve accel
         return (seal accel, ctrl, seal valve)
+
+--------------------------------------------------------------
+-- A pressure component is a sequencer for toggling a brake
+-- pressure valve in an ABS system. It requires a data element
+-- for reading wheel acceleration values (of type Double) and 
+-- pulses the valve 10 times in lengths proportional to positive
+-- acceleration. It provides a boolean on/off control operation
+-- as well as a boolean data element producing valve settings.
+--------------------------------------------------------------
 
 pressure_step valve accel 0 = do
         rte_write valve True
@@ -89,6 +120,15 @@ pressure = component $ do
         ctrl <- sequencer $ pressure_step valve accel
         return (seal accel, ctrl, seal valve)
 
+--------------------------------------------------------------
+-- A controller component reads a stream of slip values for a
+-- wheel (that is, ratios between wheel and vehicle speeds), and
+-- watches for points where slip drops below or rises above 80%.
+-- If slip drops below 80%, a relief sequence for the wheel is
+-- started (after any ongoing pressure sequence is aborted).
+-- If slip rises above 80%, any ongoing relief sequence is aborted
+-- and a pressure sequence is started.
+--------------------------------------------------------------
 
 control memo onoff_pressure onoff_relief slipstream = do
         Ok slip <- rte_receive slipstream
@@ -115,9 +155,19 @@ controller = component $ do
                 (control memo onoff_pressure onoff_relief slipstream)
         return (seal slipstream, seal onoff_pressure, seal onoff_relief)
 
+--------------------------------------------------------------
+-- The "main loop" of the ABS algorithm is a component that
+-- periodically reads the current speeds of all wheels, 
+-- approximates the vehicle speed as the maximum of the wheel
+-- speeds (should be refined for the case when all wheels are
+-- locked, must resort do dead reckoning based on latest 
+-- deacceleration in these cases), and updates all wheel 
+-- controllers with its current slip ratio.
+--------------------------------------------------------------
+
 loop velostreams slipstreams = do
         velos <- mapM (\re -> do Ok v <- rte_read re; return v) velostreams
-        let v0 = minimum velos
+        let v0 = maximum velos
         mapM (\(v,pe) -> rte_send pe (v/v0)) (velos `zip` slipstreams)
 
 main_loop :: AR c ([RE Double ()], [PQ Double ()])
@@ -127,6 +177,14 @@ main_loop = component $ do
         runnable (MinInterval 0) [Timed 0.01] (loop velostreams slipstreams)
         return (map seal velostreams, map seal slipstreams)
         
+--------------------------------------------------------------
+-- A full ABS system consists of a main loop component as well
+-- as one controller, one relief and one pressure component for 
+-- each wheel. In addition, each wheel must be equipped with
+-- speed and acceleration sensors, but these parts are considered
+-- external to the current system.
+--------------------------------------------------------------
+
 abs_system = do
         (velostreams_in, slipstreams_out) <- main_loop
         (slipstreams_in, onoffs_r_out, onoffs_p_out) <- fmap unzip3 $ mapM (const controller) [1..4]
@@ -138,7 +196,13 @@ abs_system = do
         connectAll onoffs_p_out onoffs_p_in
         
         return (velostreams_in, accels_r_in, accels_p_in, valves_r_out, valves_p_out)
-        
+
+--------------------------------------------------------------
+-- A test setup consists of the ABS system connected to simulated
+-- data sources in place of wheel sensors, and data sinks in place
+-- of pressure and relief valves.
+--------------------------------------------------------------
+
 test vel_sim acc_sim = do
         (velos_in, accels_r_in, accels_p_in, valves_r_out, valves_p_out) <- abs_system
 

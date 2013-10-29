@@ -674,8 +674,8 @@ similarLabel a             b             = a == b
 
 
 simulationM :: Monad m => SchedulerM m -> (forall c. AR c [Tag]) -> (m Trace, [Tag])
-simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, x)
-  where (x,s)           = runAR m startState 
+simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, tags)
+  where (tags,s)        = runAR m startState 
         traceM          = simulateM sched (connected (conns s)) procs_s
         procs_s         = zip (procs s) $ map (\x -> (-1,x)) [0..]
 
