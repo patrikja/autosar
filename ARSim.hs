@@ -474,33 +474,8 @@ shortProc (Timer a v t)      = spacesep ["Timer", show a]
 shortProc (QElem a n vs)     = spacesep ["QElem", show a]
 shortProc (DElem a v r)      = spacesep ["DElem", show a]
 shortProc (Op a vs)          = spacesep ["Op", show a]
-shortProc (Src a n vs)       = spacesep ["Src", show a]
-shortProc (Sink a n t vs)    = spacesep ["Sink", show a]
-
-shortProc :: Proc -> String
-shortProc (Run a t act n s)  = spacesep ["Run", show a]
-shortProc (RInst a c ex co)  = spacesep ["RInst", show a]
-shortProc (Excl a v)         = spacesep ["Excl", show a]
-shortProc (Irv a v)          = spacesep ["Irv", show a]
-shortProc (Timer a v t)      = spacesep ["Timer", show a]
-shortProc (QElem a n vs)     = spacesep ["QElem", show a]
-shortProc (DElem a v r)      = spacesep ["DElem", show a]
-shortProc (Op a vs)          = spacesep ["Op", show a]
-shortProc (Src a n vs)       = spacesep ["Src", show a]
-shortProc (Sink a n t vs)    = spacesep ["Sink", show a]
-
-shortProc :: Proc -> String
-shortProc (Run a t act n s)  = spacesep ["Run", show a]
-shortProc (RInst a c ex co)  = spacesep ["RInst", show a]
-shortProc (Excl a v)         = spacesep ["Excl", show a]
-shortProc (Irv a v)          = spacesep ["Irv", show a]
-shortProc (Timer a v t)      = spacesep ["Timer", show a]
-shortProc (QElem a n vs)     = spacesep ["QElem", show a]
-shortProc (DElem a v r)      = spacesep ["DElem", show a]
-shortProc (Op a vs)          = spacesep ["Op", show a]
-shortProc (Src a n vs)       = spacesep ["Src", show a]
-shortProc (Sink a n t vs)    = spacesep ["Sink", show a]
-
+shortProc (Src a vs)         = spacesep ["Src", show a]
+shortProc (Sink a t vs)      = spacesep ["Sink", show a]
 
 data Label      = ENTER (InstName, ExclName)
                 | EXIT  (InstName, ExclName)
