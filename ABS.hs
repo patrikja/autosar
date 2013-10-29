@@ -149,13 +149,13 @@ wheel n = do
         return (prs_ctrl, rlf_ctrl, vel)
 
 system = do
-        (prov_rlf_seqs, prov_prs_seqs, prov_vels) <- fmap unzip3 $ mapM wheel [1..4]
-        (reqd_rlf_seqs, reqd_prs_seqs, reqd_ctrls) <- fmap unzip3 $ mapM (const controller) [1..4]
+        (prov_r_seqs, prov_p_seqs, prov_vels) <- fmap unzip3 $ mapM wheel [1..4]
+        (reqd_r_seqs, reqd_p_seqs, reqd_ctrls) <- fmap unzip3 $ mapM (const controller) [1..4]
         (reqd_vels, prov_ctrls) <- main_loop
-        mapM (uncurry connect) (reqd_rlf_seqs `zip` prov_rlf_seqs)
-        mapM (uncurry connect) (reqd_prs_seqs `zip` prov_prs_seqs)
-        mapM (uncurry connect) (prov_vels `zip` reqd_vels)
-        mapM (uncurry connect) (prov_ctrls `zip` reqd_ctrls)
+        connectAll reqd_r_seqs prov_r_seqs
+        connectAll reqd_p_seqs prov_p_seqs
+        connectAll prov_vels reqd_vels
+        connectAll prov_ctrls reqd_ctrls
         
 vel_sim 1 = []
 vel_sim 2 = []

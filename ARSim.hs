@@ -9,8 +9,8 @@ module ARSim -- Lets design the interface later...
               AR, Time, Trigger(..), Invocation(..), component, runnable, serverRunnable,
               requiredDataElement, providedDataElement, requiredQueueElement, providedQueueElement,
               requiredOperation, providedOperation, interRunnableVariable, exclusiveArea, source, sink,
-              Seal(..), seal2, seal3, seal4, seal5, seal6, seal7,
-              Connect(..), connect2, connect3, connect4, connect5, connect6, connect7,
+              Seal(..), seal2, seal3, seal4, seal5, seal6, seal7, sealAll,
+              Connect(..), connect2, connect3, connect4, connect5, connect6, connect7, connectAll,
               TraceOpt(..), putTrace, simulationM, headSched, simulationHead,
               randSched, simulationRand) -} where
 
@@ -192,6 +192,8 @@ instance Seal (RO a b) where
 instance Seal (PO a b) where
         seal (PO a)    = PO a
 
+sealAll xs                      = map seal xs
+
 seal2 (a1,a2)                   = (seal a1, seal a2)
 seal3 (a1,a2,a3)                = (seal a1, seal a2, seal a3)
 seal4 (a1,a2,a3,a4)             = (seal a1, seal a2, seal a3, seal a4)
@@ -210,6 +212,8 @@ instance Connect (PQ a ()) (RQ a ()) where
         
 instance Connect (RO a b ()) (PO a b ()) where
         connect (RO a) (PO b)   = addConn (a,b)
+        
+connectAll a b                  = mapM (uncurry connect) (a `zip` b)
         
 connect2 (a1,a2) (b1,b2)        
                                 = do connect a1 b1; connect a2 b2
