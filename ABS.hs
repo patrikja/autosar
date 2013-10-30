@@ -32,7 +32,13 @@ instance Valuable SeqState where
         fromVal Void            = Stopped
         fromVal (VArray [VInt t, VInt l, VInt i])
                                 = Running t l i
-        
+
+seq_init setup excl state = do
+        rte_enter excl
+        s <- setup
+        rte_irvWrite state s
+        rte_exit excl
+
 seq_tick step excl state = do
         rte_enter excl
         Ok s <- rte_irvRead state
@@ -51,9 +57,10 @@ seq_onoff onoff excl state on = do
         rte_exit excl
         return ()
 
-sequencer step ctrl = do
+sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
+        runnable Concurrent [Init] (seq_init setup excl state)
         runnable (MinInterval 0) [Timed 0.001] (seq_tick step excl state)
         onoff <- providedOperation
         serverRunnable (MinInterval 0) [onoff] (seq_onoff ctrl excl state)
@@ -68,6 +75,10 @@ sequencer step ctrl = do
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
+relief_setup valve = do
+        rte_write valve False
+        return Stopped
+        
 relief_step valve accel 0 = do
         Ok a <- rte_read accel
         trace ("Relief " ++ show a) (return ())
@@ -91,7 +102,7 @@ relief :: AR c (RE Double (), PO Bool () (), PE Bool ())
 relief = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
-        ctrl <- sequencer (relief_step valve accel) (relief_ctrl valve accel)
+        ctrl <- sequencer (relief_setup valve) (relief_step valve accel) (relief_ctrl valve accel)
         return (seal accel, ctrl, seal valve)
 
 --------------------------------------------------------------
@@ -102,6 +113,10 @@ relief = component $ do
 -- acceleration. It provides a boolean on/off control operation
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
+
+pressure_setup valve = do
+        rte_write valve True
+        return Stopped
 
 pressure_step valve accel 0 = do
         rte_write valve True
@@ -128,7 +143,7 @@ pressure :: AR c (RE Double (), PO Bool () (), PE Bool ())
 pressure = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
-        ctrl <- sequencer (pressure_step valve accel) (pressure_ctrl valve accel)
+        ctrl <- sequencer (pressure_setup valve) (pressure_step valve accel) (pressure_ctrl valve accel)
         return (seal accel, ctrl, seal valve)
 
 --------------------------------------------------------------
@@ -317,7 +332,7 @@ slopes ((x,y):pts@((x',y'):_))
 slopes pts                      = pts
 
 
-discrete vs                     = (0,0) : disc 0.0 vs
+discrete vs                     = disc 0.0 vs
   where disc v0 ((t,v):vs)      = (t,v0) : (t+eps,v) : disc v vs
         disc _ _                = []
         eps                     = 0.0001
