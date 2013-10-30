@@ -237,7 +237,7 @@ test vel_sim acc_sim = do
 
 curve1 = slopes [(0,18),(1,18),(5,0)]
 
-curve2 = slopes [(0,18),(1,18),(2,7),(4,4.5),(4.5,0)]
+curve2 = slopes [(0,18),(1,18),(1.8,10),(2.5,7),(4,4.5),(4.5,0)]
 
 v1 = curve1
 v2 = curve2  -- Let wheel 2 speed deviate
@@ -310,7 +310,7 @@ slopes ((x,y):pts@((x',y'):_))
   | x >= x'                     = slopes pts
   | y == y'                     = (x,y) : slopes pts
   | otherwise                   = slope x y (dx*(y'-y)/(x'-x)) pts
-  where dx                      = 0.1
+  where dx                      = 0.01
         slope x y dy pts@((x',y'):_)
           | x < x'-(dx/2)       = (x,y) : slope (x+dx) (y+dy) dy pts
         slope x y dy pts        = slopes pts

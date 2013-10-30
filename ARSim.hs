@@ -152,6 +152,7 @@ data Invocation         = Concurrent
 
 
 requiredDataElement     :: AR c (RE a c)
+requiredDataElementInit :: Valuable a => a -> AR c (RE a c)
 providedDataElement     :: AR c (PE a c)
 -- The queue is physically located on the 'required' side,
 -- which is why the receiver specifies the max queue length.
@@ -389,6 +390,11 @@ serverRunnable inv tr m = do a <- newName
 
 requiredDataElement     = do a <- newName
                              addProc (DElem a False NO_DATA)
+                             return (RE a)
+
+requiredDataElementInit v
+                        = do a <- newName
+                             addProc (DElem a False (Ok (toVal v)))
                              return (RE a)
 
 providedDataElement     = do a <- newName
@@ -761,9 +767,10 @@ collect trace (RE a)    = case [ vs | Sink b _ vs <- procs, a==b ] of
 
 simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
 simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, tags)
-  where (tags,s)        = runAR m startState 
-        traceM          = simulateM sched (connected (conns s)) procs_s
-        procs_s         = zip (procs s) $ map (\x -> (-1,x)) [0..]
+  where (tags,s)        = runAR m startState
+        s1              = initSources s
+        traceM          = simulateM sched (connected (conns s1)) procs_s
+        procs_s         = zip (procs s1) $ map (\x -> (-1,x)) [0..]
 
 simulateM :: Monad m => SchedulerM m -> Connected -> [ParentProc] -> m [SchedulerOption]
 simulateM = go 0 where
@@ -925,3 +932,11 @@ hear' conn (WR a v)      (Sink b t vs)      | a `conn` b         = Just $ Sink b
 hear' conn (DELTA d)     (Sink b t vs)                           = Just $ Sink b (t+d) vs
 hear' conn label         proc                                    = Nothing
 
+initSources state                                 = state { procs = foldl initialize processes inits }
+  where inits                                     = [ WR a v | Src a ((0.0,v):_) <- processes ]
+        conn                                      = connected (conns state)
+        processes                                 = procs state
+        init (WR a v) (Src b (_:vs)) | a==b       = Src b vs
+        init (WR a v) (DElem b _ _)  | a `conn` b = DElem b False (Ok v)
+        init label    proc                        = proc
+        initialize processes label                = map (init label) processes
