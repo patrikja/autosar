@@ -417,8 +417,12 @@ exclusiveArea           = do a <- newName
                              return (EX a)
 
 source vs               = do a <- newName
-                             addProc (Src a [(t,toVal v)|(t,v)<-vs])
+                             addProc (Src a (relative 0.0 [(t,toVal v)|(t,v)<-vs]))
                              return (PE a)
+  where relative t0 []  = []
+        relative t0 ((t,v):pts)     
+                        = (t-t0,v) : relative t pts
+
 
 sink                    = do a <- newName
                              addProc (Sink a 0.0 [])
@@ -739,17 +743,21 @@ cascade k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds
 
 
 
-chopTrace :: Int -> Trace -> Trace
-chopTrace n (x,tr) = (x, take n tr)
+chopTrace :: Int -> (Trace,a) -> (Trace,a)
+chopTrace n ((x,tr),a) = ((x, take n tr),a)
 
 collect :: Valuable a => Trace -> (RE a c) -> [(Time,a)]
 collect trace (RE a)    = case [ vs | Sink b _ vs <- procs, a==b ] of
                                 [] -> []
-                                (vs:_) -> [ (t, fromVal v) | (t,v) <- reverse vs ]
+                                (vs:_) -> absolute 0.0 ([ (t, fromVal v) | (t,v) <- reverse vs ])
   where schopts         = snd trace
         final           = last schopts
         pprocs          = snd (snd final)
         procs           = map fst pprocs
+        absolute t0 []  = []
+        absolute t0 ((t,v):pts)
+                        = (t0+t,v) : absolute (t0+t) pts
+
 
 simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
 simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, tags)
