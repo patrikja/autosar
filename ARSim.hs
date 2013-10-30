@@ -487,6 +487,8 @@ instance Show Proc where
         show (Src a vs)         = spacesep ["Src", show a, show vs]
         show (Sink a t vs)      = spacesep ["Sink", show a, show t, show vs]
 
+showTV vs = "[" ++ unwords [ "(" ++ show (round (1000*t)) ++ ", " ++ show v ++ ")" | (t,v) <- vs ] ++ "]"
+
 shortProc :: Proc -> String
 shortProc (Run a t act n s)  = spacesep ["Run", show a]
 shortProc (RInst a n c _ _)  = spacesep ["RInst", show a++"-"++show n]
@@ -582,6 +584,9 @@ putTraceLabels = mapM_ printLabel . traceLabels where
   printLabel l@(DELTA t) = print l >> threadDelay (round (t*1000000))
   printLabel l           = print l
 
+putTraceAll :: Trace -> IO ()
+putTraceAll = mapM_ printAll . snd
+  where printAll (l,(_,ps)) = print l >> print (map fst ps)
 
 putTraceForest :: Trace -> IO ()
 putTraceForest = putStrLn . drawForest . map (fmap showNode) . toForest
@@ -606,22 +611,30 @@ sendsTo tags (_,ls) = [ v | SND a v _ <- map fst ls, a `elem` ns ]
 headSched :: SchedulerM Identity
 headSched _ = return . Just . head
 
-simulationHead :: (forall c. AR c [Tag]) -> (Trace, [Tag])
+simulationHead :: (forall c. AR c a) -> (Trace, a)
 simulationHead m = (runIdentity m', a) 
   where (m', a) = simulationM headSched m
+
+maximumProgress :: SchedulerM m -> SchedulerM m
+maximumProgress sched n opts
+  | null work = sched n deltas
+  | otherwise = sched n work
+  where (deltas,work) = partition isDelta opts
+        isDelta (DELTA _, _) = True
+        isDelta _            = False
 
 randSched :: SchedulerM Gen
 randSched _ = fmap Just . elements
 
-simulationRandG :: (forall c. AR c [Tag]) -> Gen (Trace, [Tag])
+simulationRandG :: (forall c. AR c a) -> Gen (Trace, a)
 simulationRandG m = do
   let (g, a) = simulationM randSched m
   x <- g
   return (x,a)
 
-simulationRand :: StdGen -> (forall c. AR c [Tag]) -> (Trace, [Tag])
+simulationRand :: StdGen -> (forall c. AR c a) -> (Trace, a)
 simulationRand rng m = (unGen g rng 0, a)
-  where (g, a) = simulationM randSched m
+  where (g, a) = simulationM (maximumProgress randSched) m
 
 
 
@@ -658,7 +671,7 @@ fixReferences k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds
     (x1,((x2,(n-skips,x3)),x4)) : fixReferences (k+1) ds xs
 
 
-simulationRerun :: Trace -> (forall c. AR c [Tag]) -> (Trace, [Tag])
+simulationRerun :: Trace -> (forall c. AR c a) -> (Trace, a)
 simulationRerun tc m = (S.evalState m' tc, a)
     where (m',a) = simulationM rerunSched m
 
@@ -672,10 +685,19 @@ similarLabel (SND n1 _ _)  (SND n2 _ _)  = n1 == n2
 -- Several more cases could be added.
 similarLabel a             b             = a == b
 
+chopTrace :: Int -> Trace -> Trace
+chopTrace n (x,tr) = (x, take n tr)
 
+collect :: Valuable a => Trace -> (RE a c) -> [(Time,a)]
+collect trace (RE a)    = case [ vs | Sink b _ vs <- procs, a==b ] of
+                                [] -> []
+                                (vs:_) -> [ (t, fromVal v) | (t,v) <- reverse vs ]
+  where schopts         = snd trace
+        final           = last schopts
+        pprocs          = snd (snd final)
+        procs           = map fst pprocs
 
-
-simulationM :: Monad m => SchedulerM m -> (forall c. AR c [Tag]) -> (m Trace, [Tag])
+simulationM :: Monad m => SchedulerM m -> (forall c. AR c a) -> (m Trace, a)
 simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, tags)
   where (tags,s)        = runAR m startState 
         traceM          = simulateM sched (connected (conns s)) procs_s
@@ -796,6 +818,8 @@ may_hear conn (DELTA d)      (Run _ t _ _ _)   | t == 0         = DELTA d
                                                | d > t          = PASS
 may_hear conn (DELTA d)      (Timer _ t _)     | d <= t         = DELTA d
                                                | d > t          = PASS
+may_hear conn (DELTA d)      (Src a ((t,v):_)) | d <= t         = DELTA d
+                                               | d > t          = PASS
 may_hear conn (WR a v)       (Sink b _ _)      | a `conn` b     = WR a v
 may_hear conn (DELTA d)      (Sink _ _ _)                       = DELTA d
 may_hear conn label _                                           = label
@@ -834,7 +858,8 @@ hear' conn (TICK a)      (Run b t _ n s)    | a==b               = Just $ Run b 
 hear' conn (DELTA d)     (Run b 0.0 act n s)                     = Nothing -- Just $ Run b 0.0 act n s
 hear' conn (DELTA d)     (Run b t act n s)                       = Just $ Run b (t-d) act n s
 hear' conn (DELTA d)     (Timer b t t0)                          = Just $ Timer b (t-d) t0
-hear' conn (WR a v)      (Sink b t vs)    | a `conn` b           = Just $ Sink b 0.0 ((t,v):vs)
+hear' conn (DELTA d)     (Src b ((t,v):vs))                      = Just $ Src b ((t-d,v):vs)
+hear' conn (WR a v)      (Sink b t vs)      | a `conn` b         = Just $ Sink b 0.0 ((t,v):vs)
 hear' conn (DELTA d)     (Sink b t vs)                           = Just $ Sink b (t+d) vs
 hear' conn label         proc                                    = Nothing
 

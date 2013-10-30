@@ -1,4 +1,4 @@
-module ABS where
+module Main where
         
 import ARSim
 import System.Random
@@ -12,9 +12,9 @@ instance (Valuable a, Valuable b) => Valuable (a,b) where
 -- A generic skeleton for creating sequencer components; i.e., 
 -- components that produce sequences of observable effects at
 -- programmable points in time. The skeleton is parametric in 
--- the actual step function, which takes takes a step index as
+-- the actual step function (which takes takes a step index as
 -- a parameter, performs any observable effects, and returns a
--- new sequencer state. A sequencer state is either Stopped or 
+-- new sequencer state). A sequencer state is either Stopped or 
 -- (Running ticks limit index), where limit is the step size in
 -- milliseconds, ticks is the time in milliseconds since the 
 -- last step, and index is the new step index. A sequencer 
@@ -35,26 +35,26 @@ seq_tick step excl state = do
         rte_enter excl
         Ok s <- rte_irvRead state
         s' <- case s of
-                Stopped                 -> return s
+                Stopped                   -> return s
                 Running ticks limit i 
-                        | ticks < limit -> return (Running (ticks+1) limit i)
-                        | otherwise     -> step i
+                        | ticks < limit-1 -> return (Running (ticks+1) limit i)
+                        | otherwise       -> step i
         rte_irvWrite state s'
         rte_exit excl
 
-seq_onoff step excl state on = do
+seq_onoff onoff excl state on = do
         rte_enter excl
-        s <- step (if on then 0 else -1)
+        s <- onoff on
         rte_irvWrite state s
         rte_exit excl
         return ()
 
-sequencer step = do
+sequencer step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
         runnable (MinInterval 0) [Timed 0.001] (seq_tick step excl state)
         onoff <- providedOperation
-        serverRunnable (MinInterval 0) [onoff] (seq_onoff step excl state)
+        serverRunnable (MinInterval 0) [onoff] (seq_onoff ctrl excl state)
         return (seal onoff)
 
 --------------------------------------------------------------
@@ -70,21 +70,25 @@ relief_step valve accel 0 = do
         Ok a <- rte_read accel
         if a < 0 then do
                 rte_write valve True
-                return (Running 0 (-(round a)*10) 1)
+                return (Running 0 (round (-a*10)) 1)
          else
                 return (Running 0 5 0)
-relief_step valve accel 1 = do
-        rte_write valve False
-        return (Running 0 5 0)
 relief_step valve accel n = do
         rte_write valve False
+        return (Running 0 5 0)
+
+relief_ctrl valve accel True = 
+        relief_step valve accel 0
+relief_ctrl valve accel False = do
+        rte_write valve False
         return Stopped
+        
 
 relief :: AR c (RE Double (), PO Bool () (), PE Bool ())
 relief = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
-        ctrl <- sequencer $ relief_step valve accel
+        ctrl <- sequencer (relief_step valve accel) (relief_ctrl valve accel)
         return (seal accel, ctrl, seal valve)
 
 --------------------------------------------------------------
@@ -105,7 +109,7 @@ pressure_step valve accel 20 = do
 pressure_step valve accel n | even n = do
         rte_write valve True
         Ok a <- rte_read accel
-        return (Running 0 (round a*50) (n+1))
+        return (Running 0 (round (a*50)) (n+1))
 pressure_step valve accel n | odd n = do
         rte_write valve False
         return (Running 0 20 (n+1))
@@ -113,11 +117,17 @@ pressure_step valve accel n | n < 0 = do
         rte_write valve False
         return Stopped
 
+pressure_ctrl valve True =
+        return (Running 0 0 0)
+pressure_ctrl valve False = do
+        rte_write valve False
+        return Stopped
+
 pressure :: AR c (RE Double (), PO Bool () (), PE Bool ())
 pressure = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
-        ctrl <- sequencer $ pressure_step valve accel
+        ctrl <- sequencer (pressure_step valve accel) (pressure_ctrl valve)
         return (seal accel, ctrl, seal valve)
 
 --------------------------------------------------------------
@@ -161,8 +171,8 @@ controller = component $ do
 -- approximates the vehicle speed as the maximum of the wheel
 -- speeds (should be refined for the case when all wheels are
 -- locked, must resort do dead reckoning based on latest 
--- deacceleration in these cases), and updates all wheel 
--- controllers with its current slip ratio.
+-- deacceleration in these cases), and sends every wheel 
+-- controller its updated slip ratio.
 --------------------------------------------------------------
 
 loop velostreams slipstreams = do
@@ -218,3 +228,49 @@ test vel_sim acc_sim = do
         connectAll valves_p_out p_actuators
         
         return $ tag v_sensors ++ tag a_sensors ++ tag r_actuators ++ tag p_actuators
+
+simulation vel_sim acc_sim = do 
+        s <- newStdGen
+        let (trace,tags) = simulationRand s (test vel_sim acc_sim)
+        putTraceLabels trace
+
+--main = simulation (const [(0,0)]) (const [(0,0)])
+main = seq_sim
+
+ctrl = component $ do
+        trig <- requiredDataElement
+        op <- requiredOperation
+        runnable (MinInterval 0) [ReceiveE trig] (rte_call op True)
+        return (seal trig, seal op)
+
+seq_test = do
+        (accel_in, onoff_in, valve_out) <- relief
+        (trig_in,onoff_out) <- ctrl
+        
+        trig_sens <- source [(0.0, True)]
+        accel_sens <- source vs
+        valve <- sink
+        connect trig_sens trig_in
+        connect accel_sens accel_in
+        connect onoff_out onoff_in
+        connect valve_out valve
+        
+        return valve
+
+k1 = 1.9
+k2 = 0.02
+xs = [0.0,k2..1.0]
+f t = 0.5 - k1*((1.0-t)^2)
+vs = (0 : repeat k2) `zip` map f xs
+
+seq_sim = do
+        s <- newStdGen
+        let (trace, valve) = simulationRand s seq_test
+            trace' = chopTrace 5000 trace
+        print (absolute 0.0 (collect trace' valve))
+        putStr "\n"
+        print (absolute 0.0 vs)
+--        putTraceLabels trace'
+
+absolute base [] = []
+absolute base ((t,v):vs) = (round ((base+t)*1000),v) : absolute (base+t) vs
