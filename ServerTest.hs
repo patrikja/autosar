@@ -4,8 +4,6 @@ module Main where
 import ARSim
 import System.Random
 import Test.QuickCheck
-import Test.QuickCheck.Gen
-import Test.QuickCheck.Arbitrary
 
 import Control.Monad.State.Lazy as S
 import Control.Monad.Error
@@ -14,7 +12,18 @@ import Data.List(nub, sortBy)
 import Data.Function(on)
 import Data.Tree
 
-main = quickCheck prop_norace
+import System.IO.Unsafe
+import Data.IORef
+
+main = main' Nothing >> return ()
+
+main' repl = do 
+  ior <- newIORef Nothing
+  r <- quickCheckWithResult stdArgs {replay = repl } $ prop_norace ior
+  Just x <- readIORef ior
+  return (x,(usedSeed r, usedSize r))
+  
+
 
 ticketDispenser :: AR c (PO () Int ())
 ticketDispenser = component $
@@ -50,81 +59,11 @@ test            = do t <- ticketDispenser
 
 
 
-oneRun :: IO Sim 
-oneRun = do 
-  s <- newStdGen
-  print s
-  return $ Sim $ simulationRand s test
-  
-parentSort :: Sim -> Sim 
-parentSort (Sim ((x,t),z)) = Sim ((x,t'),z) where
-  t' :: [SchedulerOption]
-  t' = sortBy (compare `on` (snd . fst . snd)) t
-         
--- A simulation trace along with a list of ports to observe
-newtype Sim = Sim (Trace, [Tag])
-instance Show Sim where
-  show (Sim (t,_)) = drawForest (map (fmap showNode) $ toForest t) where
-   
--- Take a finite initial part of the simulation trace
-cutSim :: Int -> Sim -> Sim
-cutSim n (Sim (t,xs)) = Sim (fmap (take n) t, xs)
-
--- Shrink the simulation trace and rerun it
--- This would work much better if the trace was a tree, branching on new processes.
-shrinkSim :: (forall c. AR c [Tag]) -> Sim -> [Sim]
-shrinkSim code (Sim (trc,_)) = [rerun tn'| tn' <- shrinkTrace trc ] where
-  rerun tns = Sim $ simulationRerun tns code
-
-shrink2 shrnk x =
-    [ y | y <- shrnk_x ] ++
-    [ z
-    | y <- shrnk_x
-    , z <- shrnk y
-    ]
-   where
-    shrnk_x = shrnk x  
-
 -- Checks that there are no duplicate tickets being issued.
-prop_norace :: Property
-(prop_norace,prop) = (\x -> (x,prop)) $ sized $ \n -> do
-  let code  = test
-      limit = (1+n*10)
-      gen :: Gen Sim
-      gen = fmap (cutSim limit . Sim) $ simulationRandG code
-      shrnk :: Sim -> [Sim]
-      shrnk = shrink2 $ shrinkSim code
-              -- shrinkNothing -- Disable shrinking
-      
-      prop :: Sim -> Bool
-      prop (Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
-  forAllShrink gen shrnk prop
-
-
--- Just tests that the rerun scheduler works with unmodified traces.    
-testRerun = do
-  g <- newStdGen
-  print g
-  let s@(Sim (t,a)) = cutSim 20 $ Sim $ simulationRand g test
-  mapM_ print (traceLabelParents t)
-  putTraceForest t
-  putStrLn ""
-  let ((x,_)) = simulationRerun t test
-  mapM_ print (take 100 $  traceLabelParents x)
-  print $ take 100 (traceLabelParents t) == (take 100 $ traceLabelParents x)
-    
-
-{- -- Some code for debugging the shrinker     
-rerun = let ((x,_)) = simulationRerun fakeTrace test in do
-  mapM_ print (drop 22 $ traceLabels x)
-  putStrLn ""
-  mapM_ print (drop 22 $ unshrinkable)
-  print $ length $ takeWhile id (zipWith (==) (traceLabels x) unshrinkable)
-fakeTrace :: Trace
-fakeTrace = ((undefined,zip unshrinkable (repeat undefined))) where
-  ps = [(4,6),(12,14),(8,10),(16,18)]
-fakeSim = Sim ((undefined,zip t (repeat undefined)),ps) where
-  t  = unshrinkable
-  ps = [(4,6),(12,14),(8,10),(16,18)]
-unshrinkable = []
--}
+prop_norace :: IORef (Maybe Sim) -> Property
+prop_norace ior = traceProp test $ \s -> if prop_norace' s 
+     then True
+     else unsafePerformIO (writeIORef ior (Just s) >> return False)
+ 
+prop_norace' :: Sim -> Bool
+prop_norace' s@(Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks

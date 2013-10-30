@@ -23,7 +23,7 @@ import Data.Tree
 import Data.Function(on)
 
 import System.Random (StdGen)
-import Test.QuickCheck (Gen, elements, choose, shrinkNothing)
+import Test.QuickCheck (Gen, elements, choose, shrinkNothing, forAllShrink, sized, Property)
 import Test.QuickCheck.Arbitrary (shrinkList)
 import Test.QuickCheck.Gen (Gen(..))
 import qualified Control.Monad.Writer as W
@@ -591,16 +591,16 @@ putTraceAll = mapM_ printAll . snd
 putTraceForest :: Trace -> IO ()
 putTraceForest = putStrLn . drawForest . map (fmap showNode) . toForest
 
-toForest :: Trace -> Forest (Int,Proc,Label)
+toForest :: Trace -> Forest (Int,ParentProc,Label)
 toForest (ps,tc)= toForest' (-1) indexed where
   indexed = (zip tc [0..])
-  toForest' :: Int -> [(SchedulerOption,Int)] -> Forest (Int,Proc,Label)
+  toForest' :: Int -> [(SchedulerOption,Int)] -> Forest (Int,ParentProc,Label)
   toForest' par sos = map snd $ sortBy (compare `on` fst)
     [(snd (optionParent so),toTree ix so)|(so,ix) <- sos, fst (optionParent so) == par]
-  toTree :: Int -> SchedulerOption -> Tree (Int,Proc,Label)
-  toTree ix so = Node (ix, orphan $ optionSpeaker so, optionLabel so) (toForest' ix indexed) 
+  toTree :: Int -> SchedulerOption -> Tree (Int,ParentProc,Label)
+  toTree ix so = Node (ix, optionSpeaker so, optionLabel so) (toForest' ix indexed) 
                               -- could drop ix from indexed to optimise 
-showNode (ix,p,l) = show ix ++ ": " ++ shortProc p ++ " !!! " ++ show l
+showNode (ix,p,l) = show ix ++ ": " ++ shortProc (orphan p) ++ " !!! " ++ show l
 
 
                              
@@ -651,30 +651,13 @@ rerunSched n ls = do
     (rr,(gpar,_)):rrs'  -> do 
       S.put (init, rrs')
       case [x | x@(lab, (gparx,_)) <- ls, (lab `similarLabel` rr) && (gpar `siblingTo` gparx)] of
-        []     -> rerunSched n ls
+        []     -> do
+           let rrs'' = shortCut n (snd gpar) rrs'
+           S.put (init,rrs'')
+           rerunSched n ls
         [x]    -> return $ Just $ x
         (x:xs) -> return $ Just $ x -- Take the label that's closest to the original choice
-
-shrinkTrace :: Trace -> [Trace]
-shrinkTrace (init,t) = [(init,t')|t' <- removeSingle 0 t] where
-
-
-removeSingle _ [] = []
-removeSingle _ [x] = [[]]
-removeSingle k (x:xs) = fixReferences (k+1) [k] xs : map (x:) (removeSingle (k+1) xs)
-
-fixReferences :: Int -> [Int] -> [SchedulerOption] -> [SchedulerOption]
-fixReferences k ds []     = []
-fixReferences k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds 
-  then fixReferences (k+1) (ds ++ [k]) xs
-  else let skips = length (takeWhile (< n) ds) in 
-    (x1,((x2,(n-skips,x3)),x4)) : fixReferences (k+1) ds xs
-
-
-simulationRerun :: Trace -> (forall c. AR c a) -> (Trace, a)
-simulationRerun tc m = (S.evalState m' tc, a)
-    where (m',a) = simulationM rerunSched m
-
+        
 similarLabel :: Label -> Label -> Bool
 similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
 similarLabel (IRVW n1 _)   (IRVW n2 _)   = n1 == n2
@@ -684,6 +667,77 @@ similarLabel (RCV n1 _)    (RCV n2 _)    = n1 == n2
 similarLabel (SND n1 _ _)  (SND n2 _ _)  = n1 == n2
 -- Several more cases could be added.
 similarLabel a             b             = a == b
+
+simulationRerun :: Trace -> (forall c. AR c a) -> (Trace, a)
+simulationRerun tc m = (S.evalState m' tc, a)
+    where (m',a) = simulationM rerunSched m
+
+
+    
+-- Shrinking and property stuff    
+
+-- A simulation trace along with a list of ports to observe
+newtype Sim = Sim (Trace, [Tag])
+instance Show Sim where
+  show (Sim (t,_)) = drawForest (map (fmap showNode) $ toForest t) where
+
+
+traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
+traceProp code prop = sized $ \n -> do
+  let limit = (1+n*10)
+      gen :: Gen Sim
+      gen = fmap (cutSim limit . Sim) $ simulationRandG code
+  -- forAllShrink gen shrinkNothinh prop -- Disable shrinking
+  forAllShrink gen (shrinkSim code) prop
+
+
+
+-- Take a finite initial part of the simulation trace
+cutSim :: Int -> Sim -> Sim
+cutSim n (Sim (t,xs)) = Sim (fmap (take n) t, xs)
+
+-- Shrink the simulation trace and rerun it
+-- This would work much better if the trace was a tree, branching on new processes.
+shrinkSim :: (forall c. AR c [Tag]) -> Sim -> [Sim]
+shrinkSim code (Sim (trc,_)) = [rerun tn'| tn' <- shrink2 shrinkTrace trc ] where
+  rerun tns = Sim $ simulationRerun tns code
+
+shrink2 shrnk x =
+    [ y | y <- shrnk_x ] ++
+    [ z
+    | y <- shrnk_x
+    , z <- shrnk y
+    ]
+   where
+    shrnk_x = shrnk x 
+
+shrinkTrace :: Trace -> [Trace]
+shrinkTrace (init,t) =  -- [(init,t')|t' <- removeSingle 0 t]
+                     [(init,t')|t' <- cutLoop 0 t]
+
+cutLoop _ []     = []
+cutLoop _ [x]    = [[]]
+cutLoop k (x:xs) = shortCut k (optionParent x) xs : map (x:) (cutLoop (k+1) xs)
+
+shortCut :: Int -> (Int,Int) -> [SchedulerOption] -> [SchedulerOption]
+shortCut ds p []     = []
+shortCut ds p ((r@(x1,((x2,(n,c)),x4))):xs) = if n == ds
+  then (x1,((x2,p),x4)) : shortCut ds p xs
+  else (if ds <= n then (x1,((x2,(n-1,c)),x4)) else r) : shortCut ds p xs
+
+removeSingle _ [] = []
+removeSingle _ [x] = [[]]
+removeSingle k (x:xs) = cascade (k+1) [k] xs : map (x:) (removeSingle (k+1) xs)
+
+cascade :: Int -> [Int] -> [SchedulerOption] -> [SchedulerOption]
+cascade k ds []     = []
+cascade k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds 
+  then cascade (k+1) (ds ++ [k]) xs
+  else let skips = length (takeWhile (< n) ds) in 
+    (x1,((x2,(n-skips,x3)),x4)) : cascade (k+1) ds xs
+
+
+
 
 chopTrace :: Int -> Trace -> Trace
 chopTrace n (x,tr) = (x, take n tr)
