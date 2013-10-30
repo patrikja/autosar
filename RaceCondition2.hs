@@ -61,11 +61,10 @@ consumerFix     = component $
                      runnable Concurrent [ReceiveQ rqe] r2
                      return (seal rqe)
 
-test :: AR c (RQ Int ()) -> AR c [a]
+test :: AR c (RQ Int ()) -> AR c ()
 test consumerx  = do pqe <- component producer
                      rqe <- consumerx
                      connect pqe rqe
-                     return []
 
 -- Run the buggy version with the randomised scheduler
 main            = mainRand consumer

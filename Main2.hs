@@ -24,7 +24,6 @@ test            = do src <- source [(0.0,5),(0.0,7::Int)]
                      connect rop pop
                      connect src re
                      connect pe snk
-                     return []
            
 -- Occasionally gives pattern match failure (in r1)           
 main            = do s <- newStdGen; putTraceLabels (fst (simulationRand s test))

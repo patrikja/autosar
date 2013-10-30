@@ -23,11 +23,10 @@ c2              = do rqe <- requiredQueueElement 10 -- Queue of size 10
                      return (seal rqe)
 
 -- | Connect c1 and c2 to create a program that sends and receives.
-test :: AR c [Tag]
+test :: AR c ()
 test            = do pqe <- component c1
                      rqe <- component c2
                      connect pqe rqe
-                     return []
                              
 -- | Run the simulation of this test program, showing a trace of the execution
 main            = putTraceLabels $ fst $ (simulationHead test)
