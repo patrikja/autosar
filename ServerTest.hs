@@ -1,23 +1,13 @@
 {-# LANGUAGE RankNTypes #-}
-module Main where
+module ServerTest where
 
 import ARSim
-import System.Random
 import Test.QuickCheck
 import Test.QuickCheck.Property
+import Data.List(nub)
 
-import Control.Monad.State.Lazy as S
-import Control.Monad.Error
 
-import Data.List(nub, sortBy)
-import Data.Function(on)
-import Data.Tree
 
-import System.IO.Unsafe
-import Data.IORef
-
-main = do
-  quickCheck $ noShrinking prop_norace
 
 ticketDispenser :: AR c (PO () Int ())
 ticketDispenser = component $
@@ -34,12 +24,13 @@ client n        = component $
                   do rop <- requiredOperation
                      pqe <- providedQueueElement
                      let -- r2 1 = return ()
-                         r2 i  = do Ok v <- rte_call rop ()
-                                    rte_send pqe v
-                                    r2 (i+1)
-                     runnableN ("Client" ++ show n) Concurrent [Init] (r2 0)
+                         r2  = do Ok v <- rte_call rop ()
+                                  rte_send pqe v
+                                  r2
+                     runnableN ("Client" ++ show n) Concurrent [Init] r2
                      return (seal2 (rop, pqe))
 
+test :: forall c. AR c [Tag]
 test            = do t <- ticketDispenser
                      (rop1, pqe1) <- client 1
                      (rop2, pqe2) <- client 2
@@ -57,18 +48,14 @@ prop_norace :: Property
 prop_norace = traceProp test norace
  
 norace :: Sim -> Bool
-norace s@(Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
+norace (Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
 
+main :: IO ()
+main = quickCheck prop_norace
 
+noShrink :: IO ()
+noShrink = do
+  quickCheck $ noShrinking prop_norace
 
-prop_norace_ioref :: IORef (Maybe Sim) -> Property
-prop_norace_ioref ior = traceProp test $ \s -> if norace s 
-     then True
-     else unsafePerformIO (writeIORef ior (Just s) >> return False)
- 
-main' repl = do 
-  ior <- newIORef Nothing
-  r <- quickCheckWithResult stdArgs {replay = repl } $ noShrinking $ prop_norace_ioref ior
-  Just x <- readIORef ior
-  return (x,(usedSeed r, usedSize r))
-  
+perfect :: IO ()
+perfect = quickCheckWith stdArgs{replay = Just (read "1458293422 535353310",3)} prop_norace >> return ()

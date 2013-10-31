@@ -546,7 +546,8 @@ labelName :: Label -> Maybe (Name,Name)
 labelName (SND n _ _) = Just n
 labelName _           = Nothing
 
-
+shortLabel :: Label -> String
+shortLabel = filter (/= ' ') . show
 
 
 -- An initial state, and all intermediate states
@@ -747,8 +748,15 @@ rerunSched n ls = do
            let rrs'' = shortCut n (snd gpar) rrs'
            S.put (init,rrs'')
            rerunSched n ls
-        [x]    -> return $ Just $ x
-        (x:xs) -> return $ Just $ x -- Take the label that's closest to the original choice
+        [x]  -> return $ Just $ x
+        xs   -> return $ Just $ 
+          case [x | x <- xs, orphan gpar `sameProcess` orphan (optionSpeaker x)] of 
+            []    -> head xs
+            (x:_) -> x
+
+sameProcess (Run a _ _ _ _ _)   (Run b _ _ _ _ _)     = a == b   
+sameProcess (RInst a n _ _ _)   (RInst b m _ _ _)     = a == b && n == m 
+sameProcess _                   _                     = False
         
 similarLabel :: Label -> Label -> Bool
 similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
@@ -841,10 +849,42 @@ cascade k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds
 
 -- Try to move sequential broadcasts closer to their parents
 sequentialise k (x:y:xys) = fmap (x:) $ if yp == k && yc == 0
-  then rc
-  else maybe id (\(e,_,es) -> ((e:y:es):)) (goFish (k+1) xys) $ rc
+  then rc 
+  else go (go id childOf) firstBornOf rc -- Look for other children if there is no firstborn.
+       -- go id firstBornOf rc
   where  
-    rc = sequentialise (k+1) (y:xys)
+    go fc fbo = maybe fc (\(e,_,es) -> ((e:y:es):)) (goFish fbo (k+2) xys)
+    rc        = sequentialise (k+1) (y:xys)
+    (yp, yc)  = optionParent y
+    -- Look for a 'firstborn' child of x, and return it along with it's index an updated list
+    goFish :: (SchedulerOption -> Int -> Bool) -> 
+              Int -> 
+              [SchedulerOption] -> 
+              Maybe (SchedulerOption, Int, [SchedulerOption])
+    goFish fbo m []           = Nothing
+    goFish fbo m (x:xs)
+      | x `fbo` k = Just (x, m, map (updateRef m) xs) 
+      | otherwise         = fmap (\(e,m',es) -> (e,m',updateRef m' x:es)) (goFish fbo (m+1) xs)
+      where
+        updateRef m z
+          | op == m                   = updateIndex z (const (k+1))
+          | op < m && op >= k         = updateIndex z (+1)
+          | otherwise                 = z
+          where op = fst (optionParent z) 
+        updateIndex z f = setOptionParent z (f ix,c)
+          where (ix,c) = optionParent z
+sequentialise k _         = []
+
+-- if yp == k
+--     then rc
+--     else maybe id (\(e,_,es) -> ((e:y:es):)) (goFish childOf (k+2) xys) $ rc
+
+
+sequentialise' k (x:y:xys) = fmap (\(m,xs) -> (m,x:xs)) $ if yp == k && yc == 0
+  then rc
+  else maybe id (\(e,m,es) -> ((m,e:y:es):)) (goFish (k+2) xys) $ rc
+  where  
+    rc = sequentialise' (k+1) (y:xys)
     (yp, yc) = optionParent y
     -- Look for a 'firstborn' child of x, and return it along with it's index an updated list
     goFish :: Int -> [SchedulerOption] -> Maybe (SchedulerOption, Int, [SchedulerOption])
@@ -853,17 +893,17 @@ sequentialise k (x:y:xys) = fmap (x:) $ if yp == k && yc == 0
       | x `firstBornOf` k = Just (x, m, map (updateRef m) xs) 
       | otherwise         = fmap (\(e,m',es) -> (e,m',updateRef m' x:es)) (goFish (m+1) xs)
       where
-        updateRef m x
-          | op == m                   = updateIndex x (const (k+1))
-          | op < m && op > k          = updateIndex x (+1)
-          | otherwise                 = x
-          where op = fst (optionParent x) 
-        updateIndex x f = setOptionParent x (f ix,c)
-          where (ix,c) = optionParent x
-sequentialise k _         = []
+        updateRef m z
+          | op == m                   = updateIndex z (const (k+1))
+          | op < m && op >= k         = updateIndex z (+1)
+          | otherwise                 = z
+          where op = fst (optionParent z) 
+        updateIndex z f = setOptionParent z (f ix,c)
+          where (ix,c) = optionParent z
+sequentialise' k _         = []
 
-
-
+-- k = 4
+-- m = 6
 
 chopTrace :: Int -> (Trace,a) -> (Trace,a)
 chopTrace n ((x,tr),a) = ((x, take n tr),a)
