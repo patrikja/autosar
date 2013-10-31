@@ -626,8 +626,9 @@ toForest (ps,tc)= toForest' (-1) indexed where
   toTree :: Int -> SchedulerOption -> Tree (Int,ParentProc,Label)
   toTree ix so = Node (ix, optionSpeaker so, optionLabel so) (toForest' ix indexed) 
                               -- could drop ix from indexed to optimise 
-showNode (ix,p,l) = show ix ++ ": " ++ shortProc (orphan p) ++ " !!! " ++ show l
-
+--showNode (ix,p,l) = show ix ++ ": " ++ shortProc (orphan p) ++ " !!! " ++ show l
+showNode (ix,p,l) = (star $ snd $ snd p) ++ show ix ++ ": " ++ shortProc (orphan p) ++ " !!! " ++ show l
+  where star 0 = ""; star _ = "*"
 
                              
 sendsTo :: [Tag] -> Trace -> [Value]
