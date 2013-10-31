@@ -232,6 +232,7 @@ connect7 (a1,a2,a3,a4,a5,a6,a7) (b1,b2,b3,b4,b5,b6,b7)
                                 = do connect a1 b1; connect (a2,a3,a4,a5,a6,a7) (b2,b3,b4,b5,b6,b7)
 
 newtype Tag                     = Tag Name2
+                                    -- deriving Show -- Probably we want to remove this instance later, but it's useful for debugging
 
 class Taggable a where
         tag                     :: [a] -> [Tag]
@@ -565,14 +566,29 @@ siblingTo :: ParentProc -> ParentProc -> Bool
 processParent :: ParentProc -> (Int,Int)
 processParent (_,x) = x
 
+setProcessParent :: ParentProc -> (Int,Int) -> ParentProc
+setProcessParent (x,_) p = (x,p)
+
 optionSpeaker :: SchedulerOption -> ParentProc
 optionSpeaker (_,(p,_)) = p
+
+setOptionSpeaker :: SchedulerOption -> ParentProc -> SchedulerOption
+setOptionSpeaker (x,(_,y)) p = (x,(p,y))
 
 optionParent :: SchedulerOption -> (Int,Int)
 optionParent = processParent . optionSpeaker
 
+setOptionParent :: SchedulerOption -> (Int,Int) -> SchedulerOption
+setOptionParent so = setOptionSpeaker so . setProcessParent (optionSpeaker so)
+
 optionLabel :: SchedulerOption -> Label
 optionLabel = fst
+
+opt `firstBornOf` k = optionParent opt == (k,0)
+opt `childOf` k     = fst (optionParent opt) == k
+
+
+
 
 traceLabels :: Trace -> [Label]
 traceLabels (_,xs) = map fst xs
@@ -650,9 +666,6 @@ simulationRand rng m = (unGen g rng 0, a)
 
 -- Scheduler that reruns a trace. The only difficult part is what to do if there are several
 --   labels in the choice list (ls) that match the next label from the rerun trace.
--- Currently it uses a list of indexes of the original choices to guarantee that rerunning an 
---   exact trace gives identical result, however if elements have been  removed from the trace it  
---   may still fail to identify the "correct" choice from the list.
 rerunSched :: SchedulerM (S.State Trace)
 rerunSched n ls = do
   (init,steps) <- S.get
@@ -688,9 +701,13 @@ simulationRerun tc m = (S.evalState m' tc, a)
 
 -- A simulation trace along with a list of ports to observe
 newtype Sim = Sim (Trace, [Tag])
-instance Show Sim where
-  show (Sim (t,_)) = drawForest (map (fmap showNode) $ toForest t) where
+simTrace (Sim (t,_)) = t
 
+instance Show Sim where
+--  show (Sim (t,_)) = unlines $ map show $ sortByParent $ traceLabelParents t
+  show (Sim (t,_)) = drawForest (map (fmap showNode) $ toForest t)
+
+sortByParent tls = sortBy (compare `on` (\(a,b,c) -> b)) tls
 
 traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
 traceProp code prop = sized $ \n -> do
@@ -723,7 +740,8 @@ shrink2 shrnk x =
 
 shrinkTrace :: Trace -> [Trace]
 shrinkTrace (init,t) =  -- [(init,t')|t' <- removeSingle 0 t]
-                     [(init,t')|t' <- cutLoop 0 t]
+                     [(init,t')|t' <- cutLoop 0 t] ++
+                     [(init,t')|t' <- sequentialise 0 t]
 
 cutLoop _ []     = []
 cutLoop _ [x]    = [[]]
@@ -745,6 +763,29 @@ cascade k ds ((r@(x1,((x2,(n,x3)),x4))):xs) = if n `elem` ds
   then cascade (k+1) (ds ++ [k]) xs
   else let skips = length (takeWhile (< n) ds) in 
     (x1,((x2,(n-skips,x3)),x4)) : cascade (k+1) ds xs
+
+-- Try to move sequential broadcasts closer to their parents
+sequentialise k (x:y:xys) = fmap (x:) $ if yp == k && yc == 0
+  then rc
+  else maybe id (\(e,_,es) -> ((e:y:es):)) (goFish (k+1) xys) $ rc
+  where  
+    rc = sequentialise (k+1) (y:xys)
+    (yp, yc) = optionParent y
+    -- Look for a 'firstborn' child of x, and return it along with it's index an updated list
+    goFish :: Int -> [SchedulerOption] -> Maybe (SchedulerOption, Int, [SchedulerOption])
+    goFish m []           = Nothing
+    goFish m (x:xs)
+      | x `firstBornOf` k = Just (x, m, map (updateRef m) xs) 
+      | otherwise         = fmap (\(e,m',es) -> (e,m',updateRef m' x:es)) (goFish (m+1) xs)
+      where
+        updateRef m x
+          | op == m                   = updateIndex x (const (k+1))
+          | op < m && op > k          = updateIndex x (+1)
+          | otherwise                 = x
+          where op = fst (optionParent x) 
+        updateIndex x f = setOptionParent x (f ix,c)
+          where (ix,c) = optionParent x
+sequentialise k _         = []
 
 
 
@@ -897,8 +938,8 @@ may_hear conn label _                                           = label
 -- Not sure if a change here should actually cause adopt or not, currently it does not.
 -- Probably it should not. The process-parent (and the scheduler as a whole) only keep tracks of who speaks.
 hear :: Connected -> Label -> Int -> ParentProc -> ParentProc
-hear conn l par pp = maybe pp (\p' -> adopt (fst $ processParent pp) p') (hear' conn l (orphan pp))
-                                    -- adopt par p'
+hear conn l par pp = maybe pp (\p' -> (p',processParent pp)) (hear' conn l (orphan pp))
+                                      -- adopt par p'
 hear' :: Connected -> Label -> Proc -> Maybe Proc
 hear' conn (ENTER a)     (Excl b True)      | a==b               = Just $ Excl b False
 hear' conn (EXIT a)      (Excl b False)     | a==b               = Just $ Excl b True
