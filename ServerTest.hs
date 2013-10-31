@@ -4,6 +4,7 @@ module Main where
 import ARSim
 import System.Random
 import Test.QuickCheck
+import Test.QuickCheck.Property
 
 import Control.Monad.State.Lazy as S
 import Control.Monad.Error
@@ -15,15 +16,8 @@ import Data.Tree
 import System.IO.Unsafe
 import Data.IORef
 
-main = main' Nothing >> return ()
-
-main' repl = do 
-  ior <- newIORef Nothing
-  r <- quickCheckWithResult stdArgs {replay = repl } $ prop_norace ior
-  Just x <- readIORef ior
-  return (x,(usedSeed r, usedSize r))
-  
-
+main = do
+  quickCheck $ noShrinking prop_norace
 
 ticketDispenser :: AR c (PO () Int ())
 ticketDispenser = component $
@@ -58,14 +52,23 @@ test            = do t <- ticketDispenser
                      return (tag [pqe1, pqe2, pqe3, pqe4])
 
 
-
 -- Checks that there are no duplicate tickets being issued.
-prop_norace :: IORef (Maybe Sim) -> Property
-prop_norace ior = traceProp test $ \s -> if prop_norace' s 
+prop_norace :: Property
+prop_norace = traceProp test norace
+ 
+norace :: Sim -> Bool
+norace s@(Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
+
+
+
+prop_norace_ioref :: IORef (Maybe Sim) -> Property
+prop_norace_ioref ior = traceProp test $ \s -> if norace s 
      then True
      else unsafePerformIO (writeIORef ior (Just s) >> return False)
  
-prop_norace' :: Sim -> Bool
-prop_norace' s@(Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
-
- 
+main' repl = do 
+  ior <- newIORef Nothing
+  r <- quickCheckWithResult stdArgs {replay = repl } $ noShrinking $ prop_norace_ioref ior
+  Just x <- readIORef ior
+  return (x,(usedSeed r, usedSize r))
+  

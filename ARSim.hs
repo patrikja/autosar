@@ -386,7 +386,7 @@ runnableN = runnableMN . Just
 
 runnableMN mn inv tr m  = do a <- newName
                              mapM (addProc . Timer a 0.0) ts
-                             addProc (Run a mn 0.0 act 0 (static inv ns cont))
+                             addProc (Run a (0, mn) 0.0 act 0 (static inv ns cont))
         where ns        = [ n | ReceiveE (RE n) <- tr ] ++ [ n | ReceiveQ (RQ n) <- tr ]
               ts        = [ t | Timed t <- tr ]
               act       = if null [ Init | Init <- tr ] then Idle else Pending
@@ -396,7 +396,7 @@ serverRunnable  = serverRunnableMN Nothing
 serverRunnableN = serverRunnableMN . Just
 
 serverRunnableMN mn inv tr m = do a <- newName
-                                  addProc (Run a mn 0.0 (Serving [] []) 0 (static inv ns cont))
+                                  addProc (Run a (0, mn) 0.0 (Serving [] []) 0 (static inv ns cont))
         where ns             = [ n | PO n <- tr ]
               cont v         = let RunM f = m (fromVal v) in f (\r -> Terminate (Ok (toVal r)))
 
@@ -484,7 +484,7 @@ trig conn a s   = or [ a `conn` b | b <- triggers s ]
 -- by means of phantom types. Types would be very inconvenient in a list of Proc terms, 
 -- though, since every Proc element might require a distinct type. And I don't think
 -- we want to enclose each Proc behind an existential quantifier.
-data Proc       = Run   (InstName, RunName) (Maybe String) Time Act Int Static
+data Proc       = Run   (InstName, RunName) (Int, Maybe String) Time Act Int Static
                 | RInst (InstName, RunName) (Int, Maybe String) (Maybe Client) [ExclName] Code 
                 | Excl  (InstName, ExclName) Bool
                 | Irv   (InstName, VarName) Value
@@ -512,16 +512,16 @@ instance Show Proc where
 showTV vs = "[" ++ unwords [ "(" ++ show (round (1000*t)) ++ ", " ++ show v ++ ")" | (t,v) <- vs ] ++ "]"
 
 shortProc :: Proc -> String
-shortProc (Run a mn t act n s)    = maybe (spacesep ["Run", show a]) id mn
-shortProc (RInst a (n, mn) c _ _) = (maybe (spacesep ["RInst", show a]) id mn)++"-"++show n
-shortProc (Excl a v)              = spacesep ["Excl", show a]
-shortProc (Irv a v)               = spacesep ["Irv", show a]
-shortProc (Timer a v t)           = spacesep ["Timer", show a]
-shortProc (QElem a n vs)          = spacesep ["QElem", show a]
-shortProc (DElem a v r)           = spacesep ["DElem", show a]
-shortProc (Op a vs)               = spacesep ["Op", show a]
-shortProc (Src a vs)              = spacesep ["Src", show a]
-shortProc (Sink a t vs)           = spacesep ["Sink", show a]
+shortProc (Run a (_, mn) t act n s) = maybe (spacesep ["Run", show a]) id mn
+shortProc (RInst a (n, mn) c _ _)   = (maybe (spacesep ["RInst", show a]) id mn)++"-"++show n
+shortProc (Excl a v)                = spacesep ["Excl", show a]
+shortProc (Irv a v)                 = spacesep ["Irv", show a]
+shortProc (Timer a v t)             = spacesep ["Timer", show a]
+shortProc (QElem a n vs)            = spacesep ["QElem", show a]
+shortProc (DElem a v r)             = spacesep ["DElem", show a]
+shortProc (Op a vs)                 = spacesep ["Op", show a]
+shortProc (Src a vs)                = spacesep ["Src", show a]
+shortProc (Sink a t vs)             = spacesep ["Sink", show a]
 
 data Label      = ENTER (InstName, ExclName)
                 | EXIT  (InstName, ExclName)
@@ -681,7 +681,7 @@ flattenF = concatMap flatten
 
 printRow :: Int -> Int -> (Int -> String) -> String
 printRow width tot prt =
-  intercalate " | " [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]] 
+  intercalate "|" [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]] 
 
 printTraceRow :: (SchedOpt', Int) -> Int -> String
 printTraceRow ((_row, _, lab), col) i
@@ -958,17 +958,17 @@ say (CALL _ _ res) (RInst a n c ex (Call o _ cont))         = [RInst a n c ex (c
 say (RES _ res)    (RInst a n c ex (Result o cont))         = [RInst a n c ex (cont res)]
 say (RET _ _)      (RInst a n _ ex (Terminate _))           = [RInst a n Nothing ex (Terminate void)]
 say (TERM _)       (RInst _ _ _ _ _)                        = []
-say (NEW _)        (Run a mn _ Pending n s)                 = [Run a mn (minstart s) Idle (n+1) s,
-                                                               RInst a (n, mn) Nothing [] (implementation s Void)]
-say (NEW _)        (Run a mn _ (Serving (c:cs) (v:vs)) n s) = [Run a mn (minstart s) (Serving cs vs) (n+1) s,
-                                                               RInst a (n, mn) (Just c) [] (implementation s v)]
-say (DELTA d)      (Run a mn t act n s)                     = [Run a mn (t-d) act n s]
+say (NEW _)        (Run a x _ Pending n s)                  = [Run a (nextProc x) (minstart s) Idle (n+1) s,
+                                                               RInst a x Nothing [] (implementation s Void)]
+say (NEW _)        (Run a x _ (Serving (c:cs) (v:vs)) n s)  = [Run a (nextProc x) (minstart s) (Serving cs vs) (n+1) s,
+                                                               RInst a x (Just c) [] (implementation s v)]
+say (DELTA d)      (Run a x t act n s)                      = [Run a x (t-d) act n s]
 say (TICK _)       (Timer a _ t)                            = [Timer a t t]
 say (DELTA d)      (Timer a t t0)                           = [Timer a (t-d) t0]
 say (WR _ _)       (Src a (_:vs))                           = [Src a vs]
 say (DELTA d)      (Src a ((t,v):vs))                       = [Src a ((t-d,v):vs)]
 
-
+nextProc (c, y) = (c+1, y)
 
 may_hear :: Connected -> Label -> Proc -> Label
 may_hear conn PASS _                                            = PASS
