@@ -32,25 +32,25 @@ ticketDispenser = component $
                      let r1 = do Ok v <- rte_irvRead irv
                                  rte_irvWrite irv (v+1)
                                  return v
-                     serverRunnable Concurrent [pop] (\() -> r1)
+                     serverRunnableN "Server" Concurrent [pop] (\() -> r1)
                      return (seal pop)
 
-client :: AR c (RO () Int (), PQ Int ())
-client          = component $
+client :: Int -> AR c (RO () Int (), PQ Int ())
+client n        = component $
                   do rop <- requiredOperation
                      pqe <- providedQueueElement
                      let -- r2 1 = return ()
                          r2 i  = do Ok v <- rte_call rop ()
                                     rte_send pqe v
                                     r2 (i+1)
-                     runnable Concurrent [Init] (r2 0)
+                     runnableN ("Client" ++ show n) Concurrent [Init] (r2 0)
                      return (seal2 (rop, pqe))
 
 test            = do t <- ticketDispenser
-                     (rop1, pqe1) <- client
-                     (rop2, pqe2) <- client
-                     (rop3, pqe3) <- client
-                     (rop4, pqe4) <- client
+                     (rop1, pqe1) <- client 1
+                     (rop2, pqe2) <- client 2
+                     (rop3, pqe3) <- client 3 
+                     (rop4, pqe4) <- client 4
                      connect rop1 t
                      connect rop2 t
                      connect rop3 t
@@ -67,3 +67,5 @@ prop_norace ior = traceProp test $ \s -> if prop_norace' s
  
 prop_norace' :: Sim -> Bool
 prop_norace' s@(Sim (t,ps)) = let ticks = sendsTo ps t in ticks == nub ticks
+
+ 

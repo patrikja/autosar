@@ -15,7 +15,7 @@ module ARSim -- Lets design the interface later...
               simulationRerun, randSched, simulationRand, sendsTo) -} where
 
               
-import Control.Monad (liftM)
+import Control.Monad (liftM, when)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
@@ -165,8 +165,12 @@ providedOperation       :: AR c (PO a b c)
 interRunnableVariable   :: Valuable a => a -> AR c (IV a c)
 exclusiveArea           :: AR c (EX c)
 runnable                :: Invocation -> [Trigger c] -> RunM a -> AR c ()
+runnableN               :: String -> Invocation -> [Trigger c] -> RunM a -> AR c ()
 serverRunnable          :: (Valuable a, Valuable b) => 
                            Invocation -> [PO a b c] -> (a -> RunM b) -> AR c ()
+
+serverRunnableN         :: (Valuable a, Valuable b) => 
+                           String -> Invocation -> [PO a b c] -> (a -> RunM b) -> AR c ()
 
 component               :: (forall c. AR c a) -> AR c a
 
@@ -377,18 +381,24 @@ component m             = do s <- get
                              put (s' {inst = inst s})
                              return r
 
-runnable inv tr m       = do a <- newName
+runnable  = runnableMN Nothing
+runnableN = runnableMN . Just
+
+runnableMN mn inv tr m  = do a <- newName
                              mapM (addProc . Timer a 0.0) ts
-                             addProc (Run a 0.0 act 0 (static inv ns cont))
+                             addProc (Run a mn 0.0 act 0 (static inv ns cont))
         where ns        = [ n | ReceiveE (RE n) <- tr ] ++ [ n | ReceiveQ (RQ n) <- tr ]
               ts        = [ t | Timed t <- tr ]
               act       = if null [ Init | Init <- tr ] then Idle else Pending
               cont _    = let RunM f = m in f (\_ -> Terminate void)
 
-serverRunnable inv tr m = do a <- newName
-                             addProc (Run a 0.0 (Serving [] []) 0 (static inv ns cont))
-        where ns        = [ n | PO n <- tr ]
-              cont v    = let RunM f = m (fromVal v) in f (\r -> Terminate (Ok (toVal r)))
+serverRunnable  = serverRunnableMN Nothing
+serverRunnableN = serverRunnableMN . Just
+
+serverRunnableMN mn inv tr m = do a <- newName
+                                  addProc (Run a mn 0.0 (Serving [] []) 0 (static inv ns cont))
+        where ns             = [ n | PO n <- tr ]
+              cont v         = let RunM f = m (fromVal v) in f (\r -> Terminate (Ok (toVal r)))
 
 requiredDataElement     = do a <- newName
                              addProc (DElem a False NO_DATA)
@@ -474,8 +484,8 @@ trig conn a s   = or [ a `conn` b | b <- triggers s ]
 -- by means of phantom types. Types would be very inconvenient in a list of Proc terms, 
 -- though, since every Proc element might require a distinct type. And I don't think
 -- we want to enclose each Proc behind an existential quantifier.
-data Proc       = Run   (InstName, RunName) Time Act Int Static
-                | RInst (InstName, RunName) Int (Maybe Client) [ExclName] Code
+data Proc       = Run   (InstName, RunName) (Maybe String) Time Act Int Static
+                | RInst (InstName, RunName) (Int, Maybe String) (Maybe Client) [ExclName] Code 
                 | Excl  (InstName, ExclName) Bool
                 | Irv   (InstName, VarName) Value
                 | Timer (InstName, RunName) Time Time
@@ -488,30 +498,30 @@ data Proc       = Run   (InstName, RunName) Time Act Int Static
 spacesep        = concat . intersperse " " -- JD: Same as unwords from prelude?
 
 instance Show Proc where
-        show (Run a t act n s)  = spacesep ["Run", show a, show t, show act, show n]
-        show (RInst a n c ex d) = spacesep ["RInst", show a, show n, show c, show ex, show d]
-        show (Excl a v)         = spacesep ["Excl", show a, show v]
-        show (Irv a v)          = spacesep ["Irv", show a, show v]
-        show (Timer a v t)      = spacesep ["Timer", show v, show t]
-        show (QElem a n vs)     = spacesep ["QElem", show a, show n, show vs]
-        show (DElem a v r)      = spacesep ["DElem", show a, show v, show r]
-        show (Op a vs)          = spacesep ["Op", show a, show vs]
-        show (Src a vs)         = spacesep ["Src", show a, show vs]
-        show (Sink a t vs)      = spacesep ["Sink", show a, show t, show vs]
+        show (Run a mn t act n s) = spacesep ["Run", show a, show mn, show t, show act, show n]
+        show (RInst a n c ex d)   = spacesep ["RInst", show a, show n, show c, show ex, show d]
+        show (Excl a v)           = spacesep ["Excl", show a, show v]
+        show (Irv a v)            = spacesep ["Irv", show a, show v]
+        show (Timer a v t)        = spacesep ["Timer", show v, show t]
+        show (QElem a n vs)       = spacesep ["QElem", show a, show n, show vs]
+        show (DElem a v r)        = spacesep ["DElem", show a, show v, show r]
+        show (Op a vs)            = spacesep ["Op", show a, show vs]
+        show (Src a vs)           = spacesep ["Src", show a, show vs]
+        show (Sink a t vs)        = spacesep ["Sink", show a, show t, show vs]
 
 showTV vs = "[" ++ unwords [ "(" ++ show (round (1000*t)) ++ ", " ++ show v ++ ")" | (t,v) <- vs ] ++ "]"
 
 shortProc :: Proc -> String
-shortProc (Run a t act n s)  = spacesep ["Run", show a]
-shortProc (RInst a n c _ _)  = spacesep ["RInst", show a++"-"++show n]
-shortProc (Excl a v)         = spacesep ["Excl", show a]
-shortProc (Irv a v)          = spacesep ["Irv", show a]
-shortProc (Timer a v t)      = spacesep ["Timer", show a]
-shortProc (QElem a n vs)     = spacesep ["QElem", show a]
-shortProc (DElem a v r)      = spacesep ["DElem", show a]
-shortProc (Op a vs)          = spacesep ["Op", show a]
-shortProc (Src a vs)         = spacesep ["Src", show a]
-shortProc (Sink a t vs)      = spacesep ["Sink", show a]
+shortProc (Run a mn t act n s)    = maybe (spacesep ["Run", show a]) id mn
+shortProc (RInst a (n, mn) c _ _) = (maybe (spacesep ["RInst", show a]) id mn)++"-"++show n
+shortProc (Excl a v)              = spacesep ["Excl", show a]
+shortProc (Irv a v)               = spacesep ["Irv", show a]
+shortProc (Timer a v t)           = spacesep ["Timer", show a]
+shortProc (QElem a n vs)          = spacesep ["QElem", show a]
+shortProc (DElem a v r)           = spacesep ["DElem", show a]
+shortProc (Op a vs)               = spacesep ["Op", show a]
+shortProc (Src a vs)              = spacesep ["Src", show a]
+shortProc (Sink a t vs)           = spacesep ["Sink", show a]
 
 data Label      = ENTER (InstName, ExclName)
                 | EXIT  (InstName, ExclName)
@@ -646,18 +656,20 @@ allocatePositions c = dfsM e f
                  return (x, y)
         f l sf = return $ Node { rootLabel = l, subForest = sf }
 
-reallyAllocate :: Tree SchedOpt' -> S.State Int (Tree (SchedOpt', Int))
+reallyAllocate :: Tree SchedOpt' -> S.State St (Tree (SchedOpt', Int))
 reallyAllocate = allocatePositions c
   where c x@(_, p, _) = do
-             i <- S.get
+             (i, ss) <- S.get
              let fc = snd $ snd p
                  bump 0 = 0
                  bump _ = 1
                  j = bump fc + i
-             S.put j
+             when (fc /= 0) $ S.put (j, shortProc (orphan p) : ss)
              return j
 
-reallyAllocateF :: Forest SchedOpt' -> S.State Int (Forest (SchedOpt', Int))
+type St = (Int, [String])
+
+reallyAllocateF :: Forest SchedOpt' -> S.State St (Forest (SchedOpt', Int))
 reallyAllocateF = mapM reallyAllocate
 
 byRows :: Forest (SchedOpt', Int) -> [(SchedOpt', Int)]
@@ -677,9 +689,10 @@ printTraceRow ((_row, _, lab), col) i
   | otherwise    = ""
 
 traceTable :: Trace -> String
-traceTable t = unlines $ map (printRow 10 lind . printTraceRow) $ byRows f
+traceTable t = unlines $ prt (reverse cnames !!) : prt (const $ repeat '-') : (map (prt . printTraceRow) $ byRows f)
   where
-  (f, lind) = S.runState (mapM reallyAllocate $ toForest t) 0
+  prt = printRow 10 lind
+  (f, (lind, cnames)) = S.runState (mapM reallyAllocate $ toForest t) (0, [])
 
 putTraceTable = putStr . traceTable
 sendsTo :: [Tag] -> Trace -> [Value]
@@ -918,42 +931,42 @@ may_say (RInst (i,r) _ c ex (Call o v cont))            = CALL  (i,o) v void
 may_say (RInst (i,r) _ c ex (Result o cont))            = RES   (i,o) void
 may_say (RInst (i,r) _ (Just a) ex (Terminate (Ok v)))  = RET   a v
 may_say (RInst (i,r) _ Nothing [] (Terminate _))        = TERM  (i,r)
-may_say (Run a 0.0 Pending n s)
-  | n == 0 || invocation s == Concurrent              = NEW   a
-may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
-  | n == 0 || invocation s == Concurrent              = NEW   a
-may_say (Run a t act n s) | t > 0.0                   = DELTA t
-may_say (Timer a 0.0 t)                               = TICK  a
-may_say (Timer a t t0) | t > 0.0                      = DELTA t
-may_say (Src a ((0.0,v):vs))                          = WR    a v
-may_say (Src a ((t,v):vs)) | t > 0.0                  = DELTA t
-may_say _                                             = PASS
+may_say (Run a _ 0.0 Pending n s)
+  | n == 0 || invocation s == Concurrent                = NEW   a
+may_say (Run a _ 0.0 (Serving (c:cs) (v:vs)) n s)    
+  | n == 0 || invocation s == Concurrent                = NEW   a
+may_say (Run a _ t act n s) | t > 0.0                   = DELTA t
+may_say (Timer a 0.0 t)                                 = TICK  a
+may_say (Timer a t t0) | t > 0.0                        = DELTA t
+may_say (Src a ((0.0,v):vs))                            = WR    a v
+may_say (Src a ((t,v):vs)) | t > 0.0                    = DELTA t
+may_say _                                               = PASS
 
 
 say :: Label -> Proc -> [Proc]
-say (ENTER _)      (RInst a n c ex (Enter x cont))       = [RInst a n c (x:ex) (cont void)]
-say (EXIT _)       (RInst a n c (_:ex) (Exit x cont))    = [RInst a n c ex (cont void)]
-say (IRVR _ res)   (RInst a n c ex (IrvRead _ cont))     = [RInst a n c ex (cont res)]
-say (IRVW _ _)     (RInst a n c ex (IrvWrite _ _ cont))  = [RInst a n c ex (cont void)]
-say (RCV _ res)    (RInst a n c ex (Receive _ cont))     = [RInst a n c ex (cont res)]
-say (SND _ _ res)  (RInst a n c ex (Send _ _ cont))      = [RInst a n c ex (cont res)]
-say (RD _ res)     (RInst a n c ex (Read _ cont))        = [RInst a n c ex (cont res)]
-say (WR _ _)       (RInst a n c ex (Write _ _ cont))     = [RInst a n c ex (cont void)]
-say (UP _ res)     (RInst a n c ex (IsUpdated _ cont))   = [RInst a n c ex (cont res)]
-say (INV _)        (RInst a n c ex (Invalidate _ cont))  = [RInst a n c ex (cont void)]
-say (CALL _ _ res) (RInst a n c ex (Call o _ cont))      = [RInst a n c ex (cont res)]
-say (RES _ res)    (RInst a n c ex (Result o cont))      = [RInst a n c ex (cont res)]
-say (RET _ _)      (RInst a n _ ex (Terminate _))        = [RInst a n Nothing ex (Terminate void)]
-say (TERM _)       (RInst _ _ _ _ _)                     = []
-say (NEW _)        (Run a _ Pending n s)                 = [Run a (minstart s) Idle (n+1) s,
-                                                            RInst a n Nothing [] (implementation s Void)]
-say (NEW _)        (Run a _ (Serving (c:cs) (v:vs)) n s) = [Run a (minstart s) (Serving cs vs) (n+1) s,
-                                                            RInst a n (Just c) [] (implementation s v)]
-say (DELTA d)      (Run a t act n s)                     = [Run a (t-d) act n s]
-say (TICK _)       (Timer a _ t)                         = [Timer a t t]
-say (DELTA d)      (Timer a t t0)                        = [Timer a (t-d) t0]
-say (WR _ _)       (Src a (_:vs))                        = [Src a vs]
-say (DELTA d)      (Src a ((t,v):vs))                    = [Src a ((t-d,v):vs)]
+say (ENTER _)      (RInst a n c ex (Enter x cont))          = [RInst a n c (x:ex) (cont void)]
+say (EXIT _)       (RInst a n c (_:ex) (Exit x cont))       = [RInst a n c ex (cont void)]
+say (IRVR _ res)   (RInst a n c ex (IrvRead _ cont))        = [RInst a n c ex (cont res)]
+say (IRVW _ _)     (RInst a n c ex (IrvWrite _ _ cont))     = [RInst a n c ex (cont void)]
+say (RCV _ res)    (RInst a n c ex (Receive _ cont))        = [RInst a n c ex (cont res)]
+say (SND _ _ res)  (RInst a n c ex (Send _ _ cont))         = [RInst a n c ex (cont res)]
+say (RD _ res)     (RInst a n c ex (Read _ cont))           = [RInst a n c ex (cont res)]
+say (WR _ _)       (RInst a n c ex (Write _ _ cont))        = [RInst a n c ex (cont void)]
+say (UP _ res)     (RInst a n c ex (IsUpdated _ cont))      = [RInst a n c ex (cont res)]
+say (INV _)        (RInst a n c ex (Invalidate _ cont))     = [RInst a n c ex (cont void)]
+say (CALL _ _ res) (RInst a n c ex (Call o _ cont))         = [RInst a n c ex (cont res)]
+say (RES _ res)    (RInst a n c ex (Result o cont))         = [RInst a n c ex (cont res)]
+say (RET _ _)      (RInst a n _ ex (Terminate _))           = [RInst a n Nothing ex (Terminate void)]
+say (TERM _)       (RInst _ _ _ _ _)                        = []
+say (NEW _)        (Run a mn _ Pending n s)                 = [Run a mn (minstart s) Idle (n+1) s,
+                                                               RInst a (n, mn) Nothing [] (implementation s Void)]
+say (NEW _)        (Run a mn _ (Serving (c:cs) (v:vs)) n s) = [Run a mn (minstart s) (Serving cs vs) (n+1) s,
+                                                               RInst a (n, mn) (Just c) [] (implementation s v)]
+say (DELTA d)      (Run a mn t act n s)                     = [Run a mn (t-d) act n s]
+say (TICK _)       (Timer a _ t)                            = [Timer a t t]
+say (DELTA d)      (Timer a t t0)                           = [Timer a (t-d) t0]
+say (WR _ _)       (Src a (_:vs))                           = [Src a vs]
+say (DELTA d)      (Src a ((t,v):vs))                       = [Src a ((t-d,v):vs)]
 
 
 
@@ -970,22 +983,22 @@ may_hear conn (RCV a res)    (QElem b n [])    | a==b           = RCV a (max res
 may_hear conn (SND a v res)  (QElem b n vs)                    
         | a `conn` b && length vs < n                           = SND a v (max res void)
         | a `conn` b                                            = SND a v (max res LIMIT)
-may_hear conn (SND a v res)  (Run _ _ _ _ s)   | trig conn a s  = SND a v (max res void)
+may_hear conn (SND a v res)  (Run _ _ _ _ _ s) | trig conn a s  = SND a v (max res void)
 may_hear conn (RD a res)     (DElem b u v)     | a==b           = RD a (max res v)
 may_hear conn (WR a v)       (DElem b _ _)     | a `conn` b     = WR a v
-may_hear conn (WR a v)       (Run _ _ _ _ s)   | trig conn a s  = WR a v
+may_hear conn (WR a v)       (Run _ _ _ _ _ s) | trig conn a s  = WR a v
 may_hear conn (UP a res)     (DElem b u _)     | a==b           = UP a (max res (Ok (VBool u)))
 may_hear conn (INV a)        (DElem b _ _)     | a `conn` b     = INV a
-may_hear conn (CALL a v res) (Run b t (Serving cs vs) n s)
+may_hear conn (CALL a v res) (Run b _ t (Serving cs vs) n s)
         | trig conn a s && a `notElem` cs                       = CALL a v (max res void)
         | trig conn a s                                         = CALL a v (max res LIMIT)
 may_hear conn (RES a res)    (Op b (v:vs))     | a==b           = RES a (max res (Ok v))
 --may_hear conn (RES a res)    (Op b [])         | a==b           = RES a (max res NO_DATA)
 may_hear conn (RES a res)    (Op b [])         | a==b           = PASS
 may_hear conn (RET a v)      (Op b vs)         | a==b           = RET a v
-may_hear conn (TERM a)       (Run b _ _ _ _)   | a==b           = TERM a
-may_hear conn (TICK a)       (Run b _ _ _ _)   | a==b           = TICK a
-may_hear conn (DELTA d)      (Run _ t _ _ _)   | t == 0         = DELTA d
+may_hear conn (TERM a)       (Run b _ _ _ _ _) | a==b           = TERM a
+may_hear conn (TICK a)       (Run b _ _ _ _ _) | a==b           = TICK a
+may_hear conn (DELTA d)      (Run _ _ t _ _ _) | t == 0         = DELTA d
                                                | d <= t         = DELTA d
                                                | d > t          = PASS
 may_hear conn (DELTA d)      (Timer _ t _)     | d <= t         = DELTA d
@@ -1012,26 +1025,26 @@ hear' conn (RCV a _)     (QElem b n [])     | a==b               = Nothing -- Ju
 hear' conn (SND a v _)   (QElem b n vs) 
         | a `conn` b && length vs < n                            = Just $ QElem b n (vs++[v])
         | a `conn` b                                             = Nothing -- Just $ QElem b n vs
-hear' conn (SND a _ _)   (Run b t _ n s)    | trig conn a s      = Just $ Run b t Pending n s
+hear' conn (SND a _ _)   (Run b mn t _ n s) | trig conn a s      = Just $ Run b mn t Pending n s
 hear' conn (RD a _)      (DElem b _ v)      | a==b               = Just $ DElem b False v
 hear' conn (WR a v)      (DElem b _ _)      | a `conn` b         = Just $ DElem b True (Ok v)
-hear' conn (WR a _)      (Run b t _ n s)    | trig conn a s      = Just $ Run b t Pending n s
+hear' conn (WR a _)      (Run b mn t _ n s) | trig conn a s      = Just $ Run b mn t Pending n s
 hear' conn (UP a _)      (DElem b u v)      | a==b               = Nothing -- Just $ DElem b u v
 hear' conn (INV a)       (DElem b _ _)      | a `conn` b         = Just $ DElem b True NO_DATA
-hear' conn (CALL a v _)  (Run b t (Serving cs vs) n s)
-        | trig conn a s && a `notElem` cs                        = Just $ Run b t (Serving (cs++[a]) (vs++[v])) n s
-        | trig conn a s                                          = Just $ Run b t (Serving cs vs) n s 
+hear' conn (CALL a v _)  (Run b mn t (Serving cs vs) n s)
+        | trig conn a s && a `notElem` cs                        = Just $ Run b mn t (Serving (cs++[a]) (vs++[v])) n s
+        | trig conn a s                                          = Just $ Run b mn t (Serving cs vs) n s 
   -- ^ Note: silently ignoring the value |v| from the |CALL| if |a| is already being served
-hear' conn (RES a _)     (Op b (v:vs))      | a==b               = Just $ Op b vs
-hear' conn (RES a _)     (Op b [])          | a==b               = Nothing -- Just $ Op b []
-hear' conn (RET a v)     (Op b vs)          | a==b               = Just $ Op b (vs++[v])
-hear' conn (TERM a)      (Run b t act n s)  | a==b               = Just $ Run b t act (n-1) s
-hear' conn (TICK a)      (Run b t _ n s)    | a==b               = Just $ Run b t Pending n s
-hear' conn (DELTA d)     (Run b 0.0 act n s)                     = Nothing -- Just $ Run b 0.0 act n s
-hear' conn (DELTA d)     (Run b t act n s)                       = Just $ Run b (t-d) act n s
+hear' conn (RES a _)     (Op b (v:vs))         | a==b            = Just $ Op b vs
+hear' conn (RES a _)     (Op b [])             | a==b            = Nothing -- Just $ Op b []
+hear' conn (RET a v)     (Op b vs)             | a==b            = Just $ Op b (vs++[v])
+hear' conn (TERM a)      (Run b mn t act n s)  | a==b            = Just $ Run b mn t act (n-1) s
+hear' conn (TICK a)      (Run b mn t _ n s)    | a==b            = Just $ Run b mn t Pending n s
+hear' conn (DELTA d)     (Run b mn 0.0 act n s)                  = Nothing -- Just $ Run b 0.0 act n s
+hear' conn (DELTA d)     (Run b mn t act n s)                    = Just $ Run b mn (t-d) act n s
 hear' conn (DELTA d)     (Timer b t t0)                          = Just $ Timer b (t-d) t0
 hear' conn (DELTA d)     (Src b ((t,v):vs))                      = Just $ Src b ((t-d,v):vs)
-hear' conn (WR a v)      (Sink b t vs)      | a `conn` b         = Just $ Sink b 0.0 ((t,v):vs)
+hear' conn (WR a v)      (Sink b t vs)         | a `conn` b      = Just $ Sink b 0.0 ((t,v):vs)
 hear' conn (DELTA d)     (Sink b t vs)                           = Just $ Sink b (t+d) vs
 hear' conn label         proc                                    = Nothing
 
