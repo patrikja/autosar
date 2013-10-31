@@ -19,6 +19,7 @@ import Control.Monad (liftM)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
+import Data.Ord (comparing)
 import Data.Tree
 import Data.Function(on)
 
@@ -617,22 +618,76 @@ putTraceAll = mapM_ printAll . snd
 putTraceForest :: Trace -> IO ()
 putTraceForest = putStrLn . drawForest . map (fmap showNode) . toForest
 
-toForest :: Trace -> Forest (Int,ParentProc,Label)
+type SchedOpt' = (Int,ParentProc,Label)
+
+toForest :: Trace -> Forest SchedOpt'
 toForest (ps,tc)= toForest' (-1) indexed where
   indexed = (zip tc [0..])
-  toForest' :: Int -> [(SchedulerOption,Int)] -> Forest (Int,ParentProc,Label)
+  toForest' :: Int -> [(SchedulerOption,Int)] -> Forest SchedOpt'
   toForest' par sos = map snd $ sortBy (compare `on` fst)
     [(snd (optionParent so),toTree ix so)|(so,ix) <- sos, fst (optionParent so) == par]
-  toTree :: Int -> SchedulerOption -> Tree (Int,ParentProc,Label)
+  toTree :: Int -> SchedulerOption -> Tree SchedOpt'
   toTree ix so = Node (ix, optionSpeaker so, optionLabel so) (toForest' ix indexed) 
                               -- could drop ix from indexed to optimise 
---showNode (ix,p,l) = show ix ++ ": " ++ shortProc (orphan p) ++ " !!! " ++ show l
+
+showNode :: SchedOpt' -> String
 showNode (ix,p,l) = (star $ snd $ snd p) ++ show ix ++ ": " ++ shortProc (orphan p) ++ " !!! " ++ show l
   where star 0 = ""; star _ = "*"
 
-                             
+dfsM :: Monad m => (a -> m a') -> (a' -> [b] -> m b) -> Tree a -> m b
+dfsM e f (Node {rootLabel = l, subForest = s}) = do
+  x <- e l
+  xs <- mapM (dfsM e f) s
+  f x xs
+
+allocatePositions :: Monad m => (a -> m i) -> Tree a -> m (Tree (a, i))
+allocatePositions c = dfsM e f
+  where e x = do y <- c x
+                 return (x, y)
+        f l sf = return $ Node { rootLabel = l, subForest = sf }
+
+reallyAllocate :: Tree SchedOpt' -> S.State Int (Tree (SchedOpt', Int))
+reallyAllocate = allocatePositions c
+  where c x@(_, p, _) = do
+             i <- S.get
+             let fc = snd $ snd p
+                 bump 0 = 0
+                 bump _ = 1
+                 j = bump fc + i
+             S.put j
+             return j
+
+reallyAllocateF :: Forest SchedOpt' -> S.State Int (Forest (SchedOpt', Int))
+reallyAllocateF = mapM reallyAllocate
+
+byRows :: Forest (SchedOpt', Int) -> [(SchedOpt', Int)]
+byRows = sortBy (comparing cmpExtr) . flattenF
+  where
+  cmpExtr ((row, _, _), _col) = row
+
+flattenF = concatMap flatten
+
+printRow :: Int -> Int -> (Int -> String) -> String
+printRow width tot prt =
+  intercalate " | " [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]] 
+
+printTraceRow :: (SchedOpt', Int) -> Int -> String
+printTraceRow ((_row, _, lab), col) i
+  | col == i + 1 = show lab
+  | otherwise    = ""
+
+traceTable :: Trace -> String
+traceTable t = unlines $ map (printRow 10 lind . printTraceRow) $ byRows f
+  where
+  (f, lind) = S.runState (mapM reallyAllocate $ toForest t) 0
+
+putTraceTable = putStr . traceTable
 sendsTo :: [Tag] -> Trace -> [Value]
 sendsTo tags (_,ls) = [ v | SND a v _ <- map fst ls, a `elem` ns ]
+  where ns = [ n | Tag n <- tags ]
+
+writesTo :: [Tag] -> Trace -> [Value]
+writesTo tags (_,ls) = [ v | WR a v <- map fst ls, a `elem` ns ]
   where ns = [ n | Tag n <- tags ]
 
 headSched :: SchedulerM Identity
@@ -706,8 +761,14 @@ simTrace (Sim (t,_)) = t
 
 instance Show Sim where
 --  show (Sim (t,_)) = unlines $ map show $ sortByParent $ traceLabelParents t
-  show (Sim (t,_)) = drawForest (map (fmap showNode) $ toForest t)
+  show x = unlines [simForest x, simTable x]
 
+simForest :: Sim -> String
+simForest x = drawForest (map (fmap showNode) $ toForest $ simTrace x)
+
+simTable :: Sim -> String
+simTable (Sim (t, _)) = traceTable t
+                             
 sortByParent tls = sortBy (compare `on` (\(a,b,c) -> b)) tls
 
 traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
@@ -812,7 +873,7 @@ simulationM sched m     = (liftM (\ss -> (procs_s, ss)) traceM, tags)
   where (tags,s)        = runAR m startState
         s1              = initSources s
         traceM          = simulateM sched (connected (conns s1)) procs_s
-        procs_s         = zip (procs s1) $ map (\x -> (-1,x)) [0..]
+        procs_s         = zip (procs s1) $ map (\x -> (-1,x)) [1..]
 
 simulateM :: Monad m => SchedulerM m -> Connected -> [ParentProc] -> m [SchedulerOption]
 simulateM = go 0 where
