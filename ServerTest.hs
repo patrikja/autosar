@@ -57,5 +57,16 @@ noShrink :: IO ()
 noShrink = do
   quickCheck $ noShrinking prop_norace
 
+
+collectTickets :: ((forall c. AR c [Tag]) -> (Trace,[Tag])) -> Int -> [Int]
+collectTickets sim k = [v |VInt v <- sendsTo ps t] where
+  (Sim (t,ps)) = cutSim k $ Sim $ sim test
+
+
+random = simulationRand (read "1 1")
+
+sequential = simulationHead
+
 perfect :: IO ()
 perfect = quickCheckWith stdArgs{replay = Just (read "1458293422 535353310",3)} prop_norace >> return ()
+
