@@ -9,41 +9,63 @@ import Data.List(nub)
 -- Simple server returning unique tickets to clients.
 ticketDispenser :: AR c (PO () Int ())
 ticketDispenser = component $
-                  do pop <- providedOperation
-                     irv <- interRunnableVariable (0 :: Int)
-                     let r1 = do Ok v <- rte_irvRead irv
-                                 rte_irvWrite irv (v+1)
-                                 return v
-                     serverRunnableN "Server" Concurrent [pop] (\() -> r1)
-                     return (seal pop)
+                     -- Create a port for remote operation.
+                  do requestTicketP <- providedOperation
+                     -- Variable holding number of issued tickets.
+                     cur            <- interRunnableVariable (0 :: Int)
+                     -- Code of the remote operation: return the ticket number and update state.
+                     let rtBody = do Ok v <- rte_irvRead cur
+                                     rte_irvWrite cur (v+1)
+                                     return v
+                     serverRunnableN "Server" Concurrent [requestTicketP] (\() -> rtBody)
+                     -- Export the port of the operation.
+                     return (seal requestTicketP)
 
 client :: Int -> AR c (RO () Int (), PQ Int ())
 client n        = component $
-                  do rop <- requiredOperation
-                     pqe <- providedQueueElement
-                     let -- r2 1 = return ()
-                         r2  = do Ok v <- rte_call rop ()
-                                  rte_send pqe v
-                                  r2
-                     runnableN ("Client" ++ show n) Concurrent [Init] r2
-                     return (seal2 (rop, pqe))
+                     -- Create a port for calling a remote operation and an output port for
+                     -- reporting obtained tickets.
+                  do requestTicketR <- requiredOperation
+                     outputPort <- providedQueueElement
+                     -- In a loop: Obtain a ticket and send its value to the output port.
+                     let clientLoop = do Ok v <- rte_call requestTicketR ()
+                                         rte_send outputPort v
+                                         clientLoop
+                     runnableN ("Client" ++ show n) Concurrent [Init] clientLoop
+                     -- Export both ports.
+                     return (seal2 (requestTicketR, outputPort))
 
-test :: forall c. AR c [Tag]
-test            = do t <- ticketDispenser
-                     (rop1, pqe1) <- client 1
-                     (rop2, pqe2) <- client 2
-                     (rop3, pqe3) <- client 3 
-                     (rop4, pqe4) <- client 4
-                     connect rop1 t
-                     connect rop2 t
-                     connect rop3 t
-                     connect rop4 t
-                     return (tag [pqe1, pqe2, pqe3, pqe4])
+-- Create a server instance and 4 client instances, connect them and export the output ports of the clients
+-- as the observable output.
+test :: AR c [Tag]
+test            = do srv <- ticketDispenser
+                     (r1, out1) <- client 1
+                     (r2, out2) <- client 2
+                     (r3, out3) <- client 3 
+                     (r4, out4) <- client 4
+                     connect r1 srv
+                     connect r2 srv
+                     connect r3 srv
+                     connect r4 srv
+                     return (tag [out1, out2, out3, out4])
 
 
+
+
+
+
+
+
+-- Extract the tickets reported by the clients from the trace.
 collectTickets :: ((forall c. AR c [Tag]) -> (Trace,[Tag])) -> Int -> [Int]
 collectTickets sim k = [v |VInt v <- sendsTo ps t] where
-  (Sim (t,ps)) = cutSim k $ Sim $ sim test
+  s@(Sim (t,ps)) = cutSim k $ Sim $ sim test
+
+collectTickets' :: ((forall c. AR c [Tag]) -> (Trace,[Tag])) -> Int -> IO [Int]
+collectTickets' sim k = do
+  print s
+  return [v |VInt v <- sendsTo ps t] where
+  s@(Sim (t,ps)) = cutSim k $ Sim $ sim test
 
 sequential = simulationHead
 

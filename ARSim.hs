@@ -523,6 +523,17 @@ shortProc (Op a vs)                 = spacesep ["Op", show a]
 shortProc (Src a vs)                = spacesep ["Src", show a]
 shortProc (Sink a t vs)             = spacesep ["Sink", show a]
 
+procName (Run a mn t act n s) = a
+procName (RInst a n c ex d)   = a
+procName (Excl a v)           = a
+procName (Irv a v)            = a
+procName (Timer a v t)        = a
+procName (QElem a n vs)       = a
+procName (DElem a v r)        = a
+procName (Op a vs)            = a
+procName (Src a vs)           = a
+procName (Sink a t vs)        = a
+
 data Label      = ENTER (InstName, ExclName)
                 | EXIT  (InstName, ExclName)
                 | IRVR  (InstName, VarName) StdReturn
@@ -683,7 +694,6 @@ flattenF = concatMap flatten
 printRow :: Int -> Int -> (Int -> String) -> String
 printRow width tot prt =
   intercalate "|" [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]] 
-
 printTraceRow :: (SchedOpt', Int) -> Int -> String
 printTraceRow ((_row, _, lab), col) i
   | col == i + 1 = show lab
@@ -705,7 +715,15 @@ writesTo tags (_,ls) = [ v | WR a v <- map fst ls, a `elem` ns ]
   where ns = [ n | Tag n <- tags ]
 
 headSched :: SchedulerM Identity
-headSched _ = return . Just . head
+--headSched _ = return . Just . head
+headSched = fullRRSched
+
+fullRRSched :: SchedulerM Identity
+fullRRSched _ = return . Just . shift . head
+  where
+  shift x@(l, (p, []))    = x
+  shift   (l, (p, ps)) = (l, (p, pinit ++ pfini ++ [pp]))
+    where (pinit, pp:pfini) = break (\ppp -> procName (fst p) /= procName (fst ppp)) ps
 
 simulationHead :: (forall c. AR c a) -> (Trace, a)
 simulationHead m = (runIdentity m', a) 
@@ -783,7 +801,8 @@ simTrace (Sim (t,_)) = t
 
 instance Show Sim where
 --  show (Sim (t,_)) = unlines $ map show $ sortByParent $ traceLabelParents t
-  show x = unlines [simForest x, simTable x]
+  --show x = unlines [simForest x, simTable x]
+  show x = simTable x
 
 simForest :: Sim -> String
 simForest x = drawForest (map (fmap showNode) $ toForest $ simTrace x)
