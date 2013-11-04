@@ -6,3 +6,8 @@ cabal-dev
 *.chs.h
 .virthualenv
 Main
+/plot1.dat
+/plot2.dat
+/plot3.dat
+/plot4.dat
+/plot5.dat
