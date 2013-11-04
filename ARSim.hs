@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies,
-             Rank2Types, ExistentialQuantification #-}
+             RankNTypes, ExistentialQuantification #-}
 
 module ARSim -- Lets design the interface later...
 {-
@@ -722,7 +722,8 @@ maximumProgress sched n opts
 randSched :: SchedulerM Gen
 randSched _ = fmap Just . elements
 
-simulationRandG :: (forall c. AR c a) -> Gen (Trace, a)
+simulationHeadG, simulationRandG :: (forall c. AR c a) -> Gen (Trace, a)
+simulationHeadG = return . simulationHead
 simulationRandG m = do
   let (g, a) = simulationM randSched m
   x <- g
@@ -792,15 +793,16 @@ simTable (Sim (t, _)) = traceTable t
                              
 sortByParent tls = sortBy (compare `on` (\(a,b,c) -> b)) tls
 
-traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
-traceProp code prop = sized $ \n -> do
+tracePropS :: ((forall c. AR c [Tag]) -> Gen (Trace, [Tag])) -> (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
+tracePropS sim code prop = sized $ \n -> do
   let limit = (1+n*10)
       gen :: Gen Sim
-      gen = fmap (cutSim limit . Sim) $ simulationRandG code
+      gen = fmap (cutSim limit . Sim) $ sim code
   -- forAllShrink gen shrinkNothinh prop -- Disable shrinking
   forAllShrink gen (shrinkSim code) prop
 
-
+traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
+traceProp = tracePropS simulationRandG
 
 -- Take a finite initial part of the simulation trace
 cutSim :: Int -> Sim -> Sim
