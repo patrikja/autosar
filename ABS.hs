@@ -133,13 +133,16 @@ pressure_step valve accel n | odd n = do
         rte_write valve False
         return (Running 0 20 (n+1))
 
-pressure_ctrl valve accel True =
+pressure_ctrl valve accel 2 = do
+        rte_write valve True
+        return Stopped
+pressure_ctrl valve accel 1 =
         pressure_step valve accel 0
-pressure_ctrl valve accel False = do
+pressure_ctrl valve accel 0 = do
         rte_write valve False
         return Stopped
 
-pressure :: AR c (RE Double (), PO Bool () (), PE Bool ())
+pressure :: AR c (RE Double (), PO Int () (), PE Bool ())
 pressure = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
@@ -162,18 +165,18 @@ control memo onoff_pressure onoff_relief slipstream = do
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
                         trace ("Slip " ++ show slip) (return ())
-                        rte_call onoff_pressure False
+                        rte_call onoff_pressure 0
                         rte_call onoff_relief True
                         return ()
                 (False, True) -> do
                         trace ("Slip " ++ show slip) (return ())
                         rte_call onoff_relief False
-                        rte_call onoff_pressure True
+                        rte_call onoff_pressure (if slip >= 1.0 then 2 else 1)
                         return ()
                 _ ->    return ()
         rte_irvWrite memo slip
 
-controller :: AR c (RQ Double (), RO Bool () (), RO Bool () ())
+controller :: AR c (RQ Double (), RO Int () (), RO Bool () ())
 controller = component $ do
         memo <- interRunnableVariable 1.0
         onoff_pressure <- requiredOperation
@@ -252,7 +255,7 @@ test vel_sim acc_sim = do
 
 curve1 = slopes [(0,18),(1,18),(5,0)]
 
-curve2 = slopes [(0,18),(1,18),(1.8,10),(2.5,7),(4,4.5),(4.5,0)]
+curve2 = slopes [(0,18),(1,18),(1.8,10),(2.5,8),(3,8.5),(3.4,7),(4,4),(4.5,0)]
 
 v1 = curve1
 v2 = curve2  -- Let wheel 2 speed deviate
@@ -267,8 +270,8 @@ a4 = deriv v4
 abs_sim = do 
         s <- newStdGen
         let (trace,(r_acts,p_acts)) = chopTrace 400000 $ simulationRand s (test [v1,v2,v3,v4] [a1,a2,a3,a4])
-            [r1,r2,r3,r4] = map (discrete . bool2num 1.0 . collect trace) r_acts
-            [p1,p2,p3,p4] = map (discrete . bool2num 1.0 . collect trace) p_acts
+            [r1,r2,r3,r4] = map (discrete . bool2num 2.0 3.0 . collect trace) r_acts
+            [p1,p2,p3,p4] = map (discrete . bool2num 4.0 5.0 . collect trace) p_acts
         plot (PS "plot.ps") $ [Data2D [Title "pressure 2", Style Lines, Color Red] [] p2,
                                Data2D [Title "relief 2", Style Lines, Color Blue] [] r2,
                                Data2D [Title "wheel speed 2", Style Lines, Color Green] [] v2,
@@ -278,6 +281,9 @@ abs_sim = do
 
 main = abs_sim
 ---main = seq_sim
+
+-- env t (Out a v) state   = state { a_out = (t,a) : a_out state }
+-- env t (Time d) state    = state { time = time state + d }
 
 -----------------------------------------------------------------
 -- A simple test of a single relief sequencer
@@ -312,7 +318,7 @@ curve0          = slopes (xs `zip` map f xs)
 seq_sim = do
         s <- newStdGen
         let (trace, valve) = chopTrace 5000 $ simulationRand s (seq_test curve0)
-            out = discrete $ bool2num 1.0 $ collect trace valve
+            out = discrete $ bool2num 0.0 1.0 $ collect trace valve
         plot (PS "plot.ps") $ [Data2D [Title "relief", Style Lines, Color Blue] [] out,
                                Data2D [Title "accel", Style Lines, Color Red] [] curve0]
 --        putTraceLabels trace
@@ -343,5 +349,5 @@ deriv ((x,y):pts@((x',y'):_))
 deriv [(x,y)]                   = []
 deriv []                        = []
 
-bool2num k                      = map (\(t,b) -> (t,if b then k else 0.0))
+bool2num lo hi                  = map (\(t,b) -> (t,if b then hi else lo))
 
