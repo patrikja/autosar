@@ -27,6 +27,8 @@ import System.Random (StdGen)
 import Test.QuickCheck (Gen, elements, choose, shrinkNothing, forAllShrink, sized, Property)
 import Test.QuickCheck.Arbitrary (shrinkList)
 import Test.QuickCheck.Gen (Gen(..))
+import Test.QuickCheck.Property (property, unProperty)
+import Test.QuickCheck.Random
 import qualified Control.Monad.Writer as W
 import qualified Control.Monad.State as S
 
@@ -747,7 +749,7 @@ simulationRandG m = do
   x <- g
   return (x,a)
 
-simulationRand :: StdGen -> (forall c. AR c a) -> (Trace, a)
+simulationRand :: QCGen -> (forall c. AR c a) -> (Trace, a)
 simulationRand rng m = (unGen g rng 0, a)
   where (g, a) = simulationM (maximumProgress randSched) m
 
@@ -813,12 +815,12 @@ simTable (Sim (t, _)) = traceTable t
 sortByParent tls = sortBy (compare `on` (\(a,b,c) -> b)) tls
 
 tracePropS :: ((forall c. AR c [Tag]) -> Gen (Trace, [Tag])) -> (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
-tracePropS sim code prop = sized $ \n -> do
+tracePropS sim code prop = property $ sized $ \n -> do
   let limit = (1+n*10)
       gen :: Gen Sim
       gen = fmap (cutSim limit . Sim) $ sim code
   -- forAllShrink gen shrinkNothinh prop -- Disable shrinking
-  forAllShrink gen (shrinkSim code) prop
+  unProperty $ forAllShrink gen (shrinkSim code) prop
 
 traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
 traceProp = tracePropS simulationRandG
