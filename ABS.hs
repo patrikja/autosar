@@ -4,6 +4,7 @@ import ARSim
 import System.Random
 import Graphics.EasyPlot
 import Debug.Trace
+import Test.QuickCheck.Random
 
 instance (Valuable a, Valuable b) => Valuable (a,b) where
         toVal (a,b)             = VArray [toVal a, toVal b]
@@ -268,7 +269,7 @@ a3 = deriv v3
 a4 = deriv v4
 
 abs_sim = do 
-        s <- newStdGen
+        s <- newQCGen
         let (trace,(r_acts,p_acts)) = chopTrace 400000 $ simulationRand s (test [v1,v2,v3,v4] [a1,a2,a3,a4])
             [r1,r2,r3,r4] = map (discrete . bool2num 2.0 3.0 . collect trace) r_acts
             [p1,p2,p3,p4] = map (discrete . bool2num 4.0 5.0 . collect trace) p_acts
@@ -316,7 +317,7 @@ curve0          = slopes (xs `zip` map f xs)
         f t     = 0.5 - k1*((1.0-t)^2)
 
 seq_sim = do
-        s <- newStdGen
+        s <- newQCGen
         let (trace, valve) = chopTrace 5000 $ simulationRand s (seq_test curve0)
             out = discrete $ bool2num 0.0 1.0 $ collect trace valve
         plot (PS "plot.ps") $ [Data2D [Title "relief", Style Lines, Color Blue] [] out,
