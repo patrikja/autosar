@@ -19,7 +19,7 @@ Approach
 - Static scoping and process structure (following AUTOSAR).
 - Currently limited to a flat process hierarchy (any AUTOSAR component hierarchy can 
   be transformed into a flat one).
-  
+
 
 Names
 -----
@@ -37,48 +37,48 @@ Names
 
 Process terms
 -------------
-Grammar:  	
+Grammar:
 
-    P, Q	::=		Atom    |    P || Q    |   0 	
-    Atom 	::=		named atomic processes (to follow)
+    P, Q    ::=     Atom    |    P || Q    |   0
+    Atom    ::=     named atomic processes (to follow)
     
 Labelled reduction:
-	P  --e-->  P'
+    P  --e-->  P'
 
 Labels:
-    E, F	::=		A?L   |   A!L   |   delta(T)
-	L		::=		label payload (to follow)
-	
+    E, F    ::=     A?L   |   A!L   |   delta(T)
+    L       ::=     label payload (to follow)
+
 
 Atomic processes
 ----------------
-runnable(I.R, Time, Act, N)		    Common state for runnable R of
-  								component I, showing: N current
-   								instances, Time seconds since last
-   								activation, and activation state Act
+runnable(I.R, Time, Act, N)     Common state for runnable R of
+                                component I, showing: N current
+                                instances, Time seconds since last
+                                activation, and activation state Act
 
-rinst(I.R, C, XS, Code)	        An instance of runnable R within
- 								component I, currently	executing
- 								Code and owning exclusive area set
- 								XS, possibly on behalf of client C
+rinst(I.R, C, XS, Code)         An instance of runnable R within
+                                component I, currently executing
+                                Code and owning exclusive area set
+                                XS, possibly on behalf of client C
 
-excl(I.X, Bool) 				Exclusive area X of component
- 								instance I, with current busy state
+excl(I.X, Bool)                 Exclusive area X of component
+                                instance I, with current busy state
 
-irv(I.S, Value)			    	Inter-runnable variable S of
- 								component I, with a current Value
+irv(I.S, Value)                 Inter-runnable variable S of
+                                component I, with a current Value
 
-qelem(I.P.E, N, Values)	        Queued data element of size
- 								N holding a sequence of Values
+qelem(I.P.E, N, Values)         Queued data element of size
+                                N holding a sequence of Values
 
-delem(I.P.E, Upd, Value)	    Data element holding a single
- 								Value with an update flag Upd
+delem(I.P.E, Upd, Value)        Data element holding a single
+                                Value with an update flag Upd
 
-opres(I.P.O, Values)			Client-side operation buffer,
-  								holding a sequence of result Values
+opres(I.P.O, Values)            Client-side operation buffer,
+                                holding a sequence of result Values
 
-timer(I.R, Time)			    Timer for runnable I.R with Time
-  								seconds left
+timer(I.R, Time)                Timer for runnable I.R with Time
+                                seconds left
 
 
 Parallelism & broadcast
@@ -86,16 +86,16 @@ Parallelism & broadcast
 
 Parallel reduction:
 
- 			P --E-->  P’        Q --F-->  Q'
+            P --E-->  P’        Q --F-->  Q'
             --------------------------------
-	            P || Q --E*F-->  P' || Q' 
+                P || Q --E*F-->  P' || Q' 
 
 where * is a partial label combinator:
 
-			A?L * A!L = A!L
-			A!L * A?L = A!L
-			A?L1 * A?L2 = A?(max(L1,L2))
-			delta(T) * delta(T) = delta(T)
+            A?L * A!L = A!L
+            A!L * A?L = A!L
+            A?L1 * A?L2 = A?(max(L1,L2))
+            delta(T) * delta(T) = delta(T)
 
 Cleanup:
 
@@ -105,19 +105,19 @@ Cleanup:
 The code of a runnable
 ----------------------
 
-Code	::=		rte_send(P,E,V,Cont)		Send to a QElem
- 		 |		rte_receive(P,E,Cont)		Read from a QElem
- 		 |		rte_write(P,E,V,Cont)		Write to a DElem
- 		 |		rte_read(P,E,Cont)			Read from a DElem
- 		 |		rte_is_updated(P,E,Cont)	Check flag of a DElem
- 		 |		rte_invalidate(P,E,Cont)	Empty a DElem
- 		 |		rte_call(P,O,V,Cont)		Invoke a server runnable
- 		 |		rte_result(P,O,Cont)		Fetch result of previous Call
- 		 |		rte_irv_write(S,V,Cont)		Write to an Irv
- 		 |		rte_irv_read(S,V,Cont)		Read from an Irv
- 		 |		rte_enter(X,Cont)			Acquire an exclusive token
- 		 |		rte_exit(X,Cont)			Return an exclusive token
- 		 |		rte_terminate(V)			Terminate
+Code    ::=     rte_send(P,E,V,Cont)        Send to a QElem
+         |      rte_receive(P,E,Cont)       Read from a QElem
+         |      rte_write(P,E,V,Cont)       Write to a DElem
+         |      rte_read(P,E,Cont)          Read from a DElem
+         |      rte_is_updated(P,E,Cont)    Check flag of a DElem
+         |      rte_invalidate(P,E,Cont)    Empty a DElem
+         |      rte_call(P,O,V,Cont)        Invoke a server runnable
+         |      rte_result(P,O,Cont)        Fetch result of previous Call
+         |      rte_irv_write(S,V,Cont)     Write to an Irv
+         |      rte_irv_read(S,V,Cont)      Read from an Irv
+         |      rte_enter(X,Cont)           Acquire an exclusive token
+         |      rte_exit(X,Cont)            Return an exclusive token
+         |      rte_terminate(V)            Terminate
 
 
 Values & results
@@ -179,7 +179,7 @@ A parallel composition of:
     - One Op term for each operation.
     - One Timer term for each Timing event of each runnable.
 
-  
+
 Miscellaneous
 -------------
 - Sequences (always flat) are written using : for both left and right 
@@ -315,7 +315,7 @@ timer(A, 0)             --A!tick()-->   timer(A, T)                 if timing(T)
 
 runnable(A, T, _, N)    --A?tick()-->   runnable(A, T, pending, N)
 
-runnable(A, T, Act, N)  --delta(V)-->   runnable(A, T-V, Act, N)         if T >= V
+runnable(A, T, Act, N)  --delta(V)-->   runnable(A, T-V, Act, N)    if T >= V
 
 timer(A, T)             --delta(V)-->   timer(A, T-V)               if T >= V
 
