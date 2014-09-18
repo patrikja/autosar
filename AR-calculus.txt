@@ -49,6 +49,7 @@ Labels:
     E, F    ::=     A?L   |   A!L   |   delta(T)
     L       ::=     label payload (to follow)
 
+-- read "?" as "listen", "!" as "send", "delta(T)" as "T seconds passed"
 
 Atomic processes
 ----------------
@@ -92,10 +93,14 @@ Parallel reduction:
 
 where * is a partial label combinator:
 
-            A?L * A!L = A!L
-            A!L * A?L = A!L
-            A?L1 * A?L2 = A?(max(L1,L2))
-            delta(T) * delta(T) = delta(T)
+            A?L  * A!L      = A!L
+            A!L  * A?L      = A!L
+            A?L1 * A?L2     = A?(max(L1,L2))
+        delta(T) * delta(T) = delta(T)
+
+Or in words: P||Q proceeds only if both P and Q proceed and
+* they agree on the name A of the label and at most one of them sends (!)
+* or they both take the same time step delta(T)
 
 Cleanup:
 
@@ -105,27 +110,30 @@ Cleanup:
 The code of a runnable
 ----------------------
 
-Code    ::=     rte_send(P,E,V,Cont)        Send to a QElem
-         |      rte_receive(P,E,Cont)       Read from a QElem
-         |      rte_write(P,E,V,Cont)       Write to a DElem
-         |      rte_read(P,E,Cont)          Read from a DElem
-         |      rte_is_updated(P,E,Cont)    Check flag of a DElem
-         |      rte_invalidate(P,E,Cont)    Empty a DElem
-         |      rte_call(P,O,V,Cont)        Invoke a server runnable
-         |      rte_result(P,O,Cont)        Fetch result of previous Call
-         |      rte_irv_write(S,V,Cont)     Write to an Irv
-         |      rte_irv_read(S,V,Cont)      Read from an Irv
-         |      rte_enter(X,Cont)           Acquire an exclusive token
-         |      rte_exit(X,Cont)            Return an exclusive token
-         |      rte_terminate(V)            Terminate
+Code    ::=     rte_send       (P,E,V,Cont)   Send to   a QElem
+         |      rte_receive    (P,E,  Cont)   Read from a QElem
+         |      rte_write      (P,E,V,Cont)   Write to      a DElem
+         |      rte_read       (P,E,  Cont)   Read from     a DElem
+         |      rte_is_updated (P,E,  Cont)   Check flag of a DElem
+         |      rte_invalidate (P,E,  Cont)   Empty         a DElem
+         |      rte_call       (P,O,V,Cont)   Invoke a server runnable
+         |      rte_result     (P,O,  Cont)   Fetch result of previous rte_call
+         |      rte_irv_write  (S,V,  Cont)   Write to  an Irv
+         |      rte_irv_read   (S,V,  Cont)   Read from an Irv
+         |      rte_enter      (X,    Cont)   Acquire an exclusive token
+         |      rte_exit       (X,    Cont)   Return  an exclusive token
+         |      rte_terminate  (V)            Terminate
 
+Cont    ::=     functions of type "Std_ReturnType -> Code"
+  where Std_ReturnType = Either Value Error
 
 Values & results
 ----------------
 - Values v range over standard C values (including arrays, structs and unions).
 - Observable operations return values of type Std_ReturnType, which is the 
   disjoint union of proper values and a set of error tokens.
-- A code continuation (ranged over by cont) is a function from Std_ReturnType to Code
+- A code continuation (ranged over by Cont) is a function from Std_ReturnType to Code
+
 
 
 Runnable attributes
@@ -141,9 +149,9 @@ Port interconnections
 ---------------------
 - Also part of the static AUTOSAR model info.
 - Captured as a relation => between names:
-  - i.p => i'.p' iff there is the model connects port p of 
-    component i to port p' of component i'
-  - Lifted to i.p.e => i'.p'.e for all elements e of connected 
+  - i.p => i'.p' iff the model connects port p of component i to port
+    p' of component i'
+  - Lifted to i.p.e => i'.p'.e for all elements e of connected
     sender-receiver ports i.p and i'.p'.
   - Ditto for all operations of client-server ports.
   - Ditto for all port delegations of the (root) component composition.
@@ -160,7 +168,7 @@ Reduction axioms
 - Appear in matching groups that define the ways of saying as well as 
   hearing a particular broadcast payload.
 - A separate set of axioms define how atomic terms react to the passage 
-  of time (label dt).
+  of time (label delta(T)).
 - The balance between time-steps and proper work is not fixed here 
   ("speed-agnosticism").
 
@@ -170,12 +178,12 @@ Initial semantic state
 A parallel composition of:
 - For each component prototype of the (top-level) composition:
   - One Excl term for each exclusive area.
-   - One Run term for each runnable.
+  - One Run term for each runnable.
   - One Irv term for each inter-runnable variable.
-  - For each required sender-receiver port:
+  - For each _required_ sender-receiver port:
     - one QElem term for each QueuedComSpec element.
     - one DElem term for each UnQueuedComSpec element.
-  - For each required client-server port:
+  - For each _required_ client-server port:
     - One Op term for each operation.
     - One Timer term for each Timing event of each runnable.
 
@@ -295,7 +303,7 @@ opres(I.P.O, vs)                            --I.P.O?ret(V)-->           opres(I.
 Spawning and terminating
 ------------------------
 
-rinst(A, ., [], rte_terminate(V))       --A!term()-->   0
+rinst(A, ., [], rte_terminate(V))        --A!term()-->   0
 
 runnable(A, T, Act, N)                   --A?term()-->  runnable(A, T, Act, N-1)
 

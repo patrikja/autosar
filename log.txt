@@ -1,0 +1,99 @@
+2014-09-18: Patrik: started working through the AR-calculus.txt
+
+Comments:
+* Flat process hierarchy: "any AUTOSAR component hierarchy can be transformed into a flat one"
+** are more complex hierarchys commonly used?
+** is the transformation easy / clear / well specified in the standard?
+** perhaps worth exploring
+
+* "label payload (to follow)"
+** this "payload" is not defined until (implicitly) in the transition rules
+
+** this is the full list of labels used down there. Should probably be
+   introduced or at least collected somewhere. How are "res(V)" and
+   "ret(V)" different?
+   A!new()
+   A!term()
+   A?term()
+   I.P.E!inv()
+   I.P.E!rcv(V)
+   I.P.E!rd(V)
+   I.P.E!snd(V,Res)
+   I.P.E!up(U)
+   I.P.E!wr(V)
+   I.P.E?inv()
+   I.P.E?rcv(V)
+   I.P.E?rcv(no_data)
+   I.P.E?rd(V)
+   I.P.E?snd(V,limit)
+   I.P.E?snd(V,ok)
+   I.P.E?up(U)
+   I.P.E?wr(V)
+   I.P.O!call(V,I.P.O,Res)
+   I.P.O!call(V,I.P.O,ok)
+   I.P.O!res(V)
+   I.P.O!ret(V)
+   I.P.O?call(V,C,limit)
+   I.P.O?call(V,C,ok)
+   I.P.O?res(V)
+   I.P.O?res(no_data)
+   I.P.O?ret(V)
+   I.S!irvr(V)
+   I.S!irvw(V)
+   I.S?irvr(V)
+   I.S?irvw(V)
+   I.X!enter()
+   I.X!exit()
+   I.X?enter()
+   I.X?exit()
+
+* runnable(I.R, Time, Act, N): 
+** "Time seconds since last activation" - what type? Nat, Float, Fixed precision?, (mathematical) Real number?
+** Act - is this "activation state" of arbitrary type here?
+
+* rinst(I.R, C, XS, Code): 
+** are the different instances of a runnable I.R not individually numbered or labelled?
+
+* excl(I.X, Bool):
+** Is this then common to alla runnables and all their "runnable instances" for whithin the "component instance" I?
+
+* qelem(I.P.E, N, Values)
+** Is (length(Values) <= N) checked in some way (or a property that needs proof)
+** What is the type of the values in the queue? All the same? Uniquely determined by I.P.E?
+
+* delem(I.P.E, Upd, Value)
+** what is the type of Value?
+
+* opres(I.P.O, Values)
+** unlimited size? what about overflow in practice
+** type of the values?
+
+* timer(I.R, Time)
+** type of Time?
+
+----------------------------------------------------------------
+* "Observable operations return values of type Std_ReturnType"
+** which operations are "observable"?
+
+* "Values v range over standard C values (including arrays, structs and unions)."
+** are values tagged (labelled) with their type? Or just raw bytes?
+
+* "Lifted to i.p.e => i'.p'.e for all elements e of connected sender-receiver ports i.p and i'.p'."
+** So all elements with matching names of these ports connect up
+** but any mismatch is silently ignored (is there any check for that in AUTOSAR?)
+
+----------------
+
+* "One Timer term for each Timing event of each runnable."
+** what is "a Timing event"? It sounds dynamic (a property of the
+   execution or simulation) but the text here is about initial
+   semantic state which sounds static (a syntactic property of the
+   "source code")
+
+* "irv(I.S, V) --I.S?irvr(V)--> irv(I.S, V)"
+** Is this the correct reading: "If I hear a read _of my exact current value_ I transition unchanged. Otherwise I block." If so I don't understand it.
+** But perhaps this in combination with the "Ignoring a broadcast"
+   rule "irv(A, V) --B?L--> irv(A, V) if A /= B and A /=> B" makes
+   sense.
+
+* Meta-comment: I might be good to "name" all the rules so that it becomes easier to "debug" traces than if only the sequence of labels is recorded.
