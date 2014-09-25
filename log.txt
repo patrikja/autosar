@@ -1,3 +1,5 @@
+2014-09-25: Patrik: Skype meeting with Johan + some structure in the list of labels.
+
 2014-09-18: Patrik: started working through the AR-calculus.txt
 
 Comments:
@@ -11,47 +13,40 @@ Comments:
 
 ** this is the full list of labels used down there. Should probably be
    introduced or at least collected somewhere. How are "res(V)" and
-   "ret(V)" different?
-   A!new()
-   A!term()
-   A?term()
-   I.P.E!inv()
-   I.P.E!rcv(V)
-   I.P.E!rd(V)
-   I.P.E!snd(V,Res)
-   I.P.E!up(U)
-   I.P.E!wr(V)
-   I.P.E?inv()
-   I.P.E?rcv(V)
-   I.P.E?rcv(no_data)
-   I.P.E?rd(V)
-   I.P.E?snd(V,limit)
-   I.P.E?snd(V,ok)
-   I.P.E?up(U)
-   I.P.E?wr(V)
-   I.P.O!call(V,I.P.O,Res)
-   I.P.O!call(V,I.P.O,ok)
-   I.P.O!res(V)
-   I.P.O!ret(V)
-   I.P.O?call(V,C,limit)
-   I.P.O?call(V,C,ok)
-   I.P.O?res(V)
-   I.P.O?res(no_data)
-   I.P.O?ret(V)
-   I.S!irvr(V)
-   I.S!irvw(V)
-   I.S?irvr(V)
-   I.S?irvw(V)
-   I.X!enter()
-   I.X!exit()
-   I.X?enter()
-   I.X?exit()
+   "ret(V)" different? All but new() occur in (!,?)-pairs.
 
-* runnable(I.R, Time, Act, N): 
+   A!new()
+   A!term()                A?term()
+   I.P.E!inv()             I.P.E?inv()
+   I.P.E!rcv(V)            I.P.E?rcv(V)
+                           I.P.E?rcv(no_data)
+   I.P.E!rd(V)             I.P.E?rd(V)
+   I.P.E!snd(V,Res)        I.P.E?snd(V,limit)
+                           I.P.E?snd(V,ok)
+   I.P.E!up(U)             I.P.E?up(U)
+   I.P.E!wr(V)             I.P.E?wr(V)
+   I.P.O!call(V,I.P.O,Res) I.P.O?call(V,C,limit)
+   I.P.O!call(V,I.P.O,ok)  I.P.O?call(V,C,ok)
+   I.P.O!res(V)            I.P.O?res(V)
+                           I.P.O?res(no_data)
+   I.P.O!ret(V)            I.P.O?ret(V)
+   I.S!irvr(V)             I.S?irvr(V)
+   I.S!irvw(V)             I.S?irvw(V)
+   I.X!enter()             I.X?enter()
+   I.X!exit()              I.X?exit()
+
+  Payloads:
+  * A (polymorphic): new, term
+  * I.P.E: inv, rcv, rd, snd, up, wr
+  * I.P.O: call, res, ret
+  * I.S:   irvr, irvw
+  * I.X:   enter, exit
+
+* runnable(I.R, Time, Act, N):
 ** "Time seconds since last activation" - what type? Nat, Float, Fixed precision?, (mathematical) Real number?
 ** Act - is this "activation state" of arbitrary type here?
 
-* rinst(I.R, C, XS, Code): 
+* rinst(I.R, C, XS, Code):
 ** are the different instances of a runnable I.R not individually numbered or labelled?
 
 * excl(I.X, Bool):
