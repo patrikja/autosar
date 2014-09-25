@@ -1,12 +1,21 @@
 2014-09-25: Patrik: Skype meeting with Johan + some structure in the list of labels.
 
+  Next work slot: Tuesday 2014-10-07
+
+  TODO: work through log file questions
+  TODO: perhaps write a Prolog version to enable "running" the model directly, or embedded in Haskell
+  TODO: write technical report
+
+  Split runnables into two kinds
+
+
 2014-09-18: Patrik: started working through the AR-calculus.txt
 
 Comments:
 * Flat process hierarchy: "any AUTOSAR component hierarchy can be transformed into a flat one"
-** are more complex hierarchys commonly used?
-** is the transformation easy / clear / well specified in the standard?
-** perhaps worth exploring
+** are more complex hierarchies commonly used?
+** is the transformation easy / clear / well specified in the standard? [Yes - just using fresh names]
+** perhaps worth exploring [Not now]
 
 * "label payload (to follow)"
 ** this "payload" is not defined until (implicitly) in the transition rules
@@ -15,8 +24,8 @@ Comments:
    introduced or at least collected somewhere. How are "res(V)" and
    "ret(V)" different? All but new() occur in (!,?)-pairs.
 
-   A!new()
-   A!term()                A?term()
+   I.R!new()
+   I.R!term()              I.R?term()
    I.P.E!inv()             I.P.E?inv()
    I.P.E!rcv(V)            I.P.E?rcv(V)
                            I.P.E?rcv(no_data)
@@ -36,7 +45,7 @@ Comments:
    I.X!exit()              I.X?exit()
 
   Payloads:
-  * A (polymorphic): new, term
+  * I.R:   new, term
   * I.P.E: inv, rcv, rd, snd, up, wr
   * I.P.O: call, res, ret
   * I.S:   irvr, irvw
@@ -50,7 +59,7 @@ Comments:
 ** are the different instances of a runnable I.R not individually numbered or labelled?
 
 * excl(I.X, Bool):
-** Is this then common to alla runnables and all their "runnable instances" for whithin the "component instance" I?
+** Is this then common to all runnables and all their "runnable instances" within the "component instance" I?
 
 * qelem(I.P.E, N, Values)
 ** Is (length(Values) <= N) checked in some way (or a property that needs proof)
