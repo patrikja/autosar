@@ -6,7 +6,7 @@ Johan Nordlander, Sept 2014
 
 Purpose
 -------
-- To clarify the semantics of AUTOSAR SWCs without some of the detail inherent in a 
+- To clarify the semantics of AUTOSAR SWCs without some of the detail inherent in a
   simulator implementation.
 - To serve as a starting-point for a simulator implementation.
 - To obtain a light-weight framework for further experiments in AUTOSAR formalization.
@@ -14,10 +14,10 @@ Purpose
 
 Approach
 --------
-- A simple process calculus with broadcast communication in the style of CBS  (good 
+- A simple process calculus with broadcast communication in the style of CBS (good
   match with AUTOSAR’s frequent use of publish-subscribe patterns).
 - Static scoping and process structure (following AUTOSAR).
-- Currently limited to a flat process hierarchy (any AUTOSAR component hierarchy can 
+- Currently limited to a flat process hierarchy (any AUTOSAR component hierarchy can
   be transformed into a flat one).
 
 
@@ -29,9 +29,9 @@ Names
   * runnables R & ports P are unique within an instance
   * elements E & operations O are unique within a port
   * etc
-- Leads to hierarchical names: 
-  I.P (ports)   I.P.E (data elements)  I.P.O (server ops)  
-  I.R (runnables)   I.S (inter-runnable vars)   I.X (exclusive areas)  
+- Leads to hierarchical names:
+  I.P (ports)   I.P.E (data elements)  I.P.O (server ops)
+  I.R (runnables)   I.S (inter-runnable vars)   I.X (exclusive areas)
 - The union of all names is ranged over by A, B and C
 
 
@@ -41,12 +41,12 @@ Grammar:
 
     P, Q    ::=     Atom    |    P || Q    |   0
     Atom    ::=     named atomic processes (to follow)
-    
+
 Labelled reduction:
     P  --e-->  P'
 
 Labels:
-    E, F    ::=     A?L   |   A!L   |   delta(T)
+    E, F    ::=     A?L   |   A!L   |   delta(T)
     L       ::=     label payload (to follow)
 
 -- read "?" as "listen", "!" as "send", "delta(T)" as "T seconds passed"
@@ -91,7 +91,7 @@ Parallel reduction:
 
             P --E-->  P’        Q --F-->  Q'
             --------------------------------
-                P || Q --E*F-->  P' || Q' 
+                P || Q --E*F-->  P' || Q'
 
 where * is a partial label combinator:
 
@@ -132,7 +132,7 @@ Cont    ::=     functions of type "Std_ReturnType -> Code"
 Values & results
 ----------------
 - Values v range over standard C values (including arrays, structs and unions).
-- RTE calls return values of type Std_ReturnType, which is the 
+- RTE calls return values of type Std_ReturnType, which is the
   disjoint union of proper values and a set of error tokens.
 - A code continuation (ranged over by Cont) is a function from Std_ReturnType to Code
 - Time...
@@ -140,11 +140,24 @@ Values & results
 
 Runnable attributes
 -------------------
-- Dynamic semantics is defined relative to the static info in a given AUTOSAR 
+- Dynamic semantics is defined relative to the static info in a given AUTOSAR
   system model (see ARText.hs for abstract syntax).
-- Most relevant static info is a set of attributes for each runnable, with 
+- Most relevant static info is a set of attributes for each runnable, with
   names like events, canBeInvokedConcurrently, minimumStartInterval, etc.
 - Static attribute attr of runnable i.r is here referred to as attr(i.r).
+
+There are two kinds of runnables: Server runnables and Regular
+runnables (TODO: check if terminology clashes).  A runnable is a
+Server iff it has the static attribute op_invoked_event. Otherwise it
+is Regular.
+
+- An activation state Act for a Server runnable is of the form
+  serving(Clients,Args), where Clients and Args are sequences of the
+  same length.
+- The activation state for a Regular runnable toggles between idle and
+  pending.
+- The initial Act value for a Server is serving([],[])
+- The initial Act value for a Regular runnable is idle
 
 
 Port interconnections
@@ -162,16 +175,16 @@ Port interconnections
     P  --B?L-->  P'
     ---------------         if A => B
     P  --A?L-->  P'
-  
 
-Reduction axioms 
+
+Reduction axioms
 ----------------
 - Constitute the core of the dynamic semantics.
-- Appear in matching groups that define the ways of saying as well as 
+- Appear in matching groups that define the ways of saying as well as
   hearing a particular broadcast payload.
-- A separate set of axioms define how atomic terms react to the passage 
+- A separate set of axioms define how atomic terms react to the passage
   of time (label delta(T)).
-- The balance between time-steps and proper work is not fixed here 
+- The balance between time-steps and proper work is not fixed here
   ("speed-agnosticism").
 
 
@@ -189,15 +202,10 @@ A parallel composition of:
     - One opres term for each operation.
     - One timer term for each Timing event of each runnable.
 
-
 Miscellaneous
 -------------
-- Sequences (always flat) are written using : for both left and right 
+- Sequences (always flat) are written using : for both left and right
   concatenation.
-- An activation state Act for a runnable with an op_invoked_event is of the 
-  form serving(Clients,Args), where Clients and Args are sequences of the same length.
-- Otherwise, Act toggles between idle and pending.
-- Initial Act values are either serving([],[]) or idle.
 
 
 Exclusive areas
@@ -241,6 +249,7 @@ qelem(I.P.E, N, VS)                         --I.P.E?snd(V,ok)-->        qelem(I.
 qelem(I.P.E, N, VS)                         --I.P.E?snd(V,limit)-->     qelem(I.P.E, N, VS)
                                                                         if |VS| = N
 
+-- This is a "Regular" runnable (not a Server)
 runnable(I.R, T, _, N)                      --I.P.E?snd(V,ok)-->        runnable(I.R, T, pending, N)
 
 runnable(I.R, T, Act, N)                    --I.P.E?snd(V,limit)-->     runnable(I.R, T, Act, N)
@@ -274,14 +283,14 @@ Calling a server
 ----------------
 
 rinst(I.R, C, XS, rte_call(P,O,V,Cont))     --I.P.O!call(V,I.P.O,Res)-->    rinst(I.R, C, XS, Cont(Res))
-                                                                            if async(P.O) in server_call_points(I.R) 
+                                                                            if async(P.O) in server_call_points(I.R)
                                                                             or Res /= OK
 
 rinst(I.R, C, XS, rte_call(P,O,V,Cont))     --I.P.O!call(V,I.P.O,ok)-->     rinst(I.R, C, XS, rte_result(P,O,Cont))
                                                                             if sync(P.O) in server_call_points(I.R)
 
 runnable(I.R, T, serving(CS,Vs), N)         --I.P.O?call(V,C,ok)-->         runnable(I.R, T, serving(Cs:C,Vs:V), N)
-                                                                            if op_invoked(P.O) in events(I.R) 
+                                                                            if op_invoked(P.O) in events(I.R)
                                                                             and C not in Clients
 
 runnable(I.R, T, serving(Cs,Vs), N)         --I.P.O?call(V,C,limit)-->      runnable(I.R, T, serving(Cs,Vs), N)
@@ -309,7 +318,7 @@ rinst(A, ., [], rte_terminate(V))        --A!term()-->  0
 
 runnable(A, T, Act, N)                   --A?term()-->  runnable(A, T, Act, N-1)
 
-runnable(A, 0, pending, N)               --A!new()-->   runnable(A, T, idle, N+1) || rinst(A, ., [], Cont(void))
+runnable(A, 0, pending, N)               --A!new()-->   runnable(A, T, idle, N+1) || rinst(A, ., [], Cont(void))
                                                         if N = 0 or can_be_invoked_concurrently(A), where
                                                         T = minimum_start_interval(A) and Cont = implementation(A)
 

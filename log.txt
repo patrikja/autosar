@@ -1,12 +1,18 @@
+2014-10-07: 
+
+  * Sketch a description to identify parts in need of improvements.
+  * Prolog implementation? (or embedded in Haskell DSL for Functional-Logic programming?)
+  * add references back into the actual AUTOSAR standard
+
 2014-09-25: Patrik: Skype meeting with Johan + some structure in the list of labels.
 
   Next work slot: Tuesday 2014-10-07
 
-  TODO: work through log file questions
+  Done: work through log file questions
   TODO: perhaps write a Prolog version to enable "running" the model directly, or embedded in Haskell
   TODO: write technical report
 
-  Split runnables into two kinds
+  TODO: Split runnables into two kinds (problems may arise)
 
 
 2014-09-18: Patrik: started working through the AR-calculus.txt
