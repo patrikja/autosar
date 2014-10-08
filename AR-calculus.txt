@@ -97,11 +97,11 @@ where * is a partial label combinator:
 
             A?L  * A!L      = A!L
             A!L  * A?L      = A!L
-            A?L1 * A?L2     = A?(max(L1,L2))
+            A?L  * A?L      = A?L
         delta(T) * delta(T) = delta(T)
 
 Or in words: P||Q proceeds only if both P and Q proceed and
-* they agree on the name A of the label and at most one of them sends (!)
+* they agree on the name A and payload L of the label and at most one of them sends (!)
 * or they both take the same time step delta(T)
 
 Cleanup:
@@ -240,6 +240,7 @@ rinst(I.R, C, XS, rte_receive(P,E,Cont))    --I.P.E!rcv(V)-->           rinst(I.
 qelem(I.P.E, N, V:VS)                       --I.P.E?rcv(V)-->           qelem(I.P.E, N, VS)
 
 qelem(I.P.E, N, [])                         --I.P.E?rcv(no_data)-->     qelem(I.P.E, N, [])
+                                                                        if async_rcv(P.E) in ...
 
 rinst(I.R, C, XS, rte_send(P,E,V,Cont))     --I.P.E!snd(V,Res)-->       rinst(I.R, C, XS, Cont(Res))
 
@@ -249,8 +250,12 @@ qelem(I.P.E, N, VS)                         --I.P.E?snd(V,ok)-->        qelem(I.
 qelem(I.P.E, N, VS)                         --I.P.E?snd(V,limit)-->     qelem(I.P.E, N, VS)
                                                                         if |VS| = N
 
+qelem(I.P.E, N, VS)                         --I.P.E?snd(V,Res)-->       qelem(I.P.E, N, VS:V)
+                                                                        if |VS| < N and Res /= ok
+
 -- This is a "Regular" runnable (not a Server)
 runnable(I.R, T, _, N)                      --I.P.E?snd(V,ok)-->        runnable(I.R, T, pending, N)
+                                                                        if data_received(P.E) in events(I.R)
 
 runnable(I.R, T, Act, N)                    --I.P.E?snd(V,limit)-->     runnable(I.R, T, Act, N)
                                                                         if data_received(P.E) in events(I.R)
@@ -305,6 +310,7 @@ rinst(I.R, C, XS, rte_result(P,O,Cont))     --I.P.O!res(V)-->           rinst(I.
 opres(I.P.O, V:Vs)                          --I.P.O?res(V)-->           opres(I.P.O, vs)
 
 opres(I.P.O, [])                            --I.P.O?res(no_data)-->     opres(I.P.O, [])
+                                                                        if async_res(P.O) in ...
 
 rinst(A, I.P.O, [], rte_terminate(V))       --I.P.O!ret(V)-->           rinst(A, ., [], rte_terminate(void))
 
