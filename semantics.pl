@@ -12,6 +12,78 @@ combine( I:A?L, I:A?L, I:A?L ).
 combine( delta(T), delta(T), delta(T)).
 
 
+evaluate([], [])
+    :- ! 
+    .
+evaluate([ L | P ], Q)
+    :-
+    is_list(L), !,
+    append(L,P,P1),
+    evaluate(P1, Q)
+    .
+evaluate([ M | P ], [ N | Q ])
+    :- !,
+    evaluate(M, N),
+    evaluate(P, Q)
+    .
+evaluate(rinst(A,C,Xs,M), rinst(A,C,Xs,N))
+    :- !,
+    eval(M, N)
+    .
+evaluate(P, P)
+    .
+    
+eval(ap(fn(X,T),V), R)
+    :- !,
+    X = V,
+    eval(T, R)
+    .
+eval(ap(T,V), R)
+    :- !,
+    eval(T, R)
+    .
+eval(if(E,A,B), R)
+    :-
+    E, !,
+    eval(A, R)
+    .
+eval(if(E,A,B), R)
+    :-
+    not E, !,
+    eval(B, R)
+    .
+eval((A,B), (A1,B1))
+    :- !,
+    eval(A, A1), 
+    eval(B, B1)
+    .
+eval((A.B), (A1.B1))
+    :- !,
+    eval(A, A1), 
+    eval(B, B1)
+    .
+eval((A:B), (A1:B1))
+    :- !,
+    eval(A, A1), 
+    eval(B, B1)
+    .
+eval(E, R)
+    :-
+    E =.. [H|A], name(H,N), append("rte_",_,N), !,
+    eval(A, B),
+    R =.. [H|B]
+    .
+eval(V, V)
+    :-
+    atom(V), !
+    .
+eval(E, R)
+    :-
+    R is E
+    .
+
+
+
 []  ---L--->  []
     .
 [ P1 | P2 ]  ---L--->  R
@@ -22,7 +94,7 @@ combine( delta(T), delta(T), delta(T)).
     ,
     combine(L1,L2,L)
     ,
-    flatten([Q1|Q2],R)
+    evaluate([Q1|Q2],R)
     .
 
 P  ---A?L--->  Q
@@ -34,9 +106,9 @@ P  ---A?L--->  Q
 
 %%%%% Exclusive areas
 
-rinst(I:R, C, Xs, rte_enter(X,Cont))   ---I:X!enter--->     rinst(I:R, C, X.Xs, cont(ok))
+rinst(I:R, C, Xs, rte_enter(X,Cont))   ---I:X!enter--->     rinst(I:R, C, X.Xs, ap(Cont,ok))
     .
-rinst(I:R, C, X.Xs, rte_exit(X,Cont))  ---I:X!exit--->      rinst(I:R, C, Xs, cont(ok))
+rinst(I:R, C, X.Xs, rte_exit(X,Cont))  ---I:X!exit--->      rinst(I:R, C, Xs, ap(Cont,ok))
     .
 excl(I:X, free)                        ---I:X?enter--->     excl(I:X, taken)
     .
@@ -45,9 +117,9 @@ excl(I:X, taken)                       ---I:X?exit--->      excl(I:X, free)
 
 %%%%% Inter-runnable variables
 
-rinst(I:R, C, Xs, rte_irv_read(S,Cont))     ---I:S!irvr(V)--->    rinst(I:R, C, Xs, cont(V))
+rinst(I:R, C, Xs, rte_irv_read(S,Cont))     ---I:S!irvr(V)--->    rinst(I:R, C, Xs, ap(Cont,V))
     .
-rinst(I:R, C, Xs, rte_irv_write(S, Cont))   ---I:S!irvw(V)--->    rinst(I:R, C, Xs, cont(ok))
+rinst(I:R, C, Xs, rte_irv_write(S, Cont))   ---I:S!irvw(V)--->    rinst(I:R, C, Xs, ap(Cont,ok))
     .
 irv(I:S, V)                                 ---I:S?irvr(V)--->    irv(I:S, V)
     .
@@ -56,9 +128,9 @@ irv(I:S, _)                                 ---I:S?irvw(V)--->    irv(I:S, V)
 
 %%%%% Sending/receiving
 
-rinst(I:R, C, Xs, rte_receive(P:E,Cont))    ---I:P:E!rcv(V)--->           rinst(I:R, C, Xs, cont(v))
+rinst(I:R, C, Xs, rte_receive(P:E,Cont))    ---I:P:E!rcv(V)--->           rinst(I:R, C, Xs, ap(Cont,V))
     .
-rinst(I:R, C, Xs, rte_send(P:E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(I:R, C, Xs, cont(Res))
+rinst(I:R, C, Xs, rte_send(P:E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(I:R, C, Xs, ap(Cont,Res))
     .
 qelem(I:P:E, N, V.Vs)                       ---I:P:E?rcv(V)--->           qelem(I:P:E, N, Vs)
     .
@@ -112,7 +184,7 @@ delem(I:P:E, U, _)                              ---I:P:E?inv--->      delem(I:P:
 
 %%%%% Calling a server
 
-rinst(I:R, C, XS, rte_call(P:O,V,Cont))     ---I:P:O!call(V,I:P:O,Res)--->    rinst(I:R, C, XS, cont(Res))
+rinst(I:R, C, XS, rte_call(P:O,V,Cont))     ---I:P:O!call(V,I:P:O,Res)--->    rinst(I:R, C, XS, ap(Cont,Res))
     :-
     server_call_point(I:R, async(P:O)),
     Res \= ok
@@ -133,7 +205,7 @@ runnable(I:R, T, serving(Cs,Vs), N)         ---I:P:O?call(V,C,limit)--->      ru
 
 %%%%% Obtaining a server result
 
-rinst(I:R, C, XS, rte_result(P:O,Cont))     ---I:P:O!res(V)--->           rinst(I:R, C, XS, cont(V))
+rinst(I:R, C, XS, rte_result(P:O,Cont))     ---I:P:O!res(V)--->           rinst(I:R, C, XS, ap(Cont,V))
     .
 rinst(A, I:P:O, [], rte_terminate(V))       ---I:P:O!ret(V)--->           rinst(A, -, [], rte_terminate(void))
     .
@@ -156,14 +228,14 @@ runnable(A, T, Act, N)                   ---A?term--->  runnable(A, T, Act, N1)
     :-
     N1 is N-1
     .
-runnable(A, 0, pending, N)               ---A!new--->   [ runnable(A, T, idle, N1), rinst(A, -, [], cont(void)) ]
+runnable(A, 0, pending, N)               ---A!new--->   [ runnable(A, T, idle, N1), rinst(A, -, [], ap(Cont,void)) ]
     :-
     (N == 0 ; can_be_invoked_concurrently(A)),
     minimum_start_interval(A, T),
     implementation(A, Cont),
     N1 is N+1
     .
-runnable(A, 0, serving(C.Cs,V.Vs), N)    ---A!new--->   [ runnable(A, T, serving(Cs,Vs), N1), rinst(A, C, [], cont(V)) ]
+runnable(A, 0, serving(C.Cs,V.Vs), N)    ---A!new--->   [ runnable(A, T, serving(Cs,Vs), N1), rinst(A, C, [], ap(Cont,V)) ]
     :-
     (N == 0 ; can_be_invoked_concurrently(A)),
     minimum_start_interval(A, T), 
@@ -232,6 +304,13 @@ opres(A, Vs)            ---B?L--->    opres(A, Vs)
     A \= B, not connected(B, A)
     .
 
+app(P) :- call(P,7).
+
+fun(X) :- X>5.
+
+fun2(X,Y) :- X > Y.
+
+eq(X,X).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Static info examples %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
