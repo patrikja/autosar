@@ -3,8 +3,9 @@
 :- op(901, xfy, ':').
 :- op(902, xfx, '!').
 :- op(903, xfx, '?').
-:- op(904, xfx, '--->').
-:- op(905, xfx, '---').
+:- op(904, xfx, '==>').
+:- op(905, xfx, '--->').
+:- op(906, xfx, '---').
 
 combine( I:A?L, I:A!L, I:A!L ).
 combine( I:A!L, I:A?L, I:A!L ).
@@ -29,11 +30,11 @@ combine( delta(T), delta(T), delta(T)).
 
 %%%%% Exclusive areas
 
-rinst(I:R, C, Xs, rte_enter(X,Cont))   ---I:X!enter--->     rinst(I:R, C, [X|Xs], cont(ok))
-    .
-excl(I:X, free)                        ---I:X?enter--->     excl(I:X, taken)
+rinst(I:R, C, Xs, rte_enter(X,Cont))   ---I:X!enter--->     rinst(I:R, C, X.Xs, cont(ok))
     .
 rinst(I:R, C, X.Xs, rte_exit(X,Cont))  ---I:X!exit--->      rinst(I:R, C, Xs, cont(ok))
+    .
+excl(I:X, free)                        ---I:X?enter--->     excl(I:X, taken)
     .
 excl(I:X, taken)                       ---I:X?exit--->      excl(I:X, free)
     .
@@ -42,9 +43,9 @@ excl(I:X, taken)                       ---I:X?exit--->      excl(I:X, free)
 
 rinst(I:R, C, Xs, rte_irv_read(S,Cont))     ---I:S!irvr(V)--->    rinst(I:R, C, Xs, cont(V))
     .
-irv(I:S, V)                                 ---I:S?irvr(V)--->    irv(I:S, V)
-    .
 rinst(I:R, C, Xs, rte_irv_write(S, Cont))   ---I:S!irvw(V)--->    rinst(I:R, C, Xs, cont(ok))
+    .
+irv(I:S, V)                                 ---I:S?irvr(V)--->    irv(I:S, V)
     .
 irv(I:S, _)                                 ---I:S?irvw(V)--->    irv(I:S, V)
     .
@@ -53,13 +54,13 @@ irv(I:S, _)                                 ---I:S?irvw(V)--->    irv(I:S, V)
 
 rinst(I:R, C, Xs, rte_receive(P,E,Cont))    ---I:P:E!rcv(V)--->           rinst(I:R, C, Xs, cont(v))
     .
+rinst(I:R, C, Xs, rte_send(P,E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(I:R, C, Xs, cont(Res))
+    .
 qelem(I:P:E, N, V.Vs)                       ---I:P:E?rcv(V)--->           qelem(I:P:E, N, Vs)
     .
 qelem(I:P:E, N, [])                         ---I:P:E?rcv(no_data)--->     qelem(I:P:E, N, [])
     % :-
     % async_rcv(P:E) in ...
-    .
-rinst(I:R, C, Xs, rte_send(P,E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(I:R, C, Xs, cont(Res))
     .
 qelem(I:P:E, N, Vs)                         ---I:P:E?snd(V,ok)--->        qelem(I:P:E, N, Vs1)
     :-
@@ -86,9 +87,9 @@ runnable(I:R, T, Act, N)                    ---I:P:E?snd(V,limit)--->     runnab
 
 rinst(I:R, C, XS, rte_read(P,E,Cont))           ---I:P:E!rd(V)--->    rinst(I:R, C, XS, cont(V))
     .
-delem(I:P:E, U, V)                              ---I:P:E?rd(V)--->    delem(I:P:E, false, V)
-    .
 rinst(I:R, C, XS, rte_write(P,E,V,Cont))        ---I:P:E!wr(V)--->    rinst(I:R, C, XS, cont(ok))
+    .
+delem(I:P:E, U, V)                              ---I:P:E?rd(V)--->    delem(I:P:E, false, V)
     .
 delem(I:P:E, V, _)                              ---I:P:E?wr(V)--->    delem(I:P:E, true, V)
     .
@@ -98,9 +99,9 @@ runnable(I:R, T, _, N)                          ---I:P:E?wr(V)--->    runnable(I
     .
 rinst(I:R, C, XS, rte_is_updated(P,E,Cont))     ---I:P:E!up(U)--->    rinst(I:R, C, XS, cont(U))
     .
-delem(I:P:E, U, V)                              ---I:P:E?up(U)--->    delem(I:P:E, U, V)
-    .
 rinst(I:R, C, XS, rte_invalidate(P,E,Cont))     ---I:P:E!inv--->      rinst(I:R, C, XS, cont(ok))
+    .
+delem(I:P:E, U, V)                              ---I:P:E?up(U)--->    delem(I:P:E, U, V)
     .
 delem(I:P:E, U, _)                              ---I:P:E?inv--->      delem(I:P:E, true, invalid)
     .
@@ -132,13 +133,13 @@ runnable(I:R, T, serving(Cs,Vs), N)         ---I:P:O?call(V,C,limit)--->      ru
 
 rinst(I:R, C, XS, rte_result(P,O,Cont))     ---I:P:O!res(V)--->           rinst(I:R, C, XS, cont(V))
     .
+rinst(A, I:P:O, [], rte_terminate(V))       ---I:P:O!ret(V)--->           rinst(A, -, [], rte_terminate(void))
+    .
 opres(I:P:O, V.Vs)                          ---I:P:O?res(V)--->           opres(I:P:O, Vs)
     .
 opres(I:P:O, [])                            ---I:P:O?res(no_data)--->     opres(I:P:O, [])
     % :-
     % async_res(P:O) in ...
-    .
-rinst(A, I:P:O, [], rte_terminate(V))       ---I:P:O!ret(V)--->           rinst(A, -, [], rte_terminate(void))
     .
 opres(I:P:O, Vs)                            ---I:P:O?ret(V)--->           opres(I:P:O, Vs1)
     :-
@@ -195,4 +196,37 @@ qelem(A, N, Vs)         ---delta(V)--->   qelem(A, N, Vs)
 delem(A, U, V)          ---delta(V)--->   delem(A, U, V)
     .
 opres(A, Vs)            ---delta(V)--->   opres(A, Vs)
+    .
+
+%%%%% Ignoring a broadcast
+
+rinst(A, XS, Code)      ---B?L--->    rinst(A, XS, Code)
+    .
+timer(A, T)             ---B?L--->    timer(A, T)
+    .
+
+runnable(A, T, Act, N)  ---B?L--->    runnable(A, T, Act, N)
+    :-
+    A \= B, not A ==> B
+    .
+excl(A, V)              ---B?L--->    excl(A, V)
+    :-
+    A \= B, not A ==> B
+    .
+irv(A, V)               ---B?L--->    irv(A, V)
+    :-
+    A \= B, not A ==> B
+    .
+qelem(A, N, Vs)         ---B?L--->    qelem(A, N, Vs)
+    :-
+    A \= B, not A ==> B
+    .
+opres(A, Vs)            ---B?L--->    opres(A, Vs)
+    :-
+    A \= B, not A ==> B
+    .
+
+i:p1:e ==> i:p2:e
+    .
+A ==> A
     .
