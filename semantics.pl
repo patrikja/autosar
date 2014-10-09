@@ -17,7 +17,7 @@ combine( delta(T), delta(T), delta(T)).
     :-
     var(L)
     .
-[P1|P2]  ---L--->  R
+[ P1 | P2 ]  ---L--->  R
     :-    
     P1 ---L1---> Q1
     ,
@@ -26,6 +26,13 @@ combine( delta(T), delta(T), delta(T)).
     combine(L1,L2,L)
     ,
     flatten([Q1|Q2],R)
+    .
+
+P  ---A?L--->  Q
+    :-
+    P ---B?L---> Q
+    ,
+    connected(A,B)
     .
 
 %%%%% Exclusive areas
@@ -52,9 +59,9 @@ irv(I:S, _)                                 ---I:S?irvw(V)--->    irv(I:S, V)
 
 %%%%% Sending/receiving
 
-rinst(I:R, C, Xs, rte_receive(P,E,Cont))    ---I:P:E!rcv(V)--->           rinst(I:R, C, Xs, cont(v))
+rinst(I:R, C, Xs, rte_receive(P:E,Cont))    ---I:P:E!rcv(V)--->           rinst(I:R, C, Xs, cont(v))
     .
-rinst(I:R, C, Xs, rte_send(P,E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(I:R, C, Xs, cont(Res))
+rinst(I:R, C, Xs, rte_send(P:E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(I:R, C, Xs, cont(Res))
     .
 qelem(I:P:E, N, V.Vs)                       ---I:P:E?rcv(V)--->           qelem(I:P:E, N, Vs)
     .
@@ -85,9 +92,9 @@ runnable(I:R, T, Act, N)                    ---I:P:E?snd(V,limit)--->     runnab
 
 %%%%% Reading/writing
 
-rinst(I:R, C, XS, rte_read(P,E,Cont))           ---I:P:E!rd(V)--->    rinst(I:R, C, XS, cont(V))
+rinst(I:R, C, XS, rte_read(P:E,Cont))           ---I:P:E!rd(V)--->    rinst(I:R, C, XS, cont(V))
     .
-rinst(I:R, C, XS, rte_write(P,E,V,Cont))        ---I:P:E!wr(V)--->    rinst(I:R, C, XS, cont(ok))
+rinst(I:R, C, XS, rte_write(P:E,V,Cont))        ---I:P:E!wr(V)--->    rinst(I:R, C, XS, cont(ok))
     .
 delem(I:P:E, U, V)                              ---I:P:E?rd(V)--->    delem(I:P:E, false, V)
     .
@@ -97,9 +104,9 @@ runnable(I:R, T, _, N)                          ---I:P:E?wr(V)--->    runnable(I
     :-
     events(I:R, data_received(P:E))
     .
-rinst(I:R, C, XS, rte_is_updated(P,E,Cont))     ---I:P:E!up(U)--->    rinst(I:R, C, XS, cont(U))
+rinst(I:R, C, XS, rte_is_updated(P:E,Cont))     ---I:P:E!up(U)--->    rinst(I:R, C, XS, cont(U))
     .
-rinst(I:R, C, XS, rte_invalidate(P,E,Cont))     ---I:P:E!inv--->      rinst(I:R, C, XS, cont(ok))
+rinst(I:R, C, XS, rte_invalidate(P:E,Cont))     ---I:P:E!inv--->      rinst(I:R, C, XS, cont(ok))
     .
 delem(I:P:E, U, V)                              ---I:P:E?up(U)--->    delem(I:P:E, U, V)
     .
@@ -108,12 +115,12 @@ delem(I:P:E, U, _)                              ---I:P:E?inv--->      delem(I:P:
 
 %%%%% Calling a server
 
-rinst(I:R, C, XS, rte_call(P,O,V,Cont))     ---I:P:O!call(V,I:P:O,Res)--->    rinst(I:R, C, XS, cont(Res))
+rinst(I:R, C, XS, rte_call(P:O,V,Cont))     ---I:P:O!call(V,I:P:O,Res)--->    rinst(I:R, C, XS, cont(Res))
     :-
     server_call_point(I:R, async(P:O)),
     Res \= ok
     .
-rinst(I:R, C, XS, rte_call(P,O,V,Cont))     ---I:P:O!call(V,I:P:O,ok)--->     rinst(I:R, C, XS, rte_result(P,O,Cont))
+rinst(I:R, C, XS, rte_call(P:O,V,Cont))     ---I:P:O!call(V,I:P:O,ok)--->     rinst(I:R, C, XS, rte_result(P:O,Cont))
     :-
     server_call_point(I:R, sync(P:O))
     .
@@ -129,7 +136,7 @@ runnable(I:R, T, serving(Cs,Vs), N)         ---I:P:O?call(V,C,limit)--->      ru
 
 %%%%% Obtaining a server result
 
-rinst(I:R, C, XS, rte_result(P,O,Cont))     ---I:P:O!res(V)--->           rinst(I:R, C, XS, cont(V))
+rinst(I:R, C, XS, rte_result(P:O,Cont))     ---I:P:O!res(V)--->           rinst(I:R, C, XS, cont(V))
     .
 rinst(A, I:P:O, [], rte_terminate(V))       ---I:P:O!ret(V)--->           rinst(A, -, [], rte_terminate(void))
     .
@@ -205,23 +212,27 @@ timer(A, T)             ---B?L--->    timer(A, T)
 
 runnable(A, T, Act, N)  ---B?L--->    runnable(A, T, Act, N)
     :-
-    A \= B, not connected(A, B)
+    A \= B
     .
 excl(A, V)              ---B?L--->    excl(A, V)
     :-
-    A \= B, not connected(A, B)
+    A \= B
     .
 irv(A, V)               ---B?L--->    irv(A, V)
     :-
-    A \= B, not connected(A, B)
+    A \= B
     .
 qelem(A, N, Vs)         ---B?L--->    qelem(A, N, Vs)
     :-
-    A \= B, not connected(A, B)
+    A \= B, not connected(B, A)
+    .
+delem(A, U, V)          ---B?L--->    delem(A, U, V)
+    :-
+    A \= B, not connected(B, A)
     .
 opres(A, Vs)            ---B?L--->    opres(A, Vs)
     :-
-    A \= B, not connected(A, B)
+    A \= B, not connected(B, A)
     .
 
 
