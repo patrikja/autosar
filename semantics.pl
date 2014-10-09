@@ -59,8 +59,8 @@ rinst(I:R, C, Xs, rte_send(P,E,V,Cont))     ---I:P:E!snd(V,Res)--->       rinst(
 qelem(I:P:E, N, V.Vs)                       ---I:P:E?rcv(V)--->           qelem(I:P:E, N, Vs)
     .
 qelem(I:P:E, N, [])                         ---I:P:E?rcv(no_data)--->     qelem(I:P:E, N, [])
-    % :-
-    % async_rcv(P:E) in ...
+    :-
+    async_receive(I:P:E)
     .
 qelem(I:P:E, N, Vs)                         ---I:P:E?snd(V,ok)--->        qelem(I:P:E, N, Vs1)
     :-
@@ -75,12 +75,12 @@ qelem(I:P:E, N, Vs)                         ---I:P:E?snd(V,Res)--->       qelem(
     length(VS,X), X < N, append(Vs,[V],Vs1), Res \= ok
     .
 runnable(I:R, T, _, N)                      ---I:P:E?snd(V,ok)--->        runnable(I:R, T, pending, N)
-    % :-
-    % data_received(P:E) in events(I:R)
+    :-
+    events(I:R, data_received(P:E))
     .
 runnable(I:R, T, Act, N)                    ---I:P:E?snd(V,limit)--->     runnable(I:R, T, Act, N)
-    % :-
-    % data_received(P:E) in events(I:R)
+    :-
+    events(I:R, data_received(P:E))
     .
 
 %%%%% Reading/writing
@@ -94,8 +94,8 @@ delem(I:P:E, U, V)                              ---I:P:E?rd(V)--->    delem(I:P:
 delem(I:P:E, V, _)                              ---I:P:E?wr(V)--->    delem(I:P:E, true, V)
     .
 runnable(I:R, T, _, N)                          ---I:P:E?wr(V)--->    runnable(I:R, T, pending, N)
-    % :-
-    % data_received(P:E) in events(I:R)
+    :-
+    events(I:R, data_received(P:E))
     .
 rinst(I:R, C, XS, rte_is_updated(P,E,Cont))     ---I:P:E!up(U)--->    rinst(I:R, C, XS, cont(U))
     .
@@ -110,18 +110,16 @@ delem(I:P:E, U, _)                              ---I:P:E?inv--->      delem(I:P:
 
 rinst(I:R, C, XS, rte_call(P,O,V,Cont))     ---I:P:O!call(V,I:P:O,Res)--->    rinst(I:R, C, XS, cont(Res))
     :-
-    % async(P:O) in server_call_points(I:R)
-    % ,
+    server_call_point(I:R, async(P:O)),
     Res \= ok
     .
 rinst(I:R, C, XS, rte_call(P,O,V,Cont))     ---I:P:O!call(V,I:P:O,ok)--->     rinst(I:R, C, XS, rte_result(P,O,Cont))
-    % :-
-    % sync(P:O) in server_call_points(I:R)
+    :-
+    server_call_point(I:R, sync(P:O))
     .
 runnable(I:R, T, serving(Cs,Vs), N)         ---I:P:O?call(V,C,ok)--->         runnable(I:R, T, serving(Cs1,Vs1), N)
     :-
-    % op_invoked(P:O) in events(I:R)
-    % ,
+    events(I:R, op_invoked(P:O)),
     not member(C,Cs), append(Cs,[C],Cs1), append(Vs,[V],Vs1)
     .
 runnable(I:R, T, serving(Cs,Vs), N)         ---I:P:O?call(V,C,limit)--->      runnable(I:R, T, serving(Cs,Vs), N)
@@ -138,8 +136,8 @@ rinst(A, I:P:O, [], rte_terminate(V))       ---I:P:O!ret(V)--->           rinst(
 opres(I:P:O, V.Vs)                          ---I:P:O?res(V)--->           opres(I:P:O, Vs)
     .
 opres(I:P:O, [])                            ---I:P:O?res(no_data)--->     opres(I:P:O, [])
-    % :-
-    % async_res(P:O) in ...
+    :-
+    async_result(I:P:O)
     .
 opres(I:P:O, Vs)                            ---I:P:O?ret(V)--->           opres(I:P:O, Vs1)
     :-
@@ -156,24 +154,24 @@ runnable(A, T, Act, N)                   ---A?term--->  runnable(A, T, Act, N1)
     .
 runnable(A, 0, pending, N)               ---A!new--->   [ runnable(A, T, idle, N1), rinst(A, -, [], cont(void)) ]
     :-
-    N == 0 % or can_be_invoked_concurrently(A)
-    ,
-    % T = minimum_start_interval(A), Cont = implementation(A)
+    (N == 0 ; can_be_invoked_concurrently(A)),
+    minimum_start_interval(A, T),
+    implementation(A, Cont),
     N1 is N+1
     .
 runnable(A, 0, serving(C.Cs,V.Vs), N)    ---A!new--->   [ runnable(A, T, serving(Cs,Vs), N1), rinst(A, C, [], cont(V)) ]
     :-
-    N == 0 % or can_be_invoked_concurrently(A)
-    ,
-    % T = minimum_start_interval(A), Cont = implementation(A)
+    (N == 0 ; can_be_invoked_concurrently(A)),
+    minimum_start_interval(A, T), 
+    implementation(A, Cont),
     N1 is N+1
     .
 
 %%%%% Passing time
 
 timer(A, 0)             ---A!tick--->   timer(A, T)
-    % :-
-    % timing(T) in events(A)
+    :-
+    events(A, timing(T))
     .
 runnable(A, T, _, N)    ---A?tick--->   runnable(A, T, pending, N)
     .
@@ -207,26 +205,37 @@ timer(A, T)             ---B?L--->    timer(A, T)
 
 runnable(A, T, Act, N)  ---B?L--->    runnable(A, T, Act, N)
     :-
-    A \= B, not A ==> B
+    A \= B, not connected(A, B)
     .
 excl(A, V)              ---B?L--->    excl(A, V)
     :-
-    A \= B, not A ==> B
+    A \= B, not connected(A, B)
     .
 irv(A, V)               ---B?L--->    irv(A, V)
     :-
-    A \= B, not A ==> B
+    A \= B, not connected(A, B)
     .
 qelem(A, N, Vs)         ---B?L--->    qelem(A, N, Vs)
     :-
-    A \= B, not A ==> B
+    A \= B, not connected(A, B)
     .
 opres(A, Vs)            ---B?L--->    opres(A, Vs)
     :-
-    A \= B, not A ==> B
+    A \= B, not connected(A, B)
     .
 
-i:p1:e ==> i:p2:e
-    .
-A ==> A
-    .
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Static info examples %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+connected(i:p1:e, i:p2:e).
+
+event(i:r1, timing(300)).
+event(i:r1, data_received(p3:e)).
+
+implementation(i:r1, rte_terminate(void)).
+
+minimum_start_interval(i:r1, 10).
+
+can_be_invoked_concurrently(i:r2).
+
+server_call_point(i:r1, sync(p2:o)).
