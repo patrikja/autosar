@@ -3,7 +3,6 @@
 :- op(901, xfy, ':').
 :- op(902, xfx, '!').
 :- op(903, xfx, '?').
-:- op(904, xfx, '==>').
 :- op(905, xfx, '--->').
 :- op(906, xfx, '---').
 
@@ -14,8 +13,6 @@ combine( delta(T), delta(T), delta(T)).
 
 
 []  ---L--->  []
-    :-
-    var(L)
     .
 [ P1 | P2 ]  ---L--->  R
     :-    
@@ -30,9 +27,9 @@ combine( delta(T), delta(T), delta(T)).
 
 P  ---A?L--->  Q
     :-
-    P ---B?L---> Q
-    ,
     connected(A,B)
+    ,
+    P ---B?L---> Q
     .
 
 %%%%% Exclusive areas
@@ -98,7 +95,7 @@ rinst(I:R, C, XS, rte_write(P:E,V,Cont))        ---I:P:E!wr(V)--->    rinst(I:R,
     .
 delem(I:P:E, U, V)                              ---I:P:E?rd(V)--->    delem(I:P:E, false, V)
     .
-delem(I:P:E, V, _)                              ---I:P:E?wr(V)--->    delem(I:P:E, true, V)
+delem(I:P:E, U, _)                              ---I:P:E?wr(V)--->    delem(I:P:E, true, V)
     .
 runnable(I:R, T, _, N)                          ---I:P:E?wr(V)--->    runnable(I:R, T, pending, N)
     :-
