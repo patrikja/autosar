@@ -32,15 +32,20 @@ evaluate(rinst(A,C,Xs,M), rinst(A,C,Xs,N))
     .
 evaluate(P, P)
     .
-    
-eval(ap(fn(X,T),V), R)
-    :- !,
+
+eval(ap(F,E), R)
+    :-
+    eval(F, fn(X,T)), !,
+    eval(E, V),
     X = V,
     eval(T, R)
     .
 eval(ap(T,V), R)
     :- !,
     eval(T, R)
+    .
+eval(fn(X,T), fn(X,T))
+    :- !
     .
 eval(if(E,A,B), R)
     :-
