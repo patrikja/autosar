@@ -12,25 +12,19 @@ combine( I:A?L, I:A?L, I:A?L ).
 combine( delta(T), delta(T), delta(T)).
 
 
-evaluate([], [])
+flateval([], Q, Q)
     :- ! 
     .
-evaluate([ L | P ], Q)
-    :-
-    is_list(L), !,
-    append(L,P,P1),
-    evaluate(P1, Q)
-    .
-evaluate([ M | P ], [ N | Q ])
+flateval([ M | P ], Q, R)
     :- !,
-    evaluate(M, N),
-    evaluate(P, Q)
+    flateval(P, Q, R1),
+    flateval(M, R1, R)
     .
-evaluate(rinst(A,C,Xs,M), rinst(A,C,Xs,N))
+flateval(rinst(A,C,Xs,M), Q, [ rinst(A,C,Xs,N) | Q ])
     :- !,
     eval(M, N)
     .
-evaluate(P, P)
+flateval(M, Q, [M|Q])
     .
 
 eval(ap(F,E), R)
@@ -99,7 +93,7 @@ eval(E, R)
     ,
     combine(L1,L2,L)
     ,
-    evaluate([Q1|Q2],R)
+    flateval(Q1,Q2,R)
     .
 
 P  ---A?L--->  Q
