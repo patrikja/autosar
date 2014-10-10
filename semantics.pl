@@ -3,8 +3,8 @@
 :- op(901, xfy, ':').
 :- op(902, xfx, '!').
 :- op(903, xfx, '?').
-:- op(905, xfx, '--->').
-:- op(906, xfx, '---').
+:- op(905, xfx, '---').
+:- op(906, xfx, '--->').
 
 combine( I:A?L, I:A!L, I:A!L ).
 combine( I:A!L, I:A?L, I:A!L ).
