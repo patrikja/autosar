@@ -160,9 +160,9 @@ runnable(I:R, T, Act, N)                    ---I:P:E?snd(V,limit)--->     runnab
 
 %%%%% Reading/writing
 
-rinst(I:R, C, XS, rte_read(P:E,Cont))           ---I:P:E!rd(V)--->    rinst(I:R, C, XS, cont(V))
+rinst(I:R, C, XS, rte_read(P:E,Cont))           ---I:P:E!rd(V)--->    rinst(I:R, C, XS, ap(Cont,V))
     .
-rinst(I:R, C, XS, rte_write(P:E,V,Cont))        ---I:P:E!wr(V)--->    rinst(I:R, C, XS, cont(ok))
+rinst(I:R, C, XS, rte_write(P:E,V,Cont))        ---I:P:E!wr(V)--->    rinst(I:R, C, XS, ap(Cont,ok))
     .
 delem(I:P:E, U, V)                              ---I:P:E?rd(V)--->    delem(I:P:E, false, V)
     .
@@ -172,9 +172,9 @@ runnable(I:R, T, _, N)                          ---I:P:E?wr(V)--->    runnable(I
     :-
     events(I:R, data_received(P:E))
     .
-rinst(I:R, C, XS, rte_is_updated(P:E,Cont))     ---I:P:E!up(U)--->    rinst(I:R, C, XS, cont(U))
+rinst(I:R, C, XS, rte_is_updated(P:E,Cont))     ---I:P:E!up(U)--->    rinst(I:R, C, XS, ap(Cont,U))
     .
-rinst(I:R, C, XS, rte_invalidate(P:E,Cont))     ---I:P:E!inv--->      rinst(I:R, C, XS, cont(ok))
+rinst(I:R, C, XS, rte_invalidate(P:E,Cont))     ---I:P:E!inv--->      rinst(I:R, C, XS, ap(Cont,ok))
     .
 delem(I:P:E, U, V)                              ---I:P:E?up(U)--->    delem(I:P:E, U, V)
     .
