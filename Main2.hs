@@ -1,6 +1,7 @@
 module Main where
 
 import ARSim
+import Test.QuickCheck.Random
 import System.Random
 
 r1 re op pe     = do Ok x <- rte_read re; Ok y <- rte_call op x; rte_write pe y; return ()
@@ -26,5 +27,5 @@ test            = do src <- source [(0.0,5),(0.0,7::Int)]
                      connect pe snk
            
 -- Occasionally gives pattern match failure (in r1)           
-main            = do s <- newStdGen; putTraceLabels (fst (simulationRand s test))
+main            = do s <- newQCGen; putTraceLabels (fst (simulationRand s test))
 
