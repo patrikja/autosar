@@ -1,5 +1,3 @@
-:- use_module(library(lists)).
-
 :- op(901, xfy, ':').
 :- op(905, xfx, '---').
 :- op(906, xfx, '--->').
@@ -7,7 +5,7 @@
 
 %%%%% Combining reductions
 
-[]  ---hear(A,L)--->  []
+[]  ---hear(_A,_L)--->  []
     .
 [ P | Q ]  ---say(A,L)--->  R
     :-
@@ -41,7 +39,7 @@
     ,
     tolerate(A,P)
     .
-[]  ---delta(T)--->  []
+[]  ---delta(_T)--->  []
     .
 [ P | Q ]  ---delta(T)--->  [ P2 | Q2 ]
     :-
@@ -51,35 +49,22 @@
     .
 
 
-%%%%% Tolerating broadcasts
-
-tolerate(A, rinst(B,C,Xs,Cont))     .
-tolerate(A, timer(B,T))             .
-
-tolerate(A, runnable(B, T, Act, N)) :- A \== B.
-tolerate(A, excl(B,V))              :- A \== B.
-tolerate(A, irv(B,V))               :- A \== B.
-tolerate(A, qelem(B,N,Vs))          :- A \== B, not connected(A,B).
-tolerate(A, delem(B,U,V))           :- A \== B, not connected(A,B).
-tolerate(A, opres(B,Vs))            :- A \== B, not connected(A,B).
-
-
 %%%%% Exclusive areas
 
-rinst(I:R, C, Xs, rte_enter(X,Cont))   ---say(I:X,enter)--->     rinst(I:R, C, X.Xs, ap(Cont,ok))
+rinst(I:R, C, Xs, rte_enter(X,Cont))     ---say(I:X,enter)--->     rinst(I:R, C, [X|Xs], ap(Cont,ok))
     .
-rinst(I:R, C, X.Xs, rte_exit(X,Cont))  ---say(I:X,exit)--->      rinst(I:R, C, Xs, ap(Cont,ok))
+rinst(I:R, C, [X|Xs], rte_exit(X,Cont))  ---say(I:X,exit)--->      rinst(I:R, C, Xs, ap(Cont,ok))
     .
-excl(I:X, free)                        ---hear(I:X,enter)--->     excl(I:X, taken)
+excl(I:X, free)                          ---hear(I:X,enter)--->    excl(I:X, taken)
     .
-excl(I:X, taken)                       ---hear(I:X,exit)--->      excl(I:X, free)
+excl(I:X, taken)                         ---hear(I:X,exit)--->     excl(I:X, free)
     .
 
 %%%%% Inter-runnable variables
 
 rinst(I:R, C, Xs, rte_irv_read(S,Cont))     ---say(I:S,irvr(V))--->     rinst(I:R, C, Xs, ap(Cont,V))
     .
-rinst(I:R, C, Xs, rte_irv_write(S, Cont))   ---say(I:S,irvw(V))--->     rinst(I:R, C, Xs, ap(Cont,ok))
+rinst(I:R, C, Xs, rte_irv_write(S, Cont))   ---say(I:S,irvw(_V))--->    rinst(I:R, C, Xs, ap(Cont,ok))
     .
 irv(I:S, V)                                 ---hear(I:S,irvr(V))--->    irv(I:S, V)
     .
@@ -92,7 +77,7 @@ rinst(I:R, C, Xs, rte_receive(P:E,Cont))    ---say(I:P:E,rcv(V))--->            
     .
 rinst(I:R, C, Xs, rte_send(P:E,V,Cont))     ---say(I:P:E,snd(V,Res))--->        rinst(I:R, C, Xs, ap(Cont,Res))
     .
-qelem(I:P:E, N, V.Vs)                       ---hear(I:P:E,rcv(V))--->           qelem(I:P:E, N, Vs)
+qelem(I:P:E, N, [V|Vs])                     ---hear(I:P:E,rcv(V))--->           qelem(I:P:E, N, Vs)
     .
 qelem(I:P:E, N, [])                         ---hear(I:P:E,rcv(no_data))--->     qelem(I:P:E, N, [])
     .
@@ -100,19 +85,19 @@ qelem(I:P:E, N, Vs)                         ---hear(A,snd(V,ok))--->            
     :-
     connected(A, I:P:E), length(Vs,X), X < N, append(Vs,[V],Vs1)
     .
-qelem(I:P:E, N, Vs)                         ---hear(A,snd(V,limit))--->         qelem(I:P:E, N, Vs)
+qelem(I:P:E, N, Vs)                         ---hear(A,snd(_V,limit))--->        qelem(I:P:E, N, Vs)
     :-
     connected(A, I:P:E), length(Vs,N)
     .
 qelem(I:P:E, N, Vs)                         ---hear(A,snd(V,Res))--->           qelem(I:P:E, N, Vs1)
     :-
-    connected(A, I:P:E), length(VS,X), X < N, append(Vs,[V],Vs1), Res \= ok
+    connected(A, I:P:E), length(Vs,X), X < N, append(Vs,[V],Vs1), Res \= ok
     .
-runnable(I:R, T, _, N)                      ---hear(I:P:E,snd(V,ok))--->        runnable(I:R, T, pending, N)
+runnable(I:R, T, _, N)                      ---hear(I:P:E,snd(_V,ok))--->       runnable(I:R, T, pending, N)
     :-
     events(I:R, data_received(P:E))
     .
-runnable(I:R, T, Act, N)                    ---hear(I:P:E,snd(V,limit))--->     runnable(I:R, T, Act, N)
+runnable(I:R, T, Act, N)                    ---hear(I:P:E,snd(_V,limit))--->    runnable(I:R, T, Act, N)
     :-
     events(I:R, data_received(P:E))
     .
@@ -123,13 +108,13 @@ rinst(I:R, C, XS, rte_read(P:E,Cont))           ---say(I:P:E,rd(V))--->     rins
     .
 rinst(I:R, C, XS, rte_write(P:E,V,Cont))        ---say(I:P:E,wr(V))--->     rinst(I:R, C, XS, ap(Cont,ok))
     .
-delem(I:P:E, U, V)                              ---hear(I:P:E,rd(V))--->    delem(I:P:E, false, V)
+delem(I:P:E, _U, V)                             ---hear(I:P:E,rd(V))--->    delem(I:P:E, false, V)
     .
-delem(I:P:E, U, _)                              ---hear(A,wr(V))--->        delem(I:P:E, true, V)
+delem(I:P:E, _U, _)                             ---hear(A,wr(V))--->        delem(I:P:E, true, V)
     :-
     connected(A, I:P:E)
     .
-runnable(I:R, T, _, N)                          ---hear(A,wr(V))--->        runnable(I:R, T, pending, N)
+runnable(I:R, T, _, N)                          ---hear(A,wr(_V))--->       runnable(I:R, T, pending, N)
     :-
     connected(A, I:P:E), events(I:R, data_received(P:E))
     .
@@ -139,7 +124,7 @@ rinst(I:R, C, XS, rte_invalidate(P:E,Cont))     ---say(I:P:E,inv)--->       rins
     .
 delem(I:P:E, U, V)                              ---hear(I:P:E,up(U))--->    delem(I:P:E, U, V)
     .
-delem(I:P:E, U, _)                              ---hear(A,inv)--->          delem(I:P:E, true, invalid)
+delem(I:P:E, _U, _)                             ---hear(A,inv)--->          delem(I:P:E, true, invalid)
     :-
     connected(A, I:P:E)
     .
@@ -158,9 +143,9 @@ rinst(I:R, C, XS, rte_call(P:O,V,Cont))     ---say(I:P:O,call(V,I:P:O,ok))--->  
 runnable(I:R, T, serving(Cs,Vs), N)         ---hear(A,call(V,C,ok))--->             runnable(I:R, T, serving(Cs1,Vs1), N)
     :-
     connected(A, I:P:O), events(I:R, op_invoked(P:O)),
-    not member(C,Cs), append(Cs,[C],Cs1), append(Vs,[V],Vs1)
+    \+ member(C,Cs), append(Cs,[C],Cs1), append(Vs,[V],Vs1)
     .
-runnable(I:R, T, serving(Cs,Vs), N)         ---hear(A,call(V,C,limit))--->          runnable(I:R, T, serving(Cs,Vs), N)
+runnable(I:R, T, serving(Cs,Vs), N)         ---hear(A,call(_V,C,limit))--->         runnable(I:R, T, serving(Cs,Vs), N)
     :-
     connected(A, I:P:O), events(I:R, op_invoked(P:O)),
     member(C, Cs)
@@ -172,7 +157,7 @@ rinst(I:R, C, XS, rte_result(P:O,Cont))     ---say(I:P:O,res(V))--->            
     .
 rinst(A, I:P:O, [], rte_terminate(V))       ---say(I:P:O,ret(V))--->            rinst(A, -, [], rte_terminate(void))
     .
-opres(I:P:O, V.Vs)                          ---hear(I:P:O,res(V))--->           opres(I:P:O, Vs)
+opres(I:P:O, [V|Vs])                        ---hear(I:P:O,res(V))--->           opres(I:P:O, Vs)
     .
 opres(I:P:O, [])                            ---hear(I:P:O,res(no_data))--->     opres(I:P:O, [])
     :-
@@ -185,7 +170,7 @@ opres(I:P:O, Vs)                            ---hear(I:P:O,ret(V))--->           
 
 %%%%% Spawning and terminating
 
-rinst(A, -, [], rte_terminate(V))        ---say(A,term)--->     []
+rinst(A, -, [], rte_terminate(_V))       ---say(A,term)--->     []
     .
 runnable(A, T, Act, N)                   ---hear(A,term)--->    runnable(A, T, Act, N1)
     :-
@@ -198,7 +183,7 @@ runnable(A, 0, pending, N)               ---say(A,new)--->  [ runnable(A, T, idl
     implementation(A, Cont),
     N1 is N+1
     .
-runnable(A, 0, serving(C.Cs,V.Vs), N)    ---say(A,new)--->  [ runnable(A, T, serving(Cs,Vs), N1), rinst(A, C, [], ap(Cont,V)) ]
+runnable(A, 0, serving([C|Cs],[V|Vs]), N) ---say(A,new)--->  [ runnable(A, T, serving(Cs,Vs), N1), rinst(A, C, [], ap(Cont,V)) ]
     :-
     (N == 0 ; can_be_invoked_concurrently(A)),
     minimum_start_interval(A, T), 
@@ -223,18 +208,31 @@ timer(A, V)             ---delta(T)--->     timer(A, V1)
     :-
     V >= T, V1 is V-T
     .
-rinst(A, C, XS, Code)   ---delta(T)--->     rinst(A, C, XS, Code)
+rinst(A, C, XS, Code)   ---delta(_T)--->    rinst(A, C, XS, Code)
     .
-excl(A, V)              ---delta(T)--->     excl(A, V)
+excl(A, V)              ---delta(_T)--->    excl(A, V)
     .
-irv(A, V)               ---delta(T)--->     irv(A, V)
+irv(A, V)               ---delta(_T)--->    irv(A, V)
     .
-qelem(A, N, Vs)         ---delta(T)--->     qelem(A, N, Vs)
+qelem(A, N, Vs)         ---delta(_T)--->    qelem(A, N, Vs)
     .
-delem(A, U, V)          ---delta(T)--->     delem(A, U, V)
+delem(A, U, V)          ---delta(_T)--->    delem(A, U, V)
     .
-opres(A, Vs)            ---delta(T)--->     opres(A, Vs)
+opres(A, Vs)            ---delta(_T)--->    opres(A, Vs)
     .
+
+
+%%%%% Tolerating broadcasts
+
+tolerate(_A, rinst(_B,_C,_Xs,_Cont))   .
+tolerate(_A, timer(_B,_T))             .
+
+tolerate(A, runnable(B, _T, _Act, _N)) :- A \== B.
+tolerate(A, excl(B,_V))                :- A \== B.
+tolerate(A, irv(B,_V))                 :- A \== B.
+tolerate(A, qelem(B,_N,_Vs))           :- A \== B, \+ connected(A,B).
+tolerate(A, delem(B,_U,_V))            :- A \== B, \+ connected(A,B).
+tolerate(A, opres(B,_Vs))              :- A \== B, \+ connected(A,B).
 
 
 %%%%%  Helper predicate: flattening and evaluating reduction results
@@ -272,21 +270,21 @@ eval(ap(F,E), R)
     X = V,
     eval(T, R)
     .
-eval(ap(T,V), R)
+eval(ap(T,_V), R)
     :- !,
     eval(T, R)
     .
 eval(fn(X,T), fn(X,T))
     :- !
     .
-eval(if(E,A,B), R)
+eval(if(E,A,_B), R)
     :-
     E, !,
     eval(A, R)
     .
-eval(if(E,A,B), R)
+eval(if(E,_A,B), R)
     :-
-    not E, !,
+    \+ E, !,
     eval(B, R)
     .
 eval((A,B), (A1,B1))
@@ -294,7 +292,7 @@ eval((A,B), (A1,B1))
     eval(A, A1), 
     eval(B, B1)
     .
-eval((A.B), (A1.B1))
+eval(([A|B]), ([A1|B1]))
     :- !,
     eval(A, A1), 
     eval(B, B1)
