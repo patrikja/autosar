@@ -14,8 +14,8 @@ module ARSim -- Lets design the interface later...
               traceLabels, putTraceLabels, putTrace, simulationM, headSched, simulationHead, 
               simulationRerun, randSched, simulationRand, sendsTo) -} where
 
-              
-import Control.Monad (liftM, when)
+import Control.Applicative(Applicative(..)) -- For future compatability
+import Control.Monad (liftM, when, ap)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Concurrent
 import Data.List
@@ -38,6 +38,10 @@ newtype RunM a          = RunM (Con a -> Code)
 instance Functor RunM where
         fmap f (RunM g) = RunM (\cont -> g (cont . f))
         
+instance Applicative RunM where
+  pure   = return
+  (<*>)  = ap
+
 instance Monad RunM where
         RunM f >>= b    = RunM (\cont -> f (\x -> let RunM g = b x in g cont))
         return r        = RunM (\cont -> cont r)
@@ -137,7 +141,11 @@ newtype AR c a          = AR (State -> (a,State))
 
 instance Functor (AR c) where
         fmap f (AR g)   = AR (\s -> let (x,s') = g s in (f x, s'))
-        
+
+instance Applicative (AR c) where
+  pure   = return 
+  (<*>)  = ap
+
 instance Monad (AR c) where
         AR f >>= b      = AR (\s -> let (x,t) = f s; AR g = b x in g t)
         return x        = AR (\s -> (x,s))
@@ -511,7 +519,8 @@ instance Show Proc where
         show (Src a vs)           = spacesep ["Src", show a, show vs]
         show (Sink a t vs)        = spacesep ["Sink", show a, show t, show vs]
 
-showTV vs = "[" ++ unwords [ "(" ++ show (round (1000*t)) ++ ", " ++ show v ++ ")" | (t,v) <- vs ] ++ "]"
+
+-- showTV vs = "[" ++ unwords [ "(" ++ show (round (1000*t)) ++ ", " ++ show v ++ ")" | (t,v) <- vs ] ++ "]"
 
 shortProc :: Proc -> String
 shortProc (Run a (_, mn) t act n s) = maybe (spacesep ["Run", show a]) id mn
@@ -743,7 +752,8 @@ randSched :: SchedulerM Gen
 randSched _ = fmap Just . elements
 
 simulationHeadG, simulationRandG :: (forall c. AR c a) -> Gen (Trace, a)
-simulationHeadG = return . simulationHead
+simulationHeadG ar = return (simulationHead ar)
+
 simulationRandG m = do
   let (g, a) = simulationM randSched m
   x <- g

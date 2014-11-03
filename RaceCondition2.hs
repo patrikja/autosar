@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 module Main where
 
+import Test.QuickCheck.Random
 import ARSim
 import System.Random
 
@@ -70,7 +71,7 @@ test consumerx  = do pqe <- component producer
 main            = mainRand consumer
 
 mainRand :: (forall c. AR c (RQ Int ())) -> IO ()
-mainRand consumerx  = do rng <- newStdGen
+mainRand consumerx  = do rng <- newQCGen
                          putStrLn $ "Using seed: " ++ show rng
                          putTrace $ fst $ simulationRand rng (test consumerx)
 
