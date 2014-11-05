@@ -1,3 +1,9 @@
+2014-11-05:
+
+  TODO: write technical report
+  Done: a Prolog version to enable "running" the model directly 
+  Not done: Split runnables into two kinds (would duplicate all "byte code execution" rules)
+
 2014-10-07: 
 
   * Sketch a description to identify parts in need of improvements.
@@ -11,10 +17,6 @@
   Done: work through log file questions
   TODO: perhaps write a Prolog version to enable "running" the model directly, or embedded in Haskell
   TODO: write technical report
-
-  Not done: Split runnables into two kinds (would duplicate all "byte code execution" rules)
-
-
 
 2014-09-18: Patrik: started working through the AR-calculus.txt
 
