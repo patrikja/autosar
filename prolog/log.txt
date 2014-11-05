@@ -12,7 +12,8 @@
   TODO: perhaps write a Prolog version to enable "running" the model directly, or embedded in Haskell
   TODO: write technical report
 
-  TODO: Split runnables into two kinds (problems may arise)
+  Not done: Split runnables into two kinds (would duplicate all "byte code execution" rules)
+
 
 
 2014-09-18: Patrik: started working through the AR-calculus.txt

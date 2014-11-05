@@ -155,7 +155,7 @@ runnable(I:R, T, serving(Cs,Vs), N)         ---hear(A,call(_V,C,limit))--->     
 
 rinst(I:R, C, XS, rte_result(P:O,Cont))     ---say(I:P:O,res(V))--->            rinst(I:R, C, XS, ap(Cont,V))
     .
-rinst(A, I:P:O, [], rte_terminate(V))       ---say(I:P:O,ret(V))--->            rinst(A, -, [], rte_terminate(void))
+rinst(A, I:P:O, [], rte_terminate(V))       ---say(I:P:O,ret(V))--->            rinst(A, nil, [], rte_terminate(void))
     .
 opres(I:P:O, [V|Vs])                        ---hear(I:P:O,res(V))--->           opres(I:P:O, Vs)
     .
@@ -170,13 +170,13 @@ opres(I:P:O, Vs)                            ---hear(I:P:O,ret(V))--->           
 
 %%%%% Spawning and terminating
 
-rinst(A, -, [], rte_terminate(_V))       ---say(A,term)--->     []
+rinst(A, nil, [], rte_terminate(_V))       ---say(A,term)--->     []
     .
 runnable(A, T, Act, N)                   ---hear(A,term)--->    runnable(A, T, Act, N1)
     :-
     N1 is N-1
     .
-runnable(A, 0, pending, N)               ---say(A,new)--->  [ runnable(A, T, idle, N1), rinst(A, -, [], ap(Cont,void)) ]
+runnable(A, 0, pending, N)               ---say(A,new)--->  [ runnable(A, T, idle, N1), rinst(A, nil, [], ap(Cont,void)) ]
     :-
     (N == 0 ; can_be_invoked_concurrently(A)),
     minimum_start_interval(A, T),
