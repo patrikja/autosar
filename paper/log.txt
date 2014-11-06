@@ -1,3 +1,20 @@
+2014-11-05: Prolog support
+
+  Three possible Prolog implementations for Ubuntu:
+    sudo apt-get install yap                  ; yap
+    sudo apt-get install gprolog              ; gprolog
+    sudo apt-get install swi-prolog-nox       ; swipl
+
+  Possible tool for highliting code:
+    sudo apt-get install python-pygments
+    LaTex package: minted  http://ctan.uib.no/macros/latex/contrib/minted/minted.pdf
+    \usepackage{minted}
+    \inputminted{prolog}{semantics.pl}
+
+  About prolog coding style
+    http://arxiv.org/pdf/0911.2899.pdf
+
+
 2014-11-05: Paper skeleton
 
 The semantics is currently a Prolog file in ../prolog/semantics.pl.
