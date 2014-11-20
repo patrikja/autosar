@@ -129,6 +129,44 @@ runAR sys st                = run sys st
     run' (Return a) st      = (a,st)
 
 
+-- Restricting connections -----------------------------------------------------------------------------------
+
+class Connectable a b | a -> b, b -> a where
+    connection              :: a -> b -> Conn
+
+instance Connectable (ProvidedDataElement a ()) (RequiredDataElement a ()) where
+    connection (PE a) (RE b)    = (a,b)
+        
+instance Connectable (ProvidedQueueElement a ()) (RequiredQueueElement a ()) where
+    connection (PQ a) (RQ b)    = (a,b)
+        
+instance Connectable (RequiredOperation a b ()) (ProvidedOperation a b ()) where
+    connection (RO a) (PO b)    = (a,b)
+
+
+class Seal m where
+        seal                :: m c -> m ()
+
+instance Seal (RequiredDataElement a) where
+        seal (RE a)         = RE a
+
+instance Seal (ProvidedDataElement a) where
+        seal (PE a)         = PE a
+
+instance Seal (RequiredQueueElement a) where
+        seal (RQ a)         = RQ a
+
+instance Seal (ProvidedQueueElement a) where
+        seal (PQ a)         = PQ a
+
+instance Seal (RequiredOperation a b) where
+        seal (RO a)         = RO a
+
+instance Seal (ProvidedOperation a b) where
+        seal (PO a)         = PO a
+
+
+
 -- Derived AR operations -----------------------------------------------------------------------------------------
 
 component                   :: (forall c. AR c a) -> AR c a
@@ -178,19 +216,6 @@ serverRunnable inv ops code = do a <- newAddress
                                  -- ...
                                  return ()
 
--- Restricting connections -----------------------------------------------------------------------------------
-
-class Connectable a b | a -> b, b -> a where
-    connection              :: a -> b -> Conn
-
-instance Connectable (ProvidedDataElement a ()) (RequiredDataElement a ()) where
-    connection (PE a) (RE b)    = (a,b)
-        
-instance Connectable (ProvidedQueueElement a ()) (RequiredQueueElement a ()) where
-    connection (PQ a) (RQ b)    = (a,b)
-        
-instance Connectable (RequiredOperation a b ()) (ProvidedOperation a b ()) where
-    connection (RO a) (PO b)    = (a,b)
 
 connectAll a b              = mapM (uncurry connect) (a `zip` b)
         
@@ -205,29 +230,6 @@ connect5 (a1,a2,a3,a4,a5) (b1,b2,b3,b4,b5)
 connect6 (a1,a2,a3,a4,a5,a6) (b1,b2,b3,b4,b5,b6)  
                             = do connect a1 b1; connect5 (a2,a3,a4,a5,a6) (b2,b3,b4,b5,b6)
 
-
--- 
-
-class Seal m where
-        seal                :: m c -> m ()
-
-instance Seal (RequiredDataElement a) where
-        seal (RE a)         = RE a
-
-instance Seal (ProvidedDataElement a) where
-        seal (PE a)         = PE a
-
-instance Seal (RequiredQueueElement a) where
-        seal (RQ a)         = RQ a
-
-instance Seal (ProvidedQueueElement a) where
-        seal (PQ a)         = PQ a
-
-instance Seal (RequiredOperation a b) where
-        seal (RO a)         = RO a
-
-instance Seal (ProvidedOperation a b) where
-        seal (PO a)         = PO a
 
 sealAll xs                  = map seal xs
 
