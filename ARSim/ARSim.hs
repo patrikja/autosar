@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module NewARSim where
+module ARSim where
               
 import Control.Monad.Operational
 import Data.List
