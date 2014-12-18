@@ -1,0 +1,35 @@
+fof(a0, axiom, (
+    red(0, hear(_A,_L), 0)
+)).
+
+fof(a0, axiom,
+    (red(P, say(A,L), P1) & red(Q, hear(A,L), Q1)) => red(par(P,Q), say(A,L), par(P1,Q1))
+).
+
+fof(a0, axiom,
+    (red(P, hear(A,L), P1) & red(Q, say(A,L), Q1)) => red(par(P,Q), say(A,L), par(P1,Q1))
+).
+
+fof(a0, axiom,
+    (red(P, hear(A,L), P1) & red(Q, hear(A,L), Q1)) => red(par(P,Q), say(A,L), par(P1,Q1))
+).
+
+fof(a0, axiom,
+    red(    rinst(r(I,R), C, Xs, rte_enter(X,K)),       say(x(I,X),enter),  rinst(r(I,R), C, c(X,Xs), K)    )
+).
+
+fof(a0, axiom,
+    red(    rinst(r(I,R), C, c(X,Xs), rte_exit(X,K)),   say(x(I,X),exit),   rinst(r(I,R), C, Xs, K)         )
+).
+
+fof(a0, axiom,
+    red(    excl(A, free),                              hear(A,enter),      excl(A, taken)                  )
+).
+
+fof(a0, axiom,
+    red(    excl(A, taken),                             hear(A,enter),      excl(A, free)                   )
+).
+
+fof(a0, question,
+    ?[L,P]: red(par(excl(x(i,x1),free),rinst(r(i,r1),nil,nil,rte_enter(x1,done))), L, P)
+).

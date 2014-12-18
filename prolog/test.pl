@@ -1,39 +1,33 @@
-:- op(901, xfy, ':').
-:- op(905, xfx, '---').
-:- op(906, xfx, '--->').
-
-:- consult('semantics.pl').
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Static info examples %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-connected(i:p0:e, i:p3:e).
-connected(_, _) :- false.
+e:p0:i ==> e:p3:i.
+_ ==> _ :- false.
 
-event(i:r1, timing(300)).
-event(i:r1, data_received(p3:e)).
+event(r1:i, timing(300)).
+event(r1:i, data_received(e:p3)).
 
-implementation(i:r1, return(void)).
+implementation(r1:i, return(void)).
 
-minimum_start_interval(i:r1, 10).
+minimum_start_interval(r1:i, 10).
 
-can_be_invoked_concurrently(i:r2).
+can_be_invoked_concurrently(r2:i).
 
-server_call_point(i:r1, sync(p2:o)).
+server_call_point(r1:i, sync(o:p2)).
 
 %%%%%%%%%%%%%%%%
 
 example1(L,R) :- 
 %  Cont1 = fn(X,rte_exit(x, Cont2)),
 %  Cont2 = fn(X,rte_exit(x, fn(Y,return(void)))),
-  Proc1 = rinst(i:r1,nil,[],rte_enter(x,Cont1)),
-  Proc2 = rinst(i:r2,nil,[],rte_enter(x,Cont2)),
-  Block = [excl(i:x,free), Proc1, Proc2],
-  [[excl(i:z,free), []] | Block] ---L---> R.
+  Proc1 = rinst(r1:i,nil,[],rte_enter(x,Cont1)),
+  Proc2 = rinst(r2:i,nil,[],rte_enter(x,Cont2)),
+  Block = [excl(x:i,free), Proc1, Proc2],
+  [[excl(z:i,free), []] | Block] ---L---> R.
 
 
 badexample(L,R) :- 
-  Proc1 = rinst(i:r1,nil,[],rte_enter(x,Cont1)),
-  Proc2 = rinst(i:r2,nil,[],rte_enter(x,Cont2)),
-  Block = [excl(i:x,free), Proc1, Proc2],
-  [Block | excl(i:z,free)] ---L---> R.
+  Proc1 = rinst(r1:i,nil,[],rte_enter(x,Cont1)),
+  Proc2 = rinst(r2:i,nil,[],rte_enter(x,Cont2)),
+  Block = [excl(x:i,free), Proc1, Proc2],
+  [Block | excl(z:i,free)] ---L---> R.
 

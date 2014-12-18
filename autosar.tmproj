@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>documents</key>
+	<array>
+		<dict>
+			<key>filename</key>
+			<string>NewABS.hs</string>
+			<key>lastUsed</key>
+			<date>2014-10-06T07:06:47Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>NewARSim.hs</string>
+			<key>lastUsed</key>
+			<date>2014-10-06T07:06:47Z</date>
+			<key>selected</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>ARSim.hs</string>
+			<key>lastUsed</key>
+			<date>2014-02-27T15:44:02Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>ABS.hs</string>
+			<key>lastUsed</key>
+			<date>2014-02-27T15:44:02Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>Main.hs</string>
+			<key>lastUsed</key>
+			<date>2014-01-17T17:35:22Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>Main2.hs</string>
+			<key>lastUsed</key>
+			<date>2014-01-17T17:35:22Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>RaceCondition2.hs</string>
+			<key>lastUsed</key>
+			<date>2014-01-17T17:35:24Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>ServerTest.hs</string>
+			<key>lastUsed</key>
+			<date>2014-01-17T17:35:24Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
+			<string>ARText.hs</string>
+			<key>lastUsed</key>
+			<date>2014-01-14T15:47:21Z</date>
+		</dict>
+	</array>
+	<key>fileHierarchyDrawerWidth</key>
+	<integer>149</integer>
+	<key>metaData</key>
+	<dict/>
+	<key>showFileHierarchyDrawer</key>
+	<true/>
+	<key>windowFrame</key>
+	<string>{{653, 4}, {626, 874}}</string>
+</dict>
+</plist>
