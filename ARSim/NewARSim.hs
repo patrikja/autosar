@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module ARSim where
+module NewARSim where
               
 import Control.Monad.Operational
 import Data.List
@@ -287,7 +287,7 @@ may_say (RInst a c ex code)                     = may_say' (view code)
         may_say' (Return v)                     = case c of
                                                     Just b  -> RET  b (toDyn v)
                                                     Nothing -> TERM a
-may_say _                                       = VETO
+may_say _                                       = VETO   -- most processes can't say anything
 
 
 say (NEW _)   (Run a _ Pending n s)                     = [Run a (minstart s) Idle (n+1) s,
@@ -329,7 +329,7 @@ trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
 
 may_hear conn VETO _                                            = VETO
-may_hear conn (ENTER a)       (Excl b Free)     | a==b          = ENTER a
+may_hear conn (ENTER a)       (Excl b Free)     | a==b          = ENTER a -- 
 may_hear conn (ENTER a)       (Excl b _)        | a==b          = VETO
 may_hear conn (EXIT a)        (Excl b Taken)    | a==b          = EXIT a
 may_hear conn (EXIT a)        (Excl b _)        | a==b          = VETO
@@ -392,9 +392,9 @@ hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) 
 hear conn label         proc                                    = proc
 
 
-step conn procs                         = explore conn [] labels procs
-  where labels                          = map (respond . may_say) procs
-        respond label                   = foldl (may_hear conn) label procs
+step conn procs        = explore conn [] labels procs
+  where labels         = map (respond . may_say)      procs
+        respond label  = foldl (may_hear conn) label  procs
 
 explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
 explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post

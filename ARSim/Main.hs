@@ -1,6 +1,6 @@
 module Main where
 
-import ARSim
+import NewARSim
 
 {-
 -- | Just send 123 to the queue
