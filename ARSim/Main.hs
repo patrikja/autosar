@@ -4,7 +4,7 @@ import NewARSim
 
 -- | Just send 123 to the queue
 r1 :: ProvidedQueueElement Int c -> Code (StdRet ())
-r1 pqe          = do rte_send pqe (123::Int)
+r1 pqe          = do rteSend pqe (123::Int)
 
 -- | Provide a port (create it) and run r1 every 1.0 time units
 c1 :: AR c (ProvidedQueueElement Int ())
@@ -14,7 +14,7 @@ c1              = do pqe <- providedQueueElement
 
 -- | Just receive a value and do nothing with it
 r2 :: Typeable a => RequiredQueueElement a c -> Code ()
-r2 rqe          = do Ok x <- rte_receive rqe; return ()
+r2 rqe          = do Ok x <- rteReceive rqe; return ()
 
 
 
