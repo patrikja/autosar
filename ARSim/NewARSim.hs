@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module NewARSim where
+module NewARSim (module NewARSim, module Data.Dynamic) where
               
 import Control.Monad.Operational
 import Data.List
@@ -14,7 +14,7 @@ import Data.Maybe
 import Data.Dynamic hiding (fromDyn)
 
 
--- The Code monad --------------------------------------------------------------------------------------
+-- The Code monad -------------------------------------------------------------
 
 type Code a                 = Program RTE a
 
@@ -32,6 +32,9 @@ data RTE a where
     Call                    :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE (StdRet b)
     CallAsync               :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE (StdRet ())
     Result                  :: (Typeable a, Typeable b) => RequiredOperation a b c -> RTE (StdRet b)
+
+rte_send     pqe  a  = singleton $ Send pqe a
+rte_receive  rqe     = singleton $ Receive rqe
 
 data StdRet a               = Ok a
                             | NO_DATA
@@ -62,7 +65,7 @@ data Invocation             = Concurrent
                             deriving (Eq)
 
 
--- Simulator state -----------------------------------------------------------------------------------------------
+-- Simulator state ------------------------------------------------------------
 
 data State                  = State {
                                     procs   :: [Proc],
@@ -101,7 +104,7 @@ data Static                 = Static {
 state0                      = State { procs = [], conns = [], context = [], next = 1 }
 
 
--- The AR monad -------------------------------------------------------------------------------------------------
+-- The AR monad ---------------------------------------------------------------
 
 data ARInstr c a where
     NewAddress              :: ARInstr c Address
@@ -130,7 +133,7 @@ runAR sys st                = run sys st
     run' (Return a) st      = (a,st)
 
 
--- Restricting connections -----------------------------------------------------------------------------------
+-- Restricting connections ----------------------------------------------------
 
 class Connectable a b | a -> b, b -> a where
     connection              :: a -> b -> Conn
@@ -168,7 +171,7 @@ instance Seal (ProvidedOperation a b) where
 
 
 
--- Derived AR operations -----------------------------------------------------------------------------------------
+-- Derived AR operations ------------------------------------------------------
 
 component                   :: (forall c. AR c a) -> AR c a
 connect                     :: Connectable a b => a -> b -> AR c ()
