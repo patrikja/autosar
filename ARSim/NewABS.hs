@@ -24,27 +24,27 @@ import System.Random
 data SeqState = Stopped | Running Int Int Int deriving Typeable
 
 seq_init setup excl state = do
-        rte_enter excl
+        rteEnter excl
         s <- setup
-        rte_irvWrite state s
-        rte_exit excl
+        rteIrvWrite state s
+        rteExit excl
 
 seq_tick step excl state = do
-        rte_enter excl
-        Ok s <- rte_irvRead state
+        rteEnter excl
+        Ok s <- rteIrvRead state
         s' <- case s of
                 Stopped                   -> return s
                 Running ticks limit i 
                         | ticks < limit-1 -> return (Running (ticks+1) limit i)
                         | otherwise       -> step i
-        rte_irvWrite state s'
-        rte_exit excl
+        rteIrvWrite state s'
+        rteExit excl
 
 seq_onoff onoff excl state on = do
-        rte_enter excl
+        rteEnter excl
         s <- onoff on
-        rte_irvWrite state s
-        rte_exit excl
+        rteIrvWrite state s
+        rteExit excl
         return ()
 
 sequencer setup step ctrl = do
@@ -66,25 +66,25 @@ sequencer setup step ctrl = do
 --------------------------------------------------------------
 
 relief_setup valve = do
-        rte_write valve False
+        rteWrite valve False
         return Stopped
         
 relief_step valve accel 0 = do
-        Ok a <- rte_read accel
+        Ok a <- rteRead accel
 --        trace ("Relief " ++ show a) (return ())
         if a < 0 then do
-                rte_write valve True
+                rteWrite valve True
                 return (Running 0 (round (-a*10)) 1)
          else
                 return (Running 0 5 0)
 relief_step valve accel n = do
-        rte_write valve False
+        rteWrite valve False
         return (Running 0 5 0)
 
 relief_ctrl valve accel True = 
         relief_step valve accel 0
 relief_ctrl valve accel False = do
-        rte_write valve False
+        rteWrite valve False
         return Stopped
         
 relief_seq :: AR c (RequiredDataElement Double (), ProvidedOperation Bool () (), ProvidedDataElement Bool ())
@@ -104,31 +104,31 @@ relief_seq = component $ do
 --------------------------------------------------------------
 
 pressure_setup valve = do
-        rte_write valve True
+        rteWrite valve True
         return Stopped
 
 pressure_step valve accel 0 = do
-        rte_write valve True
+        rteWrite valve True
         return (Running 0 100 1)
 pressure_step valve accel 20 = do
-        rte_write valve True
+        rteWrite valve True
         return Stopped
 pressure_step valve accel n | even n = do
-        rte_write valve True
-        Ok a <- rte_read accel
+        rteWrite valve True
+        Ok a <- rteRead accel
 --        trace ("Pressure " ++ show a) (return ())
         return (Running 0 (round (a*50)) (n+1))
 pressure_step valve accel n | odd n = do
-        rte_write valve False
+        rteWrite valve False
         return (Running 0 20 (n+1))
 
 pressure_ctrl valve accel 2 = do
-        rte_write valve True
+        rteWrite valve True
         return Stopped
 pressure_ctrl valve accel 1 =
         pressure_step valve accel 0
 pressure_ctrl valve accel 0 = do
-        rte_write valve False
+        rteWrite valve False
         return Stopped
 
 pressure_seq :: AR c (RequiredDataElement Double (), ProvidedOperation Int () (), ProvidedDataElement Bool ())
@@ -149,21 +149,21 @@ pressure_seq = component $ do
 --------------------------------------------------------------
 
 control memo onoff_pressure onoff_relief slipstream = do
-        Ok slip <- rte_receive slipstream
-        Ok slip' <- rte_irvRead memo
+        Ok slip <- rteReceive slipstream
+        Ok slip' <- rteIrvRead memo
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
 --                        trace ("Slip " ++ show slip) (return ())
-                        rte_call onoff_pressure 0
-                        rte_call onoff_relief True
+                        rteCall onoff_pressure 0
+                        rteCall onoff_relief True
                         return ()
                 (False, True) -> do
 --                        trace ("Slip " ++ show slip) (return ())
-                        rte_call onoff_relief False
-                        rte_call onoff_pressure (if slip >= 1.0 then 2 else 1)
+                        rteCall onoff_relief False
+                        rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
                         return ()
                 _ ->    return ()
-        rte_irvWrite memo slip
+        rteIrvWrite memo slip
 
 controller :: AR c (RequiredQueueElement Double (), RequiredOperation Int () (), RequiredOperation Bool () ())
 controller = component $ do
@@ -186,9 +186,9 @@ controller = component $ do
 --------------------------------------------------------------
 
 loop velostreams slipstreams = do
-        velos <- mapM (\re -> do Ok v <- rte_read re; return v) velostreams
+        velos <- mapM (\re -> do Ok v <- rteRead re; return v) velostreams
         let v0 = maximum velos
-        mapM (\(v,pe) -> rte_send pe (slip v0 v)) (velos `zip` slipstreams)
+        mapM (\(v,pe) -> rteSend pe (slip v0 v)) (velos `zip` slipstreams)
 
 slip 0.0 v      = 1.0
 slip v0 v       = v/v0
@@ -234,19 +234,19 @@ wheel_f time pressure relief velo
         | otherwise                 = (-3, velo-0.03)
 
 wheel_sim t ((r_act, p_act, v_sens, a_sens), velo) = do
-        Ok pressure <- rte_read p_act
-        Ok relief <- rte_read r_act
+        Ok pressure <- rteRead p_act
+        Ok relief <- rteRead r_act
         let (acc,velo1) = wheel_f t pressure relief velo
-        rte_write v_sens velo1
-        rte_write a_sens acc
+        rteWrite v_sens velo1
+        rteWrite a_sens acc
         return velo1
 
 
 simul wheels irv = do
-        Ok (time, velos) <- rte_irvRead irv
+        Ok (time, velos) <- rteIrvRead irv
         let t = time + 0.01
         velos1 <- mapM (wheel_sim t) (wheels `zip` velos)
-        rte_irvWrite irv (t, velos1)
+        rteIrvWrite irv (t, velos1)
         return ()
 
 mk_wheel i = do
