@@ -257,10 +257,10 @@ mk_wheel i = do
         if i==1 then do
             probePE "vehicle speed" v_sens id
          else if i==2 then do
-            probeRE "relief 2" r_act ((+2.0) . fromIntegral . fromEnum)
-            probeRE "pressure 2" p_act ((+5.0) . fromIntegral . fromEnum)
-            probePE "wheel speed 2" v_sens id
-            probePE "wheel acceleration 2" a_sens id
+            probeRE "relief 2"    r_act ((+2.0) . fromIntegral . fromEnum)
+            probeRE "pressure 2"  p_act ((+5.0) . fromIntegral . fromEnum)
+            probePE "wheel speed 2"         v_sens id
+            probePE "wheel acceleration 2"  a_sens id
          else return ()
         return (r_act, p_act, v_sens, a_sens)
 
