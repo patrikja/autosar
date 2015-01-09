@@ -1,4 +1,5 @@
-dist
+dist/
+cabal.sandbox.config
 cabal-dev
 *.o
 *.hi

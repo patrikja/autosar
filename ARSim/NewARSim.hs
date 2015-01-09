@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module NewARSim where
+module NewARSim (module NewARSim, module Data.Dynamic) where
               
 import Control.Monad.Operational
 import Control.Monad.Identity hiding (void)
@@ -18,7 +18,7 @@ import Data.Dynamic hiding (fromDyn)
 import System.Random
 
 
--- The Code monad --------------------------------------------------------------------------------------
+-- The Code monad -------------------------------------------------------------
 
 type Code a                 = Program RTE a
 
@@ -37,19 +37,19 @@ data RTE a where
     CallAsync               :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE (StdRet ())
     Result                  :: (Typeable a, Typeable b) => RequiredOperation a b c -> RTE (StdRet b)
 
-rte_enter x                 = singleton $ Enter x
-rte_exit x                  = singleton $ Exit x
-rte_irvWrite s v            = singleton $ IrvWrite s v
-rte_irvRead s               = singleton $ IrvRead s
-rte_send e v                = singleton $ Send e v
-rte_receive e               = singleton $ Receive e
-rte_write e v               = singleton $ Write e v
-rte_read e                  = singleton $ Read e
-rte_isUpdated e             = singleton $ IsUpdated e
-rte_invalidate e            = singleton $ Invalidate e
-rte_call o v                = singleton $ Call o v
-rte_callAsync o v           = singleton $ CallAsync o v
-rte_result o                = singleton $ Result o
+rteEnter       ex      = singleton $ Enter      ex      
+rteExit        ex      = singleton $ Exit       ex      
+rteIrvWrite    irv  a  = singleton $ IrvWrite   irv  a  
+rteIrvRead     irv     = singleton $ IrvRead    irv     
+rteSend        pqe  a  = singleton $ Send       pqe  a  
+rteReceive     rqe     = singleton $ Receive    rqe     
+rteWrite       pqe  a  = singleton $ Write      pqe  a  
+rteRead        rde     = singleton $ Read       rde     
+rteIsUpdated   rde     = singleton $ IsUpdated  rde     
+rteInvalidate  pde     = singleton $ Invalidate pde     
+rteCall        rop  a  = singleton $ Call       rop  a  
+rteCallAsync   rop  a  = singleton $ CallAsync  rop  a  
+rteResult      rop     = singleton $ Result     rop     
 
 data StdRet a               = Ok a
                             | NO_DATA
@@ -80,7 +80,7 @@ data Invocation             = Concurrent
                             deriving (Eq)
 
 
--- Simulator state -----------------------------------------------------------------------------------------------
+-- Simulator state ------------------------------------------------------------
 
 data SimState               = SimState {
                                     procs   :: [Proc],
@@ -121,8 +121,9 @@ data Static                 = Static {
 
 state0                      = SimState { procs = [], conns = [], probes = [], context = [], nextN = 1 }
 
+type ConnRel = Address -> Address -> Bool
 
--- The AR monad -------------------------------------------------------------------------------------------------
+-- The AR monad ---------------------------------------------------------------
 
 data ARInstr c a where
     NewAddress              :: ARInstr c Address
@@ -154,7 +155,7 @@ runAR sys st                = run sys st
     run' (Return a) st      = (a,st)
 
 
--- Restricting connections -----------------------------------------------------------------------------------
+-- Restricting connections ----------------------------------------------------
 
 class Connectable a b | a -> b, b -> a where
     connection              :: a -> b -> Conn
@@ -192,7 +193,7 @@ instance Seal (ProvidedOperation a b) where
 
 
 
--- Derived AR operations -----------------------------------------------------------------------------------------
+-- Derived AR operations ------------------------------------------------------
 
 component                   :: (forall c. AR c a) -> AR c a
 connect                     :: Connectable a b => a -> b -> AR c ()
@@ -294,34 +295,38 @@ data Label                  = ENTER Address
                             | VETO
 
 
-may_say (Run a 0.0 Pending n s)
-    | n == 0 || invocation s == Concurrent      = NEW   a
-may_say (Run a 0.0 (Serving (c:cs) (v:vs)) n s)    
-    | n == 0 || invocation s == Concurrent      = NEW   a
-may_say (Run a t act n s) | t > 0.0             = DELTA t
-may_say (Timer a 0.0 t)                         = TICK  a
-may_say (Timer a t t0) | t > 0.0                = DELTA t
-may_say (RInst a c ex code)                     = may_say' (view code)
-  where may_say' (Enter (EX x) :>>= cont)       = ENTER x
-        may_say' (Exit (EX x) :>>= cont)        = case ex of
-                                                    y:ys | y==x -> EXIT x
-                                                    _           -> VETO
-        may_say' (IrvRead (IV s) :>>= cont)     = IRVR  s NO_DATA
-        may_say' (IrvWrite (IV s) v :>>= cont)  = IRVW  s (toDyn v)
-        may_say' (Receive (RQ e) :>>= cont)     = RCV   e NO_DATA
-        may_say' (Send (PQ e) v :>>= cont)      = SND   e (toDyn v) ok
-        may_say' (Read (RE e) :>>= cont)        = RD    e NO_DATA
-        may_say' (Write (PE e) v :>>= cont)     = WR    e (toDyn v)
-        may_say' (IsUpdated (RE e) :>>= cont)   = UP    e NO_DATA
-        may_say' (Invalidate (PE e) :>>= cont)  = INV   e
-        may_say' (Call (RO o) v :>>= cont)      = CALL  o (toDyn v) NO_DATA
-        may_say' (Result (RO o) :>>= cont)      = RES   o NO_DATA
-        may_say' (Return v)                     = case c of
+maySay :: Proc -> Label
+maySay (Run a 0.0 Pending n s)
+    | n == 0 || invocation s == Concurrent     = NEW   a
+maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n s)    
+    | n == 0 || invocation s == Concurrent     = NEW   a
+maySay (Run a t act n s)  | t > 0.0            = DELTA t
+maySay (Timer a 0.0 t)                         = TICK  a
+maySay (Timer a t t0)     | t > 0.0            = DELTA t
+maySay (RInst a c ex code)                     = maySay' (view code)
+  where maySay' (rte :>>= cont)                = maySayRTE ex rte
+        maySay' (Return v)                     = case c of
                                                     Just b  -> RET  b (toDyn v)
                                                     Nothing -> TERM a
-may_say _                                       = VETO
+maySay _                                       = VETO   -- most processes can't say anything
 
+maySayRTE :: [Address] -> RTE a -> Label
+maySayRTE ex (Enter (EX x)     )  = ENTER x
+maySayRTE ex (Exit  (EX x)     )  = case ex of
+                                      y:ys | y==x  -> EXIT x
+                                      _            -> VETO
+maySayRTE ex (IrvRead  (IV s)  )  = IRVR  s NO_DATA
+maySayRTE ex (IrvWrite (IV s) v)  = IRVW  s (toDyn v)
+maySayRTE ex (Receive (RQ e)   )  = RCV   e NO_DATA
+maySayRTE ex (Send    (PQ e) v )  = SND   e (toDyn v) ok
+maySayRTE ex (Read    (RE e)   )  = RD    e NO_DATA
+maySayRTE ex (Write   (PE e) v )  = WR    e (toDyn v)
+maySayRTE ex (IsUpdated  (RE e))  = UP    e NO_DATA
+maySayRTE ex (Invalidate (PE e))  = INV   e
+maySayRTE ex (Call   (RO o) v  )  = CALL  o (toDyn v) NO_DATA
+maySayRTE ex (Result (RO o)    )  = RES   o NO_DATA
 
+say :: Label -> Proc -> [Proc]
 say (NEW _)   (Run a _ Pending n s)                     = [Run a (minstart s) Idle (n+1) s,
                                                            RInst a Nothing [] (implementation s (toDyn ()))]
 say (NEW _)   (Run a _ (Serving (c:cs) (v:vs)) n s)     = [Run a (minstart s) (Serving cs vs) (n+1) s,
@@ -330,71 +335,83 @@ say (DELTA d) (Run a t act n s)                         = [Run a (t-d) act n s]
 say (TICK _)  (Timer a _ t)                             = [Timer a t t]
 say (DELTA d) (Timer a t t0)                            = [Timer a (t-d) t0]
 say label     (RInst a c ex code)                       = say' label (view code)
-  where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [RInst a c (x:ex) (cont void)]
-        say' (EXIT _)       (Exit (EX x) :>>= cont)     = [RInst a c ex (cont void)]
-        say' (IRVR _ res)   (IrvRead _ :>>= cont)       = [RInst a c ex (cont (fromStdDyn res))]
-        say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [RInst a c ex (cont void)]
-        say' (RCV _ res)    (Receive _ :>>= cont)       = [RInst a c ex (cont (fromStdDyn res))]
-        say' (SND _ _ res)  (Send _ _ :>>= cont)        = [RInst a c ex (cont (fromStdDyn res))]
-        say' (RD _ res)     (Read _ :>>= cont)          = [RInst a c ex (cont (fromStdDyn res))]
-        say' (WR _ _)       (Write _ _ :>>= cont)       = [RInst a c ex (cont void)]
-        say' (UP _ res)     (IsUpdated _ :>>= cont)     = [RInst a c ex (cont (fromStdDyn res))]
-        say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a c ex (cont void)]
-        say' (CALL _ _ res) (Call _ _ :>>= cont)        = [RInst a c ex (cont (fromStdDyn res))]
-        say' (RES _ res)    (Result _ :>>= cont)        = [RInst a c ex (cont (fromStdDyn res))]
+  where say' label          (rte :>>= cont)             = [sayRTE (RInst a c) ex label rte cont]
         say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toDyn ()))]
         say' (TERM _)       (Return _)                  = []
+        -- What if no case matches?
 
+sayRTE ::  ([Address] -> Code Dynamic -> Proc) -> 
+            [Address] -> Label -> RTE a -> (a -> Code Dynamic) -> Proc
+sayRTE f ex (ENTER _)       (Enter (EX x))  cont  = f (x:ex)  (cont void)
+sayRTE f ex (EXIT _)        (Exit (EX x) )  cont  = f ex      (cont void)
+sayRTE f ex (IRVR _   res)  (IrvRead _   )  cont  = f ex      (cont (fromStdDyn res))
+sayRTE f ex (IRVW _ _)      (IrvWrite _ _)  cont  = f ex      (cont void)
+sayRTE f ex (RCV _    res)  (Receive _   )  cont  = f ex      (cont (fromStdDyn res))
+sayRTE f ex (SND _ _  res)  (Send _ _    )  cont  = f ex      (cont (fromStdDyn res))
+sayRTE f ex (RD _     res)  (Read _      )  cont  = f ex      (cont (fromStdDyn res))
+sayRTE f ex (WR _ _)        (Write _ _   )  cont  = f ex      (cont void)
+sayRTE f ex (UP _     res)  (IsUpdated _ )  cont  = f ex      (cont (fromStdDyn res))
+sayRTE f ex (INV _)         (Invalidate _)  cont  = f ex      (cont void)
+sayRTE f ex (CALL _ _ res)  (Call _ _    )  cont  = f ex      (cont (fromStdDyn res))
+sayRTE f ex (RES _    res)  (Result _    )  cont  = f ex      (cont (fromStdDyn res))
+
+ok   :: StdRet Dynamic
 ok              = Ok (toDyn ())
 
+void :: StdRet ()
 void            = Ok ()
 
+fromStdDyn :: Typeable a => StdRet Dynamic -> StdRet a
 fromStdDyn (Ok v)   = Ok (fromDyn v)
 fromStdDyn NO_DATA  = NO_DATA
 fromStdDyn LIMIT    = LIMIT
 
+minstart :: Static -> Time
 minstart s      = case invocation s of
                     MinInterval t -> t
                     Concurrent    -> 0.0
 
+trig :: ConnRel -> Address -> Static -> Bool
 trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
 
-may_hear conn VETO _                                            = VETO
-may_hear conn (ENTER a)       (Excl b Free)     | a==b          = ENTER a
-may_hear conn (ENTER a)       (Excl b _)        | a==b          = VETO
-may_hear conn (EXIT a)        (Excl b Taken)    | a==b          = EXIT a
-may_hear conn (EXIT a)        (Excl b _)        | a==b          = VETO
-may_hear conn (IRVR a _)      (Irv b v)         | a==b          = IRVR a (Ok v)
-may_hear conn (IRVW a v)      (Irv b _)         | a==b          = IRVW a v
-may_hear conn (RCV a _)       (QElem b n (v:_)) | a==b          = RCV a (Ok v)
-may_hear conn (RCV a _)       (QElem b n [])    | a==b          = RCV a NO_DATA
-may_hear conn (SND a v res)   (QElem b n vs)
-        | a `conn` b && length vs < n                           = SND a v res
-        | a `conn` b                                            = SND a v LIMIT
-may_hear conn (SND a v res)   (Run _ _ _ _ s)   | trig conn a s = SND a v res
-may_hear conn (RD a _)        (DElem b u v)     | a==b          = RD a v
-may_hear conn (WR a v)        (DElem b _ _)     | a `conn` b    = WR a v
-may_hear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s = WR a v
-may_hear conn (UP a _)        (DElem b u _)     | a==b          = UP a (Ok (toDyn u))
-may_hear conn (INV a)         (DElem b _ _)     | a `conn` b    = INV a
-may_hear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
-        | trig conn a s && a `notElem` cs                       = CALL a v ok
-        | trig conn a s                                         = CALL a v LIMIT
-may_hear conn (RES a _)       (Op b (v:vs))     | a==b          = RES a (Ok v)
---may_hear conn (RES a Bottom)  (Op b [])         | a==b          = RES a NO_DATA
-may_hear conn (RES a _)       (Op b [])         | a==b          = VETO
-may_hear conn (RET a v)       (Op b vs)         | a==b          = RET a v
-may_hear conn (TERM a)        (Run b _ _ _ _)   | a==b          = TERM a
-may_hear conn (TICK a)        (Run b _ _ _ _)   | a==b          = TICK a
-may_hear conn (DELTA d)       (Run _ t _ _ _)   | t == 0        = DELTA d
-                                                | d <= t        = DELTA d
-                                                | d > t         = VETO
-may_hear conn (DELTA d)       (Timer _ t _)     | d <= t        = DELTA d
-                                                | d > t         = VETO
-may_hear conn label _                                           = label
+mayHear :: ConnRel -> Label -> Proc -> Label
+mayHear conn VETO _                                             = VETO
+mayHear conn (ENTER a)       (Excl b Free)     | a==b           = ENTER a -- 
+mayHear conn (ENTER a)       (Excl b _)        | a==b           = VETO
+mayHear conn (EXIT a)        (Excl b Taken)    | a==b           = EXIT a
+mayHear conn (EXIT a)        (Excl b _)        | a==b           = VETO
+mayHear conn (IRVR a _)      (Irv b v)         | a==b           = IRVR a (Ok v)
+mayHear conn (IRVW a v)      (Irv b _)         | a==b           = IRVW a v
+mayHear conn (RCV a _)       (QElem b n (v:_)) | a==b           = RCV a (Ok v)
+mayHear conn (RCV a _)       (QElem b n [])    | a==b           = RCV a NO_DATA
+mayHear conn (SND a v res)   (QElem b n vs)                     
+       | a `conn` b && length vs < n                            = SND a v res
+       | a `conn` b                                             = SND a v LIMIT
+mayHear conn (SND a v res)   (Run _ _ _ _ s)   | trig conn a s  = SND a v res
+mayHear conn (RD a _)        (DElem b u v)     | a==b           = RD a v
+mayHear conn (WR a v)        (DElem b _ _)     | a `conn` b     = WR a v
+mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
+mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toDyn u))
+mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
+mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)      
+       | trig conn a s  &&  a `notElem` cs                      = CALL a v ok
+       | trig conn a s                                          = CALL a v LIMIT
+mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
+--mayHear conn (RES a Bottom)  (Op b [])         | a==b           = RES a NO_DATA
+mayHear conn (RES a _)       (Op b [])         | a==b           = VETO
+mayHear conn (RET a v)       (Op b vs)         | a==b           = RET a v
+mayHear conn (TERM a)        (Run b _ _ _ _)   | a==b           = TERM a
+mayHear conn (TICK a)        (Run b _ _ _ _)   | a==b           = TICK a
+mayHear conn (DELTA d)       (Run _ t _ _ _)   | t == 0         = DELTA d
+                                               | d <= t         = DELTA d
+                                               | d > t          = VETO
+mayHear conn (DELTA d)       (Timer _ t _)     | d <= t         = DELTA d
+                                               | d > t          = VETO
+mayHear conn label _                                            = label
 
 
+hear :: ConnRel -> Label -> Proc -> Proc
 hear conn (ENTER a)     (Excl b Free)      | a==b               = Excl b Taken
 hear conn (EXIT a)      (Excl b Taken)     | a==b               = Excl b Free
 hear conn (IRVR a _)    (Irv b v)          | a==b               = Irv b v
@@ -424,10 +441,12 @@ hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) 
 hear conn label         proc                                    = proc
 
 
-step conn procs                         = explore conn [] labels procs
-  where labels                          = map (respond . may_say) procs
-        respond label                   = foldl (may_hear conn) label procs
+step :: ConnRel -> [Proc] -> [(Label, [Proc])]
+step conn procs        = explore conn [] labels procs
+  where labels         = map  (respond . maySay)     procs
+        respond label  = foldl (mayHear conn) label  procs
 
+explore :: ConnRel -> [Proc] -> [Label] -> [Proc] -> [(Label, [Proc])]
 explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
 explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post
   where commit                          = (l, map (hear conn l) pre ++ say l p ++ map (hear conn l) post)
