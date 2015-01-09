@@ -86,8 +86,7 @@ data SimState               = SimState {
                                     procs   :: [Proc],
                                     conns   :: [Conn],
                                     probes  :: [Probe],
-                                    context :: Address,
-                                    nextN   :: Int
+                                    nextA   :: Address
                                 }
 
 data Proc                   = Run       Address Time Act Int Static
@@ -103,7 +102,7 @@ type Conn                   = (Address, Address)
 
 type Probe                  = (String, Label -> Maybe Double)
 
-type Address                = [Int]
+type Address                = Int
 
 type Client                 = Address
 
@@ -119,7 +118,7 @@ data Static                 = Static {
                                     implementation  :: Dynamic -> Code Dynamic
                                 }        
 
-state0                      = SimState { procs = [], conns = [], probes = [], context = [], nextN = 1 }
+state0                      = SimState { procs = [], conns = [], probes = [], nextA = 0 }
 
 type ConnRel = Address -> Address -> Bool
 
@@ -141,15 +140,13 @@ runAR sys st                = run sys st
     run sys st              = run' (view sys) st
     run'                    :: ProgramView (ARInstr c) a -> SimState -> (a,SimState)
     run' (NewAddress :>>= sys) st
-                            = run (sys (nextN st : context st)) (st { nextN = nextN st + 1 })
+                            = run (sys (nextA st)) (st { nextA = nextA st + 1 })
     run' (NewProcess p :>>= sys) st
                             = run (sys ()) (st { procs = p : procs st })
     run' (NewProbe s f :>>= sys) st
                             = run (sys ()) (st { probes = (s,f) : probes st })
     run' (Component subsys :>>= sys) st
-                            = let (a,st') = runAR subsys (push st) in run (sys a) (pop st')
-      where push st         = st { context = nextN st : context st, nextN = 1 }
-            pop st          = st { context = tail (context st), nextN = head (context st) + 2 }
+                            = let (a,st') = runAR subsys st in run (sys a) st'
     run' (Connect a b :>>= sys) st
                             = run (sys ()) (st { conns = connection a b : conns st })
     run' (Return a) st      = (a,st)
