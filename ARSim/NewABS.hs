@@ -2,6 +2,7 @@
 module Main where
 
 import NewARSim
+import Control.Monad
 import qualified Data.Map as Map
 import Data.Dynamic
 import Graphics.EasyPlot
@@ -175,6 +176,18 @@ controller = component $ do
                 (control memo onoff_pressure onoff_relief slipstream)
         return (seal slipstream, seal onoff_pressure, seal onoff_relief)
 
+wheel_ctrl (i,slipstream) = component $ do
+        (slip, onoff_pressure, onoff_relief) <- controller
+        (accel_p, ctrl_p, valve_p) <- pressure_seq
+        (accel_r, ctrl_r, valve_r) <- relief_seq
+        connect slipstream slip
+        connect onoff_pressure ctrl_p
+        connect onoff_relief ctrl_r
+        when (i==2) $ do
+            probeWrite "relief 2" valve_r ((+2.0) . fromIntegral . fromEnum)
+            probeWrite "pressure 2" valve_p ((+5.0) . fromIntegral . fromEnum)
+        return (accel_r, accel_p, valve_r, valve_p)
+
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
 -- periodically reads the current speeds of all wheels, 
@@ -208,18 +221,9 @@ main_loop = component $ do
 -- external to the current system.
 --------------------------------------------------------------
 
-wheel_ctrl slipstream = component $ do
-        (slip, onoff_pressure, onoff_relief) <- controller
-        (accel_p, ctrl_p, valve_p) <- pressure_seq
-        (accel_r, ctrl_r, valve_r) <- relief_seq
-        connect slipstream slip
-        connect onoff_pressure ctrl_p
-        connect onoff_relief ctrl_r
-        return (accel_r, accel_p, valve_r, valve_p)
-
 abs_system = do
         (velos_in, slips_out) <- main_loop
-        ifaces <- mapM wheel_ctrl slips_out
+        ifaces <- mapM wheel_ctrl ([1..] `zip` slips_out)
         return (velos_in, ifaces)
 
 
@@ -227,48 +231,49 @@ abs_system = do
 --  A simulated physical car
 -------------------------------------------------------------------
 
-wheel_f time pressure relief velo 
+wheel_f i time pressure relief velo 
         | time < 1.0                = (0::Double, velo)
+        | i /= 2                    = (-4.5, velo-0.045)
+        -- let wheel 2 skid...
         | pressure && not relief    = (-10, velo-0.1)
         | relief && not pressure    = (1, velo+0.01)
         | otherwise                 = (-3, velo-0.03)
 
-wheel_sim t ((r_act, p_act, v_sens, a_sens), velo) = do
+wheel_sim t (i, (r_act, p_act, v_sens, a_sens), velo) = do
         Ok pressure <- rteRead p_act
         Ok relief <- rteRead r_act
-        let (acc,velo1) = wheel_f t pressure relief velo
-        rteWrite v_sens velo1
+        let (acc,velo') = wheel_f i t pressure relief velo
+        rteWrite v_sens velo'
         rteWrite a_sens acc
-        return velo1
+        return velo'
 
 
 simul wheels irv = do
         Ok (time, velos) <- rteIrvRead irv
         let t = time + 0.01
-        velos1 <- mapM (wheel_sim t) (wheels `zip` velos)
-        rteIrvWrite irv (t, velos1)
+        velos' <- mapM (wheel_sim t) (zip3 [1..] wheels velos)
+        rteIrvWrite irv (t, velos')
         return ()
 
 mk_wheel i = do
-        r_act <- requiredDataElement
-        p_act <- requiredDataElement
-        v_sens <- providedDataElement
-        a_sens <- providedDataElement
-        if i==1 then do
-            probePE "vehicle speed" v_sens id
-         else if i==2 then do
-            probeRE "relief 2" r_act ((+2.0) . fromIntegral . fromEnum)
-            probeRE "pressure 2" p_act ((+5.0) . fromIntegral . fromEnum)
-            probePE "wheel speed 2" v_sens id
-            probePE "wheel acceleration 2" a_sens id
-         else return ()
+        r_act <- requiredDataElementInit False
+        p_act <- requiredDataElementInit True
+        v_sens <- providedDataElementInit init_v
+        a_sens <- providedDataElementInit init_a
+        when (i<=2) $ do
+            probeWrite ("wheel "++show i++" speed") v_sens id
+            probeWrite ("wheel "++show i++" acceleration") a_sens id
         return (r_act, p_act, v_sens, a_sens)
 
 car = do
         wheels <- mapM mk_wheel [1..4]
-        irv <- interRunnableVariable (0::Double, replicate 4 (18::Double))
+        irv <- interRunnableVariable (init_a, replicate 4 init_v)
         runnable (MinInterval 0) [Timed 0.01] (simul wheels irv)
         return (map seal4 wheels)
+
+init_v = 0 :: Double
+
+init_a = 18 :: Double
 
 -------------------------------------------------------------------------
 -- A test setup consists of the ABS implementation and the simulated car 
