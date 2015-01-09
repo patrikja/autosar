@@ -305,3 +305,5 @@ makePlot meas = plot (PS "plot.ps") curves
           where disc v0 ((t,v):vs)      = (t,v0) : (t+eps,v) : disc v vs
                 disc _ _                = []
                 eps                     = 0.0001
+
+main = main2

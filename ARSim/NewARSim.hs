@@ -272,7 +272,7 @@ probeRE s (RE a) f          = singleton $ NewProbe s g
     g _                     = Nothing
 
 probePE                     :: String -> ProvidedDataElement a c -> (a -> Double) -> AR c' ()
-probePE = undefined
+probePE _s _pde f = return () -- To be fixed
 
 
 data Label                  = ENTER Address
