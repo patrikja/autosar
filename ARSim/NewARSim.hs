@@ -6,12 +6,16 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module ARSim where
+module NewARSim where
               
 import Control.Monad.Operational
+import Control.Monad.Identity hiding (void)
+import Control.Monad.State hiding (void)
 import Data.List
+import qualified Data.Map as Map
 import Data.Maybe
 import Data.Dynamic hiding (fromDyn)
+import System.Random
 
 
 -- The Code monad --------------------------------------------------------------------------------------
@@ -32,6 +36,20 @@ data RTE a where
     Call                    :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE (StdRet b)
     CallAsync               :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE (StdRet ())
     Result                  :: (Typeable a, Typeable b) => RequiredOperation a b c -> RTE (StdRet b)
+
+rte_enter x                 = singleton $ Enter x
+rte_exit x                  = singleton $ Exit x
+rte_irvWrite s v            = singleton $ IrvWrite s v
+rte_irvRead s               = singleton $ IrvRead s
+rte_send e v                = singleton $ Send e v
+rte_receive e               = singleton $ Receive e
+rte_write e v               = singleton $ Write e v
+rte_read e                  = singleton $ Read e
+rte_isUpdated e             = singleton $ IsUpdated e
+rte_invalidate e            = singleton $ Invalidate e
+rte_call o v                = singleton $ Call o v
+rte_callAsync o v           = singleton $ CallAsync o v
+rte_result o                = singleton $ Result o
 
 data StdRet a               = Ok a
                             | NO_DATA
@@ -64,11 +82,12 @@ data Invocation             = Concurrent
 
 -- Simulator state -----------------------------------------------------------------------------------------------
 
-data State                  = State {
+data SimState               = SimState {
                                     procs   :: [Proc],
                                     conns   :: [Conn],
+                                    probes  :: [Probe],
                                     context :: Address,
-                                    next    :: Int
+                                    nextN   :: Int
                                 }
 
 data Proc                   = Run       Address Time Act Int Static
@@ -81,6 +100,8 @@ data Proc                   = Run       Address Time Act Int Static
                             | Op        Address [Dynamic]
 
 type Conn                   = (Address, Address)
+
+type Probe                  = (String, Label -> Maybe Double)
 
 type Address                = [Int]
 
@@ -98,7 +119,7 @@ data Static                 = Static {
                                     implementation  :: Dynamic -> Code Dynamic
                                 }        
 
-state0                      = State { procs = [], conns = [], context = [], next = 1 }
+state0                      = SimState { procs = [], conns = [], probes = [], context = [], nextN = 1 }
 
 
 -- The AR monad -------------------------------------------------------------------------------------------------
@@ -106,25 +127,28 @@ state0                      = State { procs = [], conns = [], context = [], next
 data ARInstr c a where
     NewAddress              :: ARInstr c Address
     NewProcess              :: Proc -> ARInstr c ()
+    NewProbe                :: String -> (Label -> Maybe Double) -> ARInstr c ()
     Component               :: (forall c. AR c a) -> ARInstr c a
     Connect                 :: Connectable a b => a -> b -> ARInstr c ()
 
 type AR c a                 = Program (ARInstr c) a
 
-runAR                       :: (forall c . AR c a) -> State -> (a,State)
+runAR                       :: (forall c . AR c a) -> SimState -> (a,SimState)
 runAR sys st                = run sys st
   where
-    run                     :: AR c a -> State -> (a,State)
+    run                     :: AR c a -> SimState -> (a,SimState)
     run sys st              = run' (view sys) st
-    run'                    :: ProgramView (ARInstr c) a -> State -> (a,State)
+    run'                    :: ProgramView (ARInstr c) a -> SimState -> (a,SimState)
     run' (NewAddress :>>= sys) st
-                            = run (sys (next st : context st)) (st { next = next st + 1 })
+                            = run (sys (nextN st : context st)) (st { nextN = nextN st + 1 })
     run' (NewProcess p :>>= sys) st
                             = run (sys ()) (st { procs = p : procs st })
+    run' (NewProbe s f :>>= sys) st
+                            = run (sys ()) (st { probes = (s,f) : probes st })
     run' (Component subsys :>>= sys) st
                             = let (a,st') = runAR subsys (push st) in run (sys a) (pop st')
-      where push st         = st { context = next st : context st, next = 1 }
-            pop st          = st { context = tail (context st), next = head (context st) + 2 }
+      where push st         = st { context = nextN st : context st, nextN = 1 }
+            pop st          = st { context = tail (context st), nextN = head (context st) + 2 }
     run' (Connect a b :>>= sys) st
                             = run (sys ()) (st { conns = connection a b : conns st })
     run' (Return a) st      = (a,st)
@@ -173,7 +197,7 @@ instance Seal (ProvidedOperation a b) where
 component                   :: (forall c. AR c a) -> AR c a
 connect                     :: Connectable a b => a -> b -> AR c ()
 requiredDataElement         :: AR c (RequiredDataElement a c)
-requiredDataElement1        :: Typeable a => a -> AR c (RequiredDataElement a c)
+requiredDataElementInit     :: Typeable a => a -> AR c (RequiredDataElement a c)
 providedDataElement         :: AR c (ProvidedDataElement a c)
 requiredQueueElement        :: Int -> AR c (RequiredQueueElement a c)
 providedQueueElement        :: AR c (ProvidedQueueElement a c)
@@ -191,7 +215,7 @@ newAddress                  = singleton NewAddress
 newProcess p                = singleton $ NewProcess p
 
 requiredDataElement         = do a <- newAddress; newProcess (DElem a False NO_DATA); return (RE a)
-requiredDataElement1 val    = do a <- newAddress; newProcess (DElem a False (Ok (toDyn val))); return (RE a)
+requiredDataElementInit val = do a <- newAddress; newProcess (DElem a False (Ok (toDyn val))); return (RE a)
 providedDataElement         = do a <- newAddress; return (PE a)
 requiredQueueElement size   = do a <- newAddress; newProcess (QElem a size []); return (RQ a)
 providedQueueElement        = do a <- newAddress; return (PQ a)
@@ -240,6 +264,14 @@ seal5 (a1,a2,a3,a4,a5)      = (seal a1, seal a2, seal a3, seal a4, seal a5)
 seal6 (a1,a2,a3,a4,a5,a6)   = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6)
 
 
+probeRE                     :: Typeable a => String -> RequiredDataElement a c -> (a -> Double) -> AR c' ()
+probeRE s (RE a) f          = singleton $ NewProbe s g
+  where 
+    g (RD b (Ok v)) | a==b  = (Just . f . fromDyn) v
+    g _                     = Nothing
+
+probePE                     :: String -> ProvidedDataElement a c -> (a -> Double) -> AR c' ()
+probePE = undefined
 
 
 data Label                  = ENTER Address
@@ -400,3 +432,55 @@ explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
 explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post
   where commit                          = (l, map (hear conn l) pre ++ say l p ++ map (hear conn l) post)
 explore conn _ _ _                      = []
+
+
+-- The simulator proper ---------------------------------------------------------------------------------------
+
+type SchedulerOption        = (Label,[Proc])
+type Transition             = (Int, Label, [Proc])
+type Scheduler m            = [SchedulerOption] -> m Transition
+type Trace                  = (SimState, [Transition])
+
+simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m Trace
+simulation sched sys        = do trs <- simulate sched conn (procs state1)
+                                 return (state1, trs)
+  where (_,state1)          = runAR sys state0
+        a `conn` b          = (a,b) `elem` conns state1
+
+simulate sched conn procs
+  | null next               = return []
+  | otherwise               = do trans@(_,_,procs1) <- sched next
+                                 liftM (trans:) $ simulate sched conn procs1
+  where next                = step conn procs
+        
+
+trivialSched                :: Scheduler Identity
+trivialSched alts           = return (0, label, procs)
+  where (label,procs)       = head alts
+
+randomSched                 :: Scheduler (State StdGen)
+randomSched alts            = do n <- state next
+                                 let (label,procs) = alts!!(n `mod` length alts)
+                                 return (n, label, procs)
+
+data SchedChoice            = TrivialSched
+                            | RandomSched StdGen
+
+runSim                      :: SchedChoice -> (forall c . AR c a) -> Trace
+runSim TrivialSched sys     = runIdentity (simulation trivialSched sys)
+runSim (RandomSched g) sys  = evalState (simulation randomSched sys) g
+
+type Measurement            = [(Time,Double)]
+
+runARSim                    :: SchedChoice -> Double -> (forall c . AR c a) -> [(String,Measurement)]
+runARSim choice limit sys   = Map.toList $ Map.fromListWith (++) $ collect limit (probes state) 0.0 trs
+  where (state,trs)         = runSim choice sys
+
+collect lim probes t []     = []
+collect lim probes t _
+  | t > lim                 = []
+collect lim probes t ((_,DELTA d,_):trs)
+                            = collect lim probes (t+d) trs
+collect lim probes t ((_,label,_):trs)
+                            = measurements ++ collect lim probes t trs
+  where measurements        = [ (s,[(t,v)]) | (s,f) <- probes, Just v <- [f label] ]
