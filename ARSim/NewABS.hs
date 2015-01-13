@@ -88,7 +88,7 @@ relief_ctrl valve accel False = do
         rteWrite valve False
         return Stopped
         
-relief_seq :: AR c (RequiredDataElement Double (), ProvidedOperation Bool () (), ProvidedDataElement Bool ())
+relief_seq :: AR c (RequiredDataElem Double, ProvidedOp Bool (), ProvidedDataElem Bool)
 relief_seq = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
@@ -132,7 +132,7 @@ pressure_ctrl valve accel 0 = do
         rteWrite valve False
         return Stopped
 
-pressure_seq :: AR c (RequiredDataElement Double (), ProvidedOperation Int () (), ProvidedDataElement Bool ())
+pressure_seq :: AR c (RequiredDataElem Double, ProvidedOp Int (), ProvidedDataElem Bool)
 pressure_seq = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
@@ -166,7 +166,7 @@ control memo onoff_pressure onoff_relief slipstream = do
                 _ ->    return ()
         rteIrvWrite memo slip
 
-controller :: AR c (RequiredQueueElement Double (), RequiredOperation Int () (), RequiredOperation Bool () ())
+controller :: AR c (RequiredQueueElem Double, RequiredOp Int (), RequiredOp Bool ())
 controller = component $ do
         memo <- interRunnableVariable 1.0
         onoff_pressure <- requiredOperation
@@ -206,7 +206,7 @@ loop velostreams slipstreams = do
 slip 0.0 v      = 1.0
 slip v0 v       = v/v0
 
-main_loop :: AR c ([RequiredDataElement Double ()], [ProvidedQueueElement Double ()])
+main_loop :: AR c ([RequiredDataElem Double], [ProvidedQueueElem Double])
 main_loop = component $ do
         velostreams <- mapM (const requiredDataElement) [1..4]
         slipstreams <- mapM (const providedQueueElement) [1..4]
