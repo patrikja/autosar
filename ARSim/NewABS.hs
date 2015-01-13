@@ -21,26 +21,35 @@ import System.Random
 -- can be started and stopped by means of an exported boolean
 -- service operation.
 --------------------------------------------------------------
+type Ticks = Int
+type Limit = Int
+type Index = Int
+data SeqState = Stopped | Running Ticks Limit Index deriving Typeable
 
-data SeqState = Stopped | Running Int Int Int deriving Typeable
-
+seq_init :: (Typeable a) =>
+  RTE a -> ExclusiveArea x -> InterRunnableVariable a c -> RTE (StdRet ())
 seq_init setup excl state = do
         rteEnter excl
         s <- setup
         rteIrvWrite state s
         rteExit excl
 
+seq_tick ::  (Index -> RTE SeqState) -> ExclusiveArea x -> InterRunnableVariable SeqState c
+         ->  RTE (StdRet ())
 seq_tick step excl state = do
         rteEnter excl
         Ok s <- rteIrvRead state
         s' <- case s of
-                Stopped                   -> return s
+                Stopped                    -> return s
                 Running ticks limit i 
-                        | ticks < limit-1 -> return (Running (ticks+1) limit i)
-                        | otherwise       -> step i
+                        | ticks < limit-1  -> return (Running (ticks+1) limit i)
+                        | otherwise        -> step i
         rteIrvWrite state s'
         rteExit excl
 
+seq_onoff :: (Typeable a) =>
+     (t -> RTE a) -> ExclusiveArea x -> InterRunnableVariable a c
+  -> (t -> RTE ())
 seq_onoff onoff excl state on = do
         rteEnter excl
         s <- onoff on
@@ -48,6 +57,9 @@ seq_onoff onoff excl state on = do
         rteExit excl
         return ()
 
+sequencer :: Typeable a =>
+  RTE SeqState -> (Index -> RTE SeqState) -> (a -> RTE SeqState)
+  -> AR c (ProvidedOperation a () ())
 sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
@@ -58,18 +70,22 @@ sequencer setup step ctrl = do
         return (seal onoff)
 
 --------------------------------------------------------------
--- A relief component is a sequencer for toggling a brake relief
--- valve in an ABS system. It requires a data element for reading
--- wheel acceleration values (of type Double) and pulses the valve
+-- A relief component is a sequencer for toggling a brake relief valve
+-- in an ABS system. It requires a data element for reading wheel
+-- acceleration values (of type Accel = Double) and pulses the valve
 -- in lengths proportional to acceleration, as long as this value
--- stays negative. It provides a boolean on/off control operation
--- as well as a boolean data element producing valve settings.
+-- stays negative. It provides a boolean on/off control operation as
+-- well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
+relief_setup :: ProvidedDataElement Bool c -> RTE SeqState
 relief_setup valve = do
         rteWrite valve False
         return Stopped
         
+relief_step ::  ProvidedDataElement  Valve  c1 -> 
+                RequiredDataElement  Accel  c  -> 
+                Index -> RTE SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
 --        trace ("Relief " ++ show a) (return ())
@@ -82,13 +98,19 @@ relief_step valve accel n = do
         rteWrite valve False
         return (Running 0 5 0)
 
+relief_ctrl ::  ProvidedDataElement  Valve  c1   -> 
+                RequiredDataElement  Accel  c    -> 
+                Valve -> RTE SeqState
 relief_ctrl valve accel True = 
         relief_step valve accel 0
 relief_ctrl valve accel False = do
         rteWrite valve False
         return Stopped
         
-relief_seq :: AR c (RequiredDataElem Double, ProvidedOp Bool (), ProvidedDataElem Bool)
+type Relief = ( RequiredDataElem Accel, 
+                ProvidedOp Bool (), 
+                ProvidedDataElem Valve)
+relief_seq :: AR c Relief
 relief_seq = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
@@ -104,10 +126,15 @@ relief_seq = component $ do
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
+pressure_setup :: ProvidedDataElement Valve c -> RTE SeqState
 pressure_setup valve = do
         rteWrite valve True
         return Stopped
 
+pressure_step :: 
+  ProvidedDataElement  Bool   c1  -> 
+  RequiredDataElement  Accel  c   -> 
+  Index -> RTE SeqState
 pressure_step valve accel 0 = do
         rteWrite valve True
         return (Running 0 100 1)
@@ -123,6 +150,10 @@ pressure_step valve accel n | odd n = do
         rteWrite valve False
         return (Running 0 20 (n+1))
 
+pressure_ctrl :: 
+  ProvidedDataElement  Valve  c1  -> 
+  RequiredDataElement  Accel  c   -> 
+  Index -> RTE SeqState
 pressure_ctrl valve accel 2 = do
         rteWrite valve True
         return Stopped
@@ -132,7 +163,10 @@ pressure_ctrl valve accel 0 = do
         rteWrite valve False
         return Stopped
 
-pressure_seq :: AR c (RequiredDataElem Double, ProvidedOp Int (), ProvidedDataElem Bool)
+type Pres = ( RequiredDataElem Accel, 
+              ProvidedOp Index (), 
+              ProvidedDataElem Valve)
+pressure_seq :: AR c Pres
 pressure_seq = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
@@ -149,9 +183,19 @@ pressure_seq = component $ do
 -- and a pressure sequence is started.
 --------------------------------------------------------------
 
+control ::
+  (Typeable slip, Ord slip,  Fractional slip,
+   Typeable pres, Num pres,
+   Typeable r1, 
+   Typeable q1) =>
+  InterRunnableVariable   slip  c  -> 
+  RequiredOperation pres  q1 q2    -> 
+  RequiredOperation Bool  r1 r2    -> 
+  RequiredQueueElement    slip  c  -> 
+  RTE (StdRet ())
 control memo onoff_pressure onoff_relief slipstream = do
-        Ok slip <- rteReceive slipstream
-        Ok slip' <- rteIrvRead memo
+        Ok slip   <- rteReceive slipstream
+        Ok slip'  <- rteIrvRead memo
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
 --                        trace ("Slip " ++ show slip) (return ())
@@ -166,7 +210,9 @@ control memo onoff_pressure onoff_relief slipstream = do
                 _ ->    return ()
         rteIrvWrite memo slip
 
-controller :: AR c (RequiredQueueElem Double, RequiredOp Int (), RequiredOp Bool ())
+type Slip = Double
+type ABSstate = (RequiredQueueElem Slip, RequiredOp Int (), RequiredOp Bool ())
+controller :: AR c ABSstate
 controller = component $ do
         memo <- interRunnableVariable 1.0
         onoff_pressure <- requiredOperation
@@ -176,6 +222,11 @@ controller = component $ do
                 (control memo onoff_pressure onoff_relief slipstream)
         return (seal slipstream, seal onoff_pressure, seal onoff_relief)
 
+type Accel = Double
+type Velo  = Double
+type Valve = Bool
+
+wheel_ctrl :: (Index, ProvidedQueueElement Slip ()) -> AR c WheelCtrl
 wheel_ctrl (i,slipstream) = component $ do
         (slip, onoff_pressure, onoff_relief) <- controller
         (accel_p, ctrl_p, valve_p) <- pressure_seq
@@ -184,9 +235,14 @@ wheel_ctrl (i,slipstream) = component $ do
         connect onoff_pressure ctrl_p
         connect onoff_relief ctrl_r
         when (i==2) $ do
-            probeWrite "relief 2" valve_r ((+2.0) . fromIntegral . fromEnum)
-            probeWrite "pressure 2" valve_p ((+5.0) . fromIntegral . fromEnum)
+            probeWrite "relief 2"    valve_r scaleValve_r
+            probeWrite "pressure 2"  valve_p scaleValve_p
         return (accel_r, accel_p, valve_r, valve_p)
+
+scaleValve_r :: Bool -> Double
+scaleValve_r = (+2.0) . fromIntegral . fromEnum
+scaleValve_p :: Bool -> Double
+scaleValve_p = (+5.0) . fromIntegral . fromEnum
 
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
@@ -198,18 +254,22 @@ wheel_ctrl (i,slipstream) = component $ do
 -- controller its updated slip ratio.
 --------------------------------------------------------------
 
+loop :: [RequiredDataElement   Velo  c ] -> 
+        [ProvidedQueueElement  Velo  c1] ->
+        RTE [StdRet ()]
 loop velostreams slipstreams = do
         velos <- mapM (\re -> do Ok v <- rteRead re; return v) velostreams
         let v0 = maximum velos
         mapM (\(v,pe) -> rteSend pe (slip v0 v)) (velos `zip` slipstreams)
 
-slip 0.0 v      = 1.0
-slip v0 v       = v/v0
+slip :: (Fractional a, Eq a) => a -> a -> a
+slip 0.0  v  = 1.0
+slip v0   v  = v/v0
 
-main_loop :: AR c ([RequiredDataElem Double], [ProvidedQueueElem Double])
+main_loop :: AR c ([RequiredDataElem Velo], [ProvidedQueueElem Slip])
 main_loop = component $ do
-        velostreams <- mapM (const requiredDataElement) [1..4]
-        slipstreams <- mapM (const providedQueueElement) [1..4]
+        velostreams <- mapM (const requiredDataElement)   [1..4]
+        slipstreams <- mapM (const providedQueueElement)  [1..4]
         runnable (MinInterval 0) [Timed 0.01] (loop velostreams slipstreams)
         return (map seal velostreams, map seal slipstreams)
         
@@ -221,24 +281,33 @@ main_loop = component $ do
 -- external to the current system.
 --------------------------------------------------------------
 
+abs_system :: AR c ([VelocityIn], [WheelCtrl])
 abs_system = do
         (velos_in, slips_out) <- main_loop
-        ifaces <- mapM wheel_ctrl ([1..] `zip` slips_out)
-        return (velos_in, ifaces)
+        wheelctrls <- mapM wheel_ctrl ([1..] `zip` slips_out)
+        return (velos_in, wheelctrls)
 
 
 -------------------------------------------------------------------
 --  A simulated physical car
 -------------------------------------------------------------------
-
+wheel_f :: Index -> Time -> Bool -> Bool -> Velo -> (Accel, Velo)
 wheel_f i time pressure relief velo 
-        | time < 1.0                = (0::Double, velo)
-        | i /= 2                    = (-4.5, velo-0.045)
+        | time < 1.0                = ( 0,    velo)
+        | i /= 2                    = (-4.5,  velo-0.045)
         -- let wheel 2 skid...
-        | pressure && not relief    = (-10, velo-0.1)
-        | relief && not pressure    = (1, velo+0.01)
-        | otherwise                 = (-3, velo-0.03)
+        | pressure && not relief    = (-10,   velo-0.1)
+        | relief && not pressure    = ( 1,    velo+0.01)
+        | otherwise                 = (-3,    velo-0.03)
 
+type Wheel = Wheel' ()
+
+type Wheel' c = (RequiredDataElement Valve  c,
+                 RequiredDataElement Valve  c,
+                 ProvidedDataElement Velo   c,
+                 ProvidedDataElement Accel  c)
+
+wheel_sim :: Time -> (Index, Wheel' c, Velo) -> RTE Velo
 wheel_sim t (i, (r_act, p_act, v_sens, a_sens), velo) = do
         Ok pressure <- rteRead p_act
         Ok relief <- rteRead r_act
@@ -247,7 +316,7 @@ wheel_sim t (i, (r_act, p_act, v_sens, a_sens), velo) = do
         rteWrite a_sens acc
         return velo'
 
-
+simul :: [Wheel' c] -> InterRunnableVariable (Time, [Velo]) c1 -> RTE ()
 simul wheels irv = do
         Ok (time, velos) <- rteIrvRead irv
         let t = time + 0.01
@@ -255,36 +324,48 @@ simul wheels irv = do
         rteIrvWrite irv (t, velos')
         return ()
 
+mk_wheel :: Double -> AR c (Wheel' c)
 mk_wheel i = do
-        r_act <- requiredDataElementInit False
-        p_act <- requiredDataElementInit True
+        r_act  <- requiredDataElementInit False
+        p_act  <- requiredDataElementInit True
         v_sens <- providedDataElementInit init_v
         a_sens <- providedDataElementInit init_a
         when (i<=2) $ do
-            probeWrite ("wheel "++show i++" speed") v_sens id
-            probeWrite ("wheel "++show i++" acceleration") a_sens id
+            probeWrite ("wheel "++show i++" speed")         v_sens  id
+            probeWrite ("wheel "++show i++" acceleration")  a_sens  id
         return (r_act, p_act, v_sens, a_sens)
 
+car :: AR c [Wheel]
 car = do
         wheels <- mapM mk_wheel [1..4]
         irv <- interRunnableVariable (init_a, replicate 4 init_v)
         runnable (MinInterval 0) [Timed 0.01] (simul wheels irv)
         return (map seal4 wheels)
 
-init_v = 0 :: Double
+init_v :: Velo
+init_v = 0
 
-init_a = 18 :: Double
+init_a :: Accel
+init_a = 18
 
 -------------------------------------------------------------------------
 -- A test setup consists of the ABS implementation and the simulated car 
 -- cyclically connected into a closed system.
 --------------------------------------------------------------------------
 
+test :: AR c ()
 test = do
-        (velos_in, ifaces) <- abs_system
+        (velos_in, wheelctrls) <- abs_system
         wheels <- car
-        sequence (zipWith3 conn wheels velos_in ifaces)
-    
+        sequence_ (zipWith3 conn wheels velos_in wheelctrls)
+
+type VelocityIn = RequiredDataElement Velo ()
+type WheelCtrl = (  RequiredDataElement Accel (),
+                    RequiredDataElement Accel (),
+                    ProvidedDataElement Valve (),
+                    ProvidedDataElement Valve ())
+
+conn :: Wheel -> VelocityIn -> WheelCtrl -> AR c ()
 conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
         connect v_sens velo_in
         connect a_sens accel_r
@@ -292,11 +373,16 @@ conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
         connect valve_r r_act
         connect valve_p p_act
 
+main1 :: IO Bool
 main1 = makePlot (runARSim TrivialSched 5.0 test)
 
+main2 :: IO Bool
 main2 = do g <- getStdGen
            makePlot (runARSim (RandomSched g) 5.0 test)
 
+makePlot :: (Show y, Num y, 
+             Show x, Fractional x, Enum x) =>
+  [(String, [(x, y)])] -> IO Bool
 makePlot meas = plot (PS "plot.ps") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
                   | (str,pts) <- meas ]
@@ -311,4 +397,5 @@ makePlot meas = plot (PS "plot.ps") curves
                 disc _ _                = []
                 eps                     = 0.0001
 
+main :: IO Bool
 main = main2
