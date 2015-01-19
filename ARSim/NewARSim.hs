@@ -20,21 +20,36 @@ import System.Random
 
 -- The RTE monad -------------------------------------------------------------
 
-type RTE a                  = Program RTEop a
+type RTE c a                = Program (RTEop c) a
 
-data RTEop a where
-    Enter                   :: ExclusiveArea c -> RTEop (StdRet ())
-    Exit                    :: ExclusiveArea c -> RTEop (StdRet ())
-    IrvWrite                :: Typeable a => InterRunnableVariable a c -> a -> RTEop (StdRet ())
-    IrvRead                 :: Typeable a => InterRunnableVariable a c -> RTEop (StdRet a)
-    Send                    :: Typeable a => ProvidedQueueElement a c -> a -> RTEop (StdRet ())
-    Receive                 :: Typeable a => RequiredQueueElement a c -> RTEop (StdRet a)
-    Write                   :: Typeable a => ProvidedDataElement a c -> a -> RTEop (StdRet ())
-    Read                    :: Typeable a => RequiredDataElement a c -> RTEop (StdRet a)
-    IsUpdated               :: RequiredDataElement a c -> RTEop (StdRet Bool)
-    Invalidate              :: ProvidedDataElement a c -> RTEop (StdRet ())
-    Call                    :: Typeable a => RequiredOperation a b c -> a -> RTEop (StdRet ())
-    Result                  :: Typeable b => RequiredOperation a b c -> RTEop (StdRet b)
+data RTEop c a where
+    Enter                   :: ExclusiveArea c -> RTEop c (StdRet ())
+    Exit                    :: ExclusiveArea c -> RTEop c (StdRet ())
+    IrvWrite                :: Typeable a => InterRunnableVariable a c -> a -> RTEop c (StdRet ())
+    IrvRead                 :: Typeable a => InterRunnableVariable a c -> RTEop c (StdRet a)
+    Send                    :: Typeable a => ProvidedQueueElement a c -> a -> RTEop c (StdRet ())
+    Receive                 :: Typeable a => RequiredQueueElement a c -> RTEop c (StdRet a)
+    Write                   :: Typeable a => ProvidedDataElement a c -> a -> RTEop c (StdRet ())
+    Read                    :: Typeable a => RequiredDataElement a c -> RTEop c (StdRet a)
+    IsUpdated               :: RequiredDataElement a c -> RTEop c (StdRet Bool)
+    Invalidate              :: ProvidedDataElement a c -> RTEop c (StdRet ())
+    Call                    :: Typeable a => RequiredOperation a b c -> a -> RTEop c (StdRet ())
+    Result                  :: Typeable b => RequiredOperation a b c -> RTEop c (StdRet b)
+
+rteEnter                   :: ExclusiveArea c -> RTE c (StdRet ())
+rteExit                    :: ExclusiveArea c -> RTE c (StdRet ())
+rteIrvWrite                :: Typeable a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
+rteIrvRead                 :: Typeable a => InterRunnableVariable a c -> RTE c (StdRet a)
+rteSend                    :: Typeable a => ProvidedQueueElement a c -> a -> RTE c (StdRet ())
+rteReceive                 :: Typeable a => RequiredQueueElement a c -> RTE c (StdRet a)
+rteWrite                   :: Typeable a => ProvidedDataElement a c -> a -> RTE c (StdRet ())
+rteRead                    :: Typeable a => RequiredDataElement a c -> RTE c (StdRet a)
+rteIsUpdated               :: RequiredDataElement a c -> RTE c (StdRet Bool)
+rteInvalidate              :: ProvidedDataElement a c -> RTE c (StdRet ())
+rteCall                    :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE c (StdRet b)
+rteCallAsync               :: (Typeable a) => RequiredOperation a b c -> a -> RTE c (StdRet ())
+rteResult                  :: Typeable b => RequiredOperation a b c -> RTE c (StdRet b)
+
 
 rteEnter       ex      = singleton $ Enter      ex
 rteExit        ex      = singleton $ Exit       ex
@@ -100,8 +115,10 @@ data SimState               = SimState {
                                     nextA    :: Address
                                 }
 
-data Proc                   = Run       Address Time Act Int Static
-                            | RInst     Address (Maybe Client) [Address] (RTE Dynamic)
+data Proc                   = forall c . 
+                              Run       Address Time Act Int (Static c)
+                            | forall c . 
+                              RInst     Address (Maybe Client) [Address] (RTE c Dynamic)
                             | Excl      Address Exclusive
                             | Irv       Address Dynamic
                             | Timer     Address Time Time
@@ -123,10 +140,10 @@ data Act                    = Idle
 
 data Exclusive              = Free | Taken
 
-data Static                 = Static {
+data Static c               = Static {
                                     triggers        :: [Address],
                                     invocation      :: Invocation,
-                                    implementation  :: Dynamic -> RTE Dynamic
+                                    implementation  :: Dynamic -> RTE c Dynamic
                                 }        
 
 type ConnRel = Address -> Address -> Bool
@@ -225,9 +242,9 @@ requiredOperation           :: AR c (RequiredOperation a b c)
 providedOperation           :: AR c (ProvidedOperation a b c)
 interRunnableVariable       :: Typeable a => a -> AR c (InterRunnableVariable a c)
 exclusiveArea               :: AR c (ExclusiveArea c)
-runnable                    :: Invocation -> [Trigger c] -> RTE a -> AR c ()
+runnable                    :: Invocation -> [Trigger c] -> RTE c a -> AR c ()
 serverRunnable              :: (Typeable a, Typeable b) => 
-                                Invocation -> [ProvidedOperation a b c] -> (a -> RTE b) -> AR c ()
+                                Invocation -> [ProvidedOperation a b c] -> (a -> RTE c b) -> AR c ()
 component                   :: (forall c. AR c a) -> AR c a
 connect                     :: Connectable a b => a -> b -> AR c ()
 
@@ -337,7 +354,7 @@ maySay (RInst a c ex code)                     = maySay' (view code)
                                                     Nothing -> TERM a
 maySay _                                       = VETO   -- most processes can't say anything
 
-maySayRTE :: [Address] -> RTEop a -> Label
+maySayRTE :: [Address] -> RTEop c a -> Label
 maySayRTE ex (Enter (EX x)     )  = ENTER x
 maySayRTE ex (Exit  (EX x)     )  = case ex of
                                       y:ys | y==x  -> EXIT x
@@ -367,8 +384,8 @@ say label     (RInst a c ex code)                       = say' label (view code)
         say' (TERM _)       (Return _)                  = []
         -- What if no case matches?
 
-sayRTE ::  ([Address] -> RTE Dynamic -> Proc) -> 
-            [Address] -> Label -> RTEop a -> (a -> RTE Dynamic) -> Proc
+sayRTE ::  ([Address] -> RTE c Dynamic -> Proc) -> 
+            [Address] -> Label -> RTEop c a -> (a -> RTE c Dynamic) -> Proc
 sayRTE f ex (ENTER _)       (Enter (EX x))  cont  = f (x:ex)  (cont void)
 sayRTE f ex (EXIT _)        (Exit (EX x) )  cont  = f ex      (cont void)
 sayRTE f ex (IRVR _   res)  (IrvRead _   )  cont  = f ex      (cont (fromStdDyn res))
@@ -393,12 +410,12 @@ fromStdDyn (Ok v)   = Ok (fromDyn v)
 fromStdDyn NO_DATA  = NO_DATA
 fromStdDyn LIMIT    = LIMIT
 
-minstart :: Static -> Time
+minstart :: Static c -> Time
 minstart s      = case invocation s of
                     MinInterval t -> t
                     Concurrent    -> 0.0
 
-trig :: ConnRel -> Address -> Static -> Bool
+trig :: ConnRel -> Address -> Static c -> Bool
 trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
 
