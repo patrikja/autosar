@@ -391,27 +391,25 @@ maySay (Run a t act n s)  | t > 0.0            = DELTA t
 maySay (Timer a 0.0 t)                         = TICK  a
 maySay (Timer a t t0)     | t > 0.0            = DELTA t
 maySay (RInst a c ex code)                     = maySay' (view code)
-  where maySay' (rte :>>= cont)                = maySayRTE ex rte
+  where maySay' (Enter (EX x)      :>>= cont)  = ENTER x
+        maySay' (Exit  (EX x)      :>>= cont)  = case ex of
+                                                     y:ys | y==x -> EXIT x
+                                                     _           -> VETO
+        maySay' (IrvRead  (IV s)   :>>= cont)  = IRVR  s NO_DATA
+        maySay' (IrvWrite (IV s) v :>>= cont)  = IRVW  s (toDyn v)
+        maySay' (Receive (RQ e)    :>>= cont)  = RCV   e NO_DATA
+        maySay' (Send    (PQ e) v  :>>= cont)  = SND   e (toDyn v) ok
+        maySay' (Read    (RE e)    :>>= cont)  = RD    e NO_DATA
+        maySay' (Write   (PE e) v  :>>= cont)  = WR    e (toDyn v)
+        maySay' (IsUpdated  (RE e) :>>= cont)  = UP    e NO_DATA
+        maySay' (Invalidate (PE e) :>>= cont)  = INV   e
+        maySay' (Call   (RO o) v   :>>= cont)  = CALL  o (toDyn v) NO_DATA
+        maySay' (Result (RO o)     :>>= cont)  = RES   o NO_DATA
         maySay' (Return v)                     = case c of
-                                                    Just b  -> RET  b (toDyn v)
-                                                    Nothing -> TERM a
+                                                     Just b  -> RET  b (toDyn v)
+                                                     Nothing -> TERM a
 maySay _                                       = VETO   -- most processes can't say anything
 
-maySayRTE :: [Address] -> RTEop c a -> Label
-maySayRTE ex (Enter (EX x)     )  = ENTER x
-maySayRTE ex (Exit  (EX x)     )  = case ex of
-                                      y:ys | y==x  -> EXIT x
-                                      _            -> VETO
-maySayRTE ex (IrvRead  (IV s)  )  = IRVR  s NO_DATA
-maySayRTE ex (IrvWrite (IV s) v)  = IRVW  s (toDyn v)
-maySayRTE ex (Receive (RQ e)   )  = RCV   e NO_DATA
-maySayRTE ex (Send    (PQ e) v )  = SND   e (toDyn v) ok
-maySayRTE ex (Read    (RE e)   )  = RD    e NO_DATA
-maySayRTE ex (Write   (PE e) v )  = WR    e (toDyn v)
-maySayRTE ex (IsUpdated  (RE e))  = UP    e NO_DATA
-maySayRTE ex (Invalidate (PE e))  = INV   e
-maySayRTE ex (Call   (RO o) v  )  = CALL  o (toDyn v) NO_DATA
-maySayRTE ex (Result (RO o)    )  = RES   o NO_DATA
 
 say :: Label -> Proc -> [Proc]
 say (NEW _)   (Run a _ Pending n s)                     = [Run a (minstart s) Idle (n+1) s,
@@ -422,25 +420,21 @@ say (DELTA d) (Run a t act n s)                         = [Run a (t-d) act n s]
 say (TICK _)  (Timer a _ t)                             = [Timer a t t]
 say (DELTA d) (Timer a t t0)                            = [Timer a (t-d) t0]
 say label     (RInst a c ex code)                       = say' label (view code)
-  where say' label          (rte :>>= cont)             = [sayRTE (RInst a c) ex label rte cont]
+  where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [RInst a c (x:ex)   (cont void)]
+        say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [RInst a c ex       (cont void)]
+        say' (IRVR _   res) (IrvRead _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [RInst a c ex       (cont void)]
+        say' (RCV _    res) (Receive _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (SND _ _  res) (Send _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (RD _     res) (Read _       :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (WR _ _)       (Write _ _    :>>= cont)    = [RInst a c ex       (cont void)]
+        say' (UP _     res) (IsUpdated _  :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a c ex       (cont void)]
+        say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (RES _    res) (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toDyn ()))]
         say' (TERM _)       (Return _)                  = []
-        -- What if no case matches?
 
-sayRTE ::  ([Address] -> RTE c Dynamic -> Proc) -> 
-            [Address] -> Label -> RTEop c a -> (a -> RTE c Dynamic) -> Proc
-sayRTE f ex (ENTER _)       (Enter (EX x))  cont  = f (x:ex)  (cont void)
-sayRTE f ex (EXIT _)        (Exit (EX x) )  cont  = f ex      (cont void)
-sayRTE f ex (IRVR _   res)  (IrvRead _   )  cont  = f ex      (cont (fromStdDyn res))
-sayRTE f ex (IRVW _ _)      (IrvWrite _ _)  cont  = f ex      (cont void)
-sayRTE f ex (RCV _    res)  (Receive _   )  cont  = f ex      (cont (fromStdDyn res))
-sayRTE f ex (SND _ _  res)  (Send _ _    )  cont  = f ex      (cont (fromStdDyn res))
-sayRTE f ex (RD _     res)  (Read _      )  cont  = f ex      (cont (fromStdDyn res))
-sayRTE f ex (WR _ _)        (Write _ _   )  cont  = f ex      (cont void)
-sayRTE f ex (UP _     res)  (IsUpdated _ )  cont  = f ex      (cont (fromStdDyn res))
-sayRTE f ex (INV _)         (Invalidate _)  cont  = f ex      (cont void)
-sayRTE f ex (CALL _ _ res)  (Call _ _    )  cont  = f ex      (cont (fromStdDyn res))
-sayRTE f ex (RES _    res)  (Result _    )  cont  = f ex      (cont (fromStdDyn res))
 
 ok   :: StdRet Dynamic
 ok              = Ok (toDyn ())
