@@ -171,9 +171,9 @@ runAR sys st                = run sys st
                             = run (sys ()) (st { conns = connection a b : conns st })
     run' (Return a) st      = (a,st)
 
-initialize                  :: (forall c . AR c a) -> SimState
-initialize sys              = st { procs = map (apInit (conns st) (initvals st)) (procs st) }
-  where (_,st)              = runAR sys state0
+initialize                  :: (forall c . AR c a) -> (a,SimState)
+initialize sys              = (a, st { procs = map (apInit (conns st) (initvals st)) (procs st) })
+  where (a,st)              = runAR sys state0
 
 -- Restricting connections ----------------------------------------------------
 
@@ -188,6 +188,29 @@ instance Connectable (ProvidedQueueElem a) (RequiredQueueElem a) where
         
 instance Connectable (RequiredOp a b) (ProvidedOp a b) where
     connection (RO a) (PO b)    = (a,b)
+
+
+class Addressed a where
+        address                     :: [a] -> [Address]
+
+instance Addressed (ProvidedDataElem a) where
+        address xs                  = [ n | PE n <- xs ]
+
+instance Addressed (RequiredDataElem a) where
+        address xs                  = [ n | RE n <- xs ]
+        
+instance Addressed (ProvidedQueueElem a) where
+        address xs                  = [ n | PQ n <- xs ]
+
+instance Addressed (RequiredQueueElem a) where
+        address xs                  = [ n | RQ n <- xs ]
+        
+instance Addressed (ProvidedOp a b) where
+        address xs                  = [ n | PO n <- xs ]
+
+instance Addressed (RequiredOp a b) where
+        address xs                  = [ n | RO n <- xs ]
+
 
 
 class Seal m where
@@ -321,6 +344,26 @@ data Label                  = ENTER Address
                             | DELTA Time
                             | VETO
 
+labelText :: Label -> String
+labelText l = case l of
+          ENTER a            -> "ENTER:"++show a
+          EXIT  a            -> "EXIT:"++show a
+          IRVR  a ret        -> "IRVR:"++show a
+          IRVW  a dyn        -> "IRVW:"++show a
+          RCV   a ret        -> "RCV:"++show a
+          SND   a dyn ret    -> "SND:"++show a
+          RD    a ret        -> "RD:"++show a
+          WR    a dyn        -> "WR:"++show a
+          UP    a ret        -> "UP:"++show a
+          INV   a            -> "INV:"++show a
+          CALL  a dyn ret    -> "CALL:"++show a
+          RES   a ret        -> "RES:"++show a
+          RET   a dyn        -> "RET:"++show a
+          NEW   a            -> "NEW:"++show a
+          TERM  a            -> "TERM:"++show a
+          TICK  a            -> "TICK:"++show a
+          DELTA t            -> "DELTA:"++show t
+          VETO               -> "VETO"
 
 maySay :: Proc -> Label
 maySay (Run a 0.0 Pending n s)
@@ -487,10 +530,10 @@ type Transition             = (Int, Label, [Proc])
 type Scheduler m            = [SchedulerOption] -> m Transition
 type Trace                  = (SimState, [Transition])
 
-simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m Trace
+simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
-                                 return (state1, trs)
-  where state1              = initialize sys
+                                 return (res,(state1, trs))
+  where (res,state1)        = initialize sys
         a `conn` b          = (a,b) `elem` conns state1
 
 simulate sched conn procs
@@ -527,7 +570,7 @@ data SchedChoice            = TrivialSched
                             | RoundRobinSched
                             | RandomSched StdGen
 
-runSim                      :: SchedChoice -> (forall c . AR c a) -> Trace
+runSim                      :: SchedChoice -> (forall c . AR c a) -> (a,Trace)
 runSim TrivialSched sys     = runIdentity (simulation trivialSched sys)
 runSim RoundRobinSched sys  = evalState (simulation roundRobinSched sys) 0
 runSim (RandomSched g) sys  = evalState (simulation randomSched sys) g
@@ -536,7 +579,7 @@ type Measurement            = [(Time,Double)]
 
 runARSim                    :: SchedChoice -> Double -> (forall c . AR c a) -> [(String,Measurement)]
 runARSim choice limit sys   = Map.toList $ Map.fromListWith (++) $ collect limit (probes state) 0.0 trs
-  where (state,trs)         = runSim choice sys
+  where (_,(state,trs))     = runSim choice sys
 
 collect lim probes t []     = []
 collect lim probes t _
