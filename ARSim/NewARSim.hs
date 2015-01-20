@@ -35,38 +35,41 @@ data RTEop c a where
     Invalidate              :: ProvidedDataElement a c -> RTEop c (StdRet ())
     Call                    :: Typeable a => RequiredOperation a b c -> a -> RTEop c (StdRet ())
     Result                  :: Typeable b => RequiredOperation a b c -> RTEop c (StdRet b)
+    Printlog                :: String -> RTEop c ()
 
-rteEnter                   :: ExclusiveArea c -> RTE c (StdRet ())
-rteExit                    :: ExclusiveArea c -> RTE c (StdRet ())
-rteIrvWrite                :: Typeable a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
-rteIrvRead                 :: Typeable a => InterRunnableVariable a c -> RTE c (StdRet a)
-rteSend                    :: Typeable a => ProvidedQueueElement a c -> a -> RTE c (StdRet ())
-rteReceive                 :: Typeable a => RequiredQueueElement a c -> RTE c (StdRet a)
-rteWrite                   :: Typeable a => ProvidedDataElement a c -> a -> RTE c (StdRet ())
-rteRead                    :: Typeable a => RequiredDataElement a c -> RTE c (StdRet a)
-rteIsUpdated               :: RequiredDataElement a c -> RTE c (StdRet Bool)
-rteInvalidate              :: ProvidedDataElement a c -> RTE c (StdRet ())
-rteCall                    :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE c (StdRet b)
-rteCallAsync               :: (Typeable a) => RequiredOperation a b c -> a -> RTE c (StdRet ())
-rteResult                  :: Typeable b => RequiredOperation a b c -> RTE c (StdRet b)
+rteEnter                    :: ExclusiveArea c -> RTE c (StdRet ())
+rteExit                     :: ExclusiveArea c -> RTE c (StdRet ())
+rteIrvWrite                 :: Typeable a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
+rteIrvRead                  :: Typeable a => InterRunnableVariable a c -> RTE c (StdRet a)
+rteSend                     :: Typeable a => ProvidedQueueElement a c -> a -> RTE c (StdRet ())
+rteReceive                  :: Typeable a => RequiredQueueElement a c -> RTE c (StdRet a)
+rteWrite                    :: Typeable a => ProvidedDataElement a c -> a -> RTE c (StdRet ())
+rteRead                     :: Typeable a => RequiredDataElement a c -> RTE c (StdRet a)
+rteIsUpdated                :: RequiredDataElement a c -> RTE c (StdRet Bool)
+rteInvalidate               :: ProvidedDataElement a c -> RTE c (StdRet ())
+rteCall                     :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE c (StdRet b)
+rteCallAsync                :: Typeable a => RequiredOperation a b c -> a -> RTE c (StdRet ())
+rteResult                   :: Typeable b => RequiredOperation a b c -> RTE c (StdRet b)
 
+printlog                    :: String -> RTE c ()
 
-rteEnter       ex      = singleton $ Enter      ex
-rteExit        ex      = singleton $ Exit       ex
-rteIrvWrite    irv  a  = singleton $ IrvWrite   irv  a
-rteIrvRead     irv     = singleton $ IrvRead    irv
-rteSend        pqe  a  = singleton $ Send       pqe  a
-rteReceive     rqe     = singleton $ Receive    rqe
-rteWrite       pqe  a  = singleton $ Write      pqe  a
-rteRead        rde     = singleton $ Read       rde
-rteIsUpdated   rde     = singleton $ IsUpdated  rde
-rteInvalidate  pde     = singleton $ Invalidate pde
-rteCall        rop  a  = rteCallAsync rop a >>= cont
-  where cont (Ok ())   = rteResult rop
-        cont LIMIT     = return LIMIT
-rteCallAsync   rop  a  = singleton $ Call       rop  a
-rteResult      rop     = singleton $ Result     rop
+rteEnter       ex           = singleton $ Enter      ex
+rteExit        ex           = singleton $ Exit       ex
+rteIrvWrite    irv  a       = singleton $ IrvWrite   irv  a
+rteIrvRead     irv          = singleton $ IrvRead    irv
+rteSend        pqe  a       = singleton $ Send       pqe  a
+rteReceive     rqe          = singleton $ Receive    rqe
+rteWrite       pqe  a       = singleton $ Write      pqe  a
+rteRead        rde          = singleton $ Read       rde
+rteIsUpdated   rde          = singleton $ IsUpdated  rde
+rteInvalidate  pde          = singleton $ Invalidate pde
+rteCall        rop  a       = rteCallAsync rop a >>= cont
+  where cont (Ok ())        = rteResult rop
+        cont LIMIT          = return LIMIT
+rteCallAsync   rop  a       = singleton $ Call       rop  a
+rteResult      rop          = singleton $ Result     rop
 
+printlog str                = singleton $ Printlog str
 
 data StdRet a               = Ok a
                             | NO_DATA
@@ -144,7 +147,7 @@ data Static c               = Static {
                                     triggers        :: [Address],
                                     invocation      :: Invocation,
                                     implementation  :: Dynamic -> RTE c Dynamic
-                                }        
+                                }
 
 type ConnRel = Address -> Address -> Bool
 
@@ -295,7 +298,7 @@ runnable inv trig code      = do a <- newAddress
   where periods             = [ t | Timed t <- trig ]
         watch               = [ a | ReceiveE (RE a) <- trig ] ++ [ a | ReceiveQ (RQ a) <- trig ]
         act                 = if null [ Init | Init <- trig ] then Idle else Pending
-        code'               = \void -> code >> return void
+        code'               = \dyn -> code >> return dyn
 
 serverRunnable inv ops code = do a <- newAddress
                                  newProcess (Run a 0.0 act 0 (Static watch inv code'))
@@ -406,8 +409,9 @@ maySay (RInst a c ex code)                     = maySay' (view code)
         maySay' (Call   (RO o) v   :>>= cont)  = CALL  o (toDyn v) NO_DATA
         maySay' (Result (RO o)     :>>= cont)  = RES   o NO_DATA
         maySay' (Return v)                     = case c of
-                                                     Just b  -> RET  b (toDyn v)
+                                                     Just b  -> RET  b v
                                                      Nothing -> TERM a
+        maySay' (Printlog s        :>>= cont)  = maySay' (view (cont ()))
 maySay _                                       = VETO   -- most processes can't say anything
 
 
@@ -422,18 +426,26 @@ say (DELTA d) (Timer a t t0)                            = [Timer a (t-d) t0]
 say label     (RInst a c ex code)                       = say' label (view code)
   where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [RInst a c (x:ex)   (cont void)]
         say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (IRVR _   res) (IrvRead _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (IRVR _ res)   (IrvRead _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (RCV _    res) (Receive _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (SND _ _  res) (Send _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (RD _     res) (Read _       :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (RCV _ res)    (Receive _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (SND _ _ res)  (Send _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (RD _ res)     (Read _       :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (WR _ _)       (Write _ _    :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (UP _     res) (IsUpdated _  :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (UP _ res)     (IsUpdated _  :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a c ex       (cont void)]
         say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (RES _    res) (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (RES _ res)    (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toDyn ()))]
         say' (TERM _)       (Return _)                  = []
+        say' label          (Printlog s   :>>= cont)    = say' label (view (cont ()))
+
+
+mayLog (RInst a c ex code)                              = mayLog' (view code)
+  where mayLog' :: ProgramView (RTEop c) a -> [String]
+        mayLog' (Printlog s :>>= cont)                  = s : mayLog' (view (cont ()))
+        mayLog' _                                       = []
+mayLog _                                                = []
 
 
 ok   :: StdRet Dynamic
@@ -479,7 +491,7 @@ mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
        | trig conn a s  &&  a `notElem` cs                      = CALL a v ok
        | trig conn a s                                          = CALL a v LIMIT
 mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
---mayHear conn (RES a Bottom)  (Op b [])         | a==b           = RES a NO_DATA
+--mayHear conn (RES a _)       (Op b [])         | a==b           = RES a NO_DATA
 mayHear conn (RES a _)       (Op b [])         | a==b           = VETO
 mayHear conn (RET a v)       (Op b vs)         | a==b           = RET a v
 mayHear conn (TERM a)        (Run b _ _ _ _)   | a==b           = TERM a
@@ -522,34 +534,38 @@ hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) 
 hear conn label         proc                                    = proc
 
 
-step :: ConnRel -> [Proc] -> [(Label, [Proc])]
+step :: ConnRel -> [Proc] -> [SchedulerOption]
 step conn procs        = explore conn [] labels procs
   where labels         = map  (respond . maySay)     procs
         respond label  = foldl (mayHear conn) label  procs
 
-explore :: ConnRel -> [Proc] -> [Label] -> [Proc] -> [(Label, [Proc])]
+explore :: ConnRel -> [Proc] -> [Label] -> [Proc] -> [SchedulerOption]
 explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
 explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post
-  where commit                          = (l, map (hear conn l) pre ++ say l p ++ map (hear conn l) post)
+  where commit                          = (l, logs l, map (hear conn l) pre ++ say l p ++ map (hear conn l) post)
+        logs (DELTA _)                  = []
+        logs _                          = mayLog p
 explore conn _ _ _                      = []
 
 
 -- The simulator proper ---------------------------------------------------------------------------------------
 
-type SchedulerOption        = (Label,[Proc])
-type Transition             = (Int, Label, [Proc])
+type Logs                   = [String]
+
+type SchedulerOption        = (Label, Logs, [Proc])
+type Transition             = (Int, Label, Logs, [Proc])
 type Scheduler m            = [SchedulerOption] -> m Transition
 type Trace                  = (SimState, [Transition])
 
 simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
-                                 return (res,(state1, trs))
+                                 return (res, (state1,trs))
   where (res,state1)        = initialize sys
         a `conn` b          = (a,b) `elem` conns state1
 
 simulate sched conn procs
   | null alts               = return []
-  | otherwise               = do trans@(_,_,procs1) <- maximumProgress sched alts
+  | otherwise               = do trans@(_,_,_,procs1) <- maximumProgress sched alts
                                  liftM (trans:) $ simulate sched conn procs1
   where alts                = step conn procs
         
@@ -558,24 +574,24 @@ maximumProgress sched alts
   | null work               = sched deltas
   | otherwise               = sched work
   where (deltas,work)       = partition isDelta alts
-        isDelta (DELTA _,_) = True
-        isDelta _           = False
+        isDelta (DELTA _,_,_) = True
+        isDelta _             = False
 
 trivialSched                :: Scheduler Identity
-trivialSched alts           = return (0, label, procs)
-  where (label,procs)       = head alts
+trivialSched alts           = return (0, label, logs, procs)
+  where (label,logs,procs)  = head alts
 
 roundRobinSched             :: Scheduler (State Int)
 roundRobinSched alts        = do m <- get
                                  let n = (m+1) `mod` length alts
-                                     (label,procs) = alts!!n
+                                     (label,logs,procs) = alts!!n
                                  put n
-                                 return (n, label, procs)
+                                 return (n, label, logs, procs)
 
 randomSched                 :: Scheduler (State StdGen)
 randomSched alts            = do n <- state next
-                                 let (label,procs) = alts!!(n `mod` length alts)
-                                 return (n, label, procs)
+                                 let (label,logs,procs) = alts!!(n `mod` length alts)
+                                 return (n, label, logs, procs)
 
 data SchedChoice            = TrivialSched
                             | RoundRobinSched
@@ -588,15 +604,33 @@ runSim (RandomSched g) sys  = evalState (simulation randomSched sys) g
 
 type Measurement            = [(Time,Double)]
 
-runARSim                    :: SchedChoice -> Double -> (forall c . AR c a) -> [(String,Measurement)]
-runARSim choice limit sys   = Map.toList $ Map.fromListWith (++) $ collect limit (probes state) 0.0 trs
+data Output                 = Output {
+                                  measurements :: [(String,Measurement)],
+                                  logs         :: [(Time,String)]
+                              }
+
+runARSim                    :: SchedChoice -> Double -> (forall c . AR c a) -> Output
+runARSim choice limit sys   = Output {
+                                  measurements = rearrange $ collectMeas limit (probes state) 0.0 trs,
+                                  logs = collectLogs limit 0.0 trs
+                              }
   where (_,(state,trs))     = runSim choice sys
 
-collect lim probes t []     = []
-collect lim probes t _
+rearrange                   = Map.toList . Map.fromListWith (++)
+
+collectMeas lim probes t [] = []
+collectMeas lim probes t _
   | t > lim                 = []
-collect lim probes t ((_,DELTA d,_):trs)
-                            = collect lim probes (t+d) trs
-collect lim probes t ((_,label,_):trs)
-                            = measurements ++ collect lim probes t trs
+collectMeas lim probes t ((_,DELTA d,_,_):trs)
+                            = collectMeas lim probes (t+d) trs
+collectMeas lim probes t ((_,label,_,_):trs)
+                            = measurements ++ collectMeas lim probes t trs
   where measurements        = [ (s,[(t,v)]) | (s,f) <- probes, Just v <- [f label] ]
+
+collectLogs lim t []        = []
+collectLogs lim t _
+  | t > lim                 = []
+collectLogs lim t ((_,DELTA d,_,_):trs)
+                            = collectLogs lim (t+d) trs
+collectlogs lim t ((_,_,ls,_):trs)
+                            = [ (t,v) | v <- ls ] ++ collectLogs lim t trs

@@ -88,7 +88,7 @@ relief_step ::  ProvidedDataElement  Valve  c ->
                 Index -> RTE c SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
---        trace ("Relief " ++ show a) (return ())
+        printlog ("Relief " ++ show a)
         if a < 0 then do
                 rteWrite valve True
                 return (Running 0 (round (-a*10)) 1)
@@ -144,7 +144,7 @@ pressure_step valve accel 20 = do
 pressure_step valve accel n | even n = do
         rteWrite valve True
         Ok a <- rteRead accel
---        trace ("Pressure " ++ show a) (return ())
+        printlog ("Pressure " ++ show a)
         return (Running 0 (round (a*50)) (n+1))
 pressure_step valve accel n | odd n = do
         rteWrite valve False
@@ -184,7 +184,7 @@ pressure_seq = component $ do
 --------------------------------------------------------------
 
 control ::
-  (Typeable slip, Ord slip,  Fractional slip,
+  (Typeable slip, Ord slip,  Fractional slip, Show slip,
    Typeable pres, Num pres,
    Typeable r1, 
    Typeable q1) =>
@@ -198,12 +198,12 @@ control memo onoff_pressure onoff_relief slipstream = do
         Ok slip'  <- rteIrvRead memo
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
---                        trace ("Slip " ++ show slip) (return ())
+                        printlog ("Slip " ++ show slip)
                         rteCall onoff_pressure 0
                         rteCall onoff_relief True
                         return ()
                 (False, True) -> do
---                        trace ("Slip " ++ show slip) (return ())
+                        printlog ("Slip " ++ show slip)
                         rteCall onoff_relief False
                         rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
                         return ()
@@ -380,12 +380,10 @@ main2 :: IO Bool
 main2 = do g <- getStdGen
            makePlot (runARSim (RandomSched g) 5.0 test)
 
-makePlot :: (Show y, Num y, 
-             Show x, Fractional x, Enum x) =>
-  [(String, [(x, y)])] -> IO Bool
-makePlot meas = plot (PS "plot.ps") curves
+makePlot :: Output -> IO Bool
+makePlot output = plot (PS "plot.ps") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
-                  | (str,pts) <- meas ]
+                  | (str,pts) <- measurements output ]
         color "pressure 2"              = Red
         color "relief 2"                = Blue
         color "wheel speed 2"           = Green
