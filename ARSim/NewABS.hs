@@ -389,7 +389,9 @@ main1 = makePlot (runARSim TrivialSched 5.0 test)
 
 main2 :: IO Bool
 main2 = do g <- getStdGen
-           makePlot (runARSim (RandomSched g) 5.0 test)
+           let out = runARSim (RandomSched g) 5.0 test
+           mapM putStrLn [ ms | (t,ms) <- logs out ]
+           makePlot out
 
 makePlot :: Output -> IO Bool
 makePlot output = plot (PS "plot.ps") curves

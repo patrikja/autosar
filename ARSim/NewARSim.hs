@@ -615,7 +615,6 @@ runARSim choice limit sys   = Output {
                               }
   where (_,(state,trs))     = runSim choice sys
 
---rearrange                   = map (\(s,ms) -> (s,reverse ms)) . Map.toList . Map.fromListWith (++)
 rearrange                   = Map.toList . Map.fromListWith (flip (++))
 
 collectMeas lim probes t [] = []
@@ -632,5 +631,5 @@ collectLogs lim t _
   | t > lim                 = []
 collectLogs lim t ((_,DELTA d,_,_):trs)
                             = collectLogs lim (t+d) trs
-collectlogs lim t ((_,_,ls,_):trs)
+collectLogs lim t ((_,_,ls,_):trs)
                             = [ (t,v) | v <- ls ] ++ collectLogs lim t trs
