@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module NewARSim (module NewARSim, module Data.Dynamic) where
+module NewARSim (module NewARSim, Typeable, Data) where
               
 import Control.Monad.Operational
 import Control.Monad.Identity hiding (void)
@@ -14,7 +14,7 @@ import Control.Monad.State hiding (void)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
-import Data.Dynamic hiding (fromDyn)
+import Dynamics
 import System.Random
 
 
@@ -25,30 +25,30 @@ type RTE c a                = Program (RTEop c) a
 data RTEop c a where
     Enter                   :: ExclusiveArea c -> RTEop c (StdRet ())
     Exit                    :: ExclusiveArea c -> RTEop c (StdRet ())
-    IrvWrite                :: Typeable a => InterRunnableVariable a c -> a -> RTEop c (StdRet ())
-    IrvRead                 :: Typeable a => InterRunnableVariable a c -> RTEop c (StdRet a)
-    Send                    :: Typeable a => ProvidedQueueElement a c -> a -> RTEop c (StdRet ())
-    Receive                 :: Typeable a => RequiredQueueElement a c -> RTEop c (StdRet a)
-    Write                   :: Typeable a => ProvidedDataElement a c -> a -> RTEop c (StdRet ())
-    Read                    :: Typeable a => RequiredDataElement a c -> RTEop c (StdRet a)
+    IrvWrite                :: Data a => InterRunnableVariable a c -> a -> RTEop c (StdRet ())
+    IrvRead                 :: Data a => InterRunnableVariable a c -> RTEop c (StdRet a)
+    Send                    :: Data a => ProvidedQueueElement a c -> a -> RTEop c (StdRet ())
+    Receive                 :: Data a => RequiredQueueElement a c -> RTEop c (StdRet a)
+    Write                   :: Data a => ProvidedDataElement a c -> a -> RTEop c (StdRet ())
+    Read                    :: Data a => RequiredDataElement a c -> RTEop c (StdRet a)
     IsUpdated               :: RequiredDataElement a c -> RTEop c (StdRet Bool)
     Invalidate              :: ProvidedDataElement a c -> RTEop c (StdRet ())
-    Call                    :: Typeable a => RequiredOperation a b c -> a -> RTEop c (StdRet ())
-    Result                  :: Typeable b => RequiredOperation a b c -> RTEop c (StdRet b)
+    Call                    :: Data a => RequiredOperation a b c -> a -> RTEop c (StdRet ())
+    Result                  :: Data b => RequiredOperation a b c -> RTEop c (StdRet b)
 
 rteEnter                   :: ExclusiveArea c -> RTE c (StdRet ())
 rteExit                    :: ExclusiveArea c -> RTE c (StdRet ())
-rteIrvWrite                :: Typeable a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
-rteIrvRead                 :: Typeable a => InterRunnableVariable a c -> RTE c (StdRet a)
-rteSend                    :: Typeable a => ProvidedQueueElement a c -> a -> RTE c (StdRet ())
-rteReceive                 :: Typeable a => RequiredQueueElement a c -> RTE c (StdRet a)
-rteWrite                   :: Typeable a => ProvidedDataElement a c -> a -> RTE c (StdRet ())
-rteRead                    :: Typeable a => RequiredDataElement a c -> RTE c (StdRet a)
+rteIrvWrite                :: Data a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
+rteIrvRead                 :: Data a => InterRunnableVariable a c -> RTE c (StdRet a)
+rteSend                    :: Data a => ProvidedQueueElement a c -> a -> RTE c (StdRet ())
+rteReceive                 :: Data a => RequiredQueueElement a c -> RTE c (StdRet a)
+rteWrite                   :: Data a => ProvidedDataElement a c -> a -> RTE c (StdRet ())
+rteRead                    :: Data a => RequiredDataElement a c -> RTE c (StdRet a)
 rteIsUpdated               :: RequiredDataElement a c -> RTE c (StdRet Bool)
 rteInvalidate              :: ProvidedDataElement a c -> RTE c (StdRet ())
-rteCall                    :: (Typeable a, Typeable b) => RequiredOperation a b c -> a -> RTE c (StdRet b)
-rteCallAsync               :: (Typeable a) => RequiredOperation a b c -> a -> RTE c (StdRet ())
-rteResult                  :: Typeable b => RequiredOperation a b c -> RTE c (StdRet b)
+rteCall                    :: (Data a, Data b) => RequiredOperation a b c -> a -> RTE c (StdRet b)
+rteCallAsync               :: (Data a) => RequiredOperation a b c -> a -> RTE c (StdRet ())
+rteResult                  :: Data b => RequiredOperation a b c -> RTE c (StdRet b)
 
 
 rteEnter       ex      = singleton $ Enter      ex
@@ -92,7 +92,6 @@ type ProvidedQueueElem a        = ProvidedQueueElement a ()
 type RequiredOp a b             = RequiredOperation a b ()
 type ProvidedOp a b             = ProvidedOperation a b ()
 
-
 type Time                   = Double
 
 data Trigger c              = forall a. ReceiveE (RequiredDataElement a c)
@@ -111,20 +110,20 @@ data SimState               = SimState {
                                     procs    :: [Proc],
                                     conns    :: [Conn],
                                     probes   :: [Probe],
-                                    initvals :: Map.Map Address Dynamic,
+                                    initvals :: Map.Map Address Value,
                                     nextA    :: Address
                                 }
 
 data Proc                   = forall c . 
                               Run       Address Time Act Int (Static c)
                             | forall c . 
-                              RInst     Address (Maybe Client) [Address] (RTE c Dynamic)
+                              RInst     Address (Maybe Client) [Address] (RTE c Value)
                             | Excl      Address Exclusive
-                            | Irv       Address Dynamic
+                            | Irv       Address Value
                             | Timer     Address Time Time
-                            | QElem     Address Int [Dynamic]
-                            | DElem     Address Bool (StdRet Dynamic)
-                            | Op        Address [Dynamic]
+                            | QElem     Address Int [Value]
+                            | DElem     Address Bool (StdRet Value)
+                            | Op        Address [Value]
 
 type Conn                   = (Address, Address)
 
@@ -136,14 +135,14 @@ type Client                 = Address
 
 data Act                    = Idle
                             | Pending
-                            | Serving [Client] [Dynamic]
+                            | Serving [Client] [Value]
 
 data Exclusive              = Free | Taken
 
 data Static c               = Static {
                                     triggers        :: [Address],
                                     invocation      :: Invocation,
-                                    implementation  :: Dynamic -> RTE c Dynamic
+                                    implementation  :: Value -> RTE c Value
                                 }        
 
 type ConnRel = Address -> Address -> Bool
@@ -162,7 +161,7 @@ data ARInstr c a where
     NewAddress              :: ARInstr c Address
     NewProcess              :: Proc -> ARInstr c ()
     NewProbe                :: String -> (Label -> Maybe Double) -> ARInstr c ()
-    NewInit                 :: Address -> Dynamic -> ARInstr c ()
+    NewInit                 :: Address -> Value -> ARInstr c ()
     Component               :: (forall c. AR c a) -> ARInstr c a
     Connect                 :: Connectable a b => a -> b -> ARInstr c ()
 
@@ -256,17 +255,17 @@ instance Seal (ProvidedOperation a b) where
 -- Derived AR operations ------------------------------------------------------
 
 requiredDataElement         :: AR c (RequiredDataElement a c)
-requiredDataElementInit     :: Typeable a => a -> AR c (RequiredDataElement a c)
+requiredDataElementInit     :: Data a => a -> AR c (RequiredDataElement a c)
 providedDataElement         :: AR c (ProvidedDataElement a c)
-providedDataElementInit     :: Typeable a => a -> AR c (ProvidedDataElement a c)
+providedDataElementInit     :: Data a => a -> AR c (ProvidedDataElement a c)
 requiredQueueElement        :: Int -> AR c (RequiredQueueElement a c)
 providedQueueElement        :: AR c (ProvidedQueueElement a c)
 requiredOperation           :: AR c (RequiredOperation a b c)
 providedOperation           :: AR c (ProvidedOperation a b c)
-interRunnableVariable       :: Typeable a => a -> AR c (InterRunnableVariable a c)
+interRunnableVariable       :: Data a => a -> AR c (InterRunnableVariable a c)
 exclusiveArea               :: AR c (ExclusiveArea c)
 runnable                    :: Invocation -> [Trigger c] -> RTE c a -> AR c ()
-serverRunnable              :: (Typeable a, Typeable b) => 
+serverRunnable              :: (Data a, Data b) => 
                                 Invocation -> [ProvidedOperation a b c] -> (a -> RTE c b) -> AR c ()
 component                   :: (forall c. AR c a) -> AR c a
 connect                     :: Connectable a b => a -> b -> AR c ()
@@ -279,14 +278,14 @@ newProcess p                = singleton $ NewProcess p
 newInit a v                 = singleton $ NewInit a v
 
 requiredDataElement         = do a <- newAddress; newProcess (DElem a False NO_DATA); return (RE a)
-requiredDataElementInit val = do a <- newAddress; newProcess (DElem a False (Ok (toDyn val))); return (RE a)
+requiredDataElementInit val = do a <- newAddress; newProcess (DElem a False (Ok (toValue val))); return (RE a)
 providedDataElement         = do a <- newAddress; return (PE a)
-providedDataElementInit val = do a <- newAddress; newInit a (toDyn val); return (PE a)
+providedDataElementInit val = do a <- newAddress; newInit a (toValue val); return (PE a)
 requiredQueueElement size   = do a <- newAddress; newProcess (QElem a size []); return (RQ a)
 providedQueueElement        = do a <- newAddress; return (PQ a)
 requiredOperation           = do a <- newAddress; newProcess (Op a []); return (RO a)
 providedOperation           = do a <- newAddress; return (PO a)
-interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toDyn val)); return (IV a)
+interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toValue val)); return (IV a)
 exclusiveArea               = do a <- newAddress; newProcess (Excl a Free); return (EX a)
 
 runnable inv trig code      = do a <- newAddress
@@ -301,10 +300,10 @@ serverRunnable inv ops code = do a <- newAddress
                                  newProcess (Run a 0.0 act 0 (Static watch inv code'))
   where watch               = [ a | PO a <- ops ]
         act                 = Serving [] []
-        code'               = fmap toDyn . code . fromDyn
+        code'               = fmap toValue . code . fromDyn
 
-fromDyn                     :: Typeable a => Dynamic -> a
-fromDyn                     = fromJust . fromDynamic
+fromDyn                     :: Data a => Value -> a
+fromDyn                     = value'
 
 connectAll a b              = mapM (uncurry connect) (a `zip` b)
         
@@ -329,13 +328,13 @@ seal5 (a1,a2,a3,a4,a5)      = (seal a1, seal a2, seal a3, seal a4, seal a5)
 seal6 (a1,a2,a3,a4,a5,a6)   = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6)
 
 
-probeRead                   :: Typeable a => String -> RequiredDataElement a c -> (a -> Double) -> AR c' ()
+probeRead                   :: Data a => String -> RequiredDataElement a c -> (a -> Double) -> AR c' ()
 probeRead s (RE a) f        = singleton $ NewProbe s g
   where 
     g (RD b (Ok v)) | a==b  = (Just . f . fromDyn) v
     g _                     = Nothing
 
-probeWrite                  :: Typeable a => String -> ProvidedDataElement a c -> (a -> Double) -> AR c' ()
+probeWrite                  :: Data a => String -> ProvidedDataElement a c -> (a -> Double) -> AR c' ()
 probeWrite s (PE a) f       = singleton $ NewProbe s g
   where 
     g (WR b v) | a==b       = (Just . f . fromDyn) v
@@ -344,17 +343,17 @@ probeWrite s (PE a) f       = singleton $ NewProbe s g
 
 data Label                  = ENTER Address
                             | EXIT  Address
-                            | IRVR  Address (StdRet Dynamic)
-                            | IRVW  Address Dynamic
-                            | RCV   Address (StdRet Dynamic)
-                            | SND   Address Dynamic(StdRet Dynamic)
-                            | RD    Address (StdRet Dynamic)
-                            | WR    Address Dynamic
-                            | UP    Address (StdRet Dynamic)
+                            | IRVR  Address (StdRet Value)
+                            | IRVW  Address Value
+                            | RCV   Address (StdRet Value)
+                            | SND   Address Value(StdRet Value)
+                            | RD    Address (StdRet Value)
+                            | WR    Address Value
+                            | UP    Address (StdRet Value)
                             | INV   Address
-                            | CALL  Address Dynamic (StdRet Dynamic)
-                            | RES   Address (StdRet Dynamic)
-                            | RET   Address Dynamic
+                            | CALL  Address Value (StdRet Value)
+                            | RES   Address (StdRet Value)
+                            | RET   Address Value
                             | NEW   Address
                             | TERM  Address
                             | TICK  Address
@@ -396,24 +395,24 @@ maySay (RInst a c ex code)                     = maySay' (view code)
                                                      y:ys | y==x -> EXIT x
                                                      _           -> VETO
         maySay' (IrvRead  (IV s)   :>>= cont)  = IRVR  s NO_DATA
-        maySay' (IrvWrite (IV s) v :>>= cont)  = IRVW  s (toDyn v)
+        maySay' (IrvWrite (IV s) v :>>= cont)  = IRVW  s (toValue v)
         maySay' (Receive (RQ e)    :>>= cont)  = RCV   e NO_DATA
-        maySay' (Send    (PQ e) v  :>>= cont)  = SND   e (toDyn v) ok
+        maySay' (Send    (PQ e) v  :>>= cont)  = SND   e (toValue v) ok
         maySay' (Read    (RE e)    :>>= cont)  = RD    e NO_DATA
-        maySay' (Write   (PE e) v  :>>= cont)  = WR    e (toDyn v)
+        maySay' (Write   (PE e) v  :>>= cont)  = WR    e (toValue v)
         maySay' (IsUpdated  (RE e) :>>= cont)  = UP    e NO_DATA
         maySay' (Invalidate (PE e) :>>= cont)  = INV   e
-        maySay' (Call   (RO o) v   :>>= cont)  = CALL  o (toDyn v) NO_DATA
+        maySay' (Call   (RO o) v   :>>= cont)  = CALL  o (toValue v) NO_DATA
         maySay' (Result (RO o)     :>>= cont)  = RES   o NO_DATA
         maySay' (Return v)                     = case c of
-                                                     Just b  -> RET  b (toDyn v)
+                                                     Just b  -> RET  b v
                                                      Nothing -> TERM a
 maySay _                                       = VETO   -- most processes can't say anything
 
 
 say :: Label -> Proc -> [Proc]
 say (NEW _)   (Run a _ Pending n s)                     = [Run a (minstart s) Idle (n+1) s,
-                                                           RInst a Nothing [] (implementation s (toDyn ()))]
+                                                           RInst a Nothing [] (implementation s (toValue ()))]
 say (NEW _)   (Run a _ (Serving (c:cs) (v:vs)) n s)     = [Run a (minstart s) (Serving cs vs) (n+1) s,
                                                            RInst a (Just c) [] (implementation s v)]
 say (DELTA d) (Run a t act n s)                         = [Run a (t-d) act n s]
@@ -432,17 +431,17 @@ say label     (RInst a c ex code)                       = say' label (view code)
         say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a c ex       (cont void)]
         say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (RES _    res) (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toDyn ()))]
+        say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toValue ()))]
         say' (TERM _)       (Return _)                  = []
 
 
-ok   :: StdRet Dynamic
-ok              = Ok (toDyn ())
+ok   :: StdRet Value
+ok              = Ok (toValue ())
 
 void :: StdRet ()
 void            = Ok ()
 
-fromStdDyn :: Typeable a => StdRet Dynamic -> StdRet a
+fromStdDyn :: Data a => StdRet Value -> StdRet a
 fromStdDyn (Ok v)   = Ok (fromDyn v)
 fromStdDyn NO_DATA  = NO_DATA
 fromStdDyn LIMIT    = LIMIT
@@ -473,7 +472,7 @@ mayHear conn (SND a v res)   (Run _ _ _ _ s)   | trig conn a s  = SND a v res
 mayHear conn (RD a _)        (DElem b u v)     | a==b           = RD a v
 mayHear conn (WR a v)        (DElem b _ _)     | a `conn` b     = WR a v
 mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
-mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toDyn u))
+mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toValue u))
 mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
 mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)      
        | trig conn a s  &&  a `notElem` cs                      = CALL a v ok

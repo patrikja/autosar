@@ -22,9 +22,9 @@ import System.Random
 type Ticks = Int
 type Limit = Int
 type Index = Int
-data SeqState = Stopped | Running Ticks Limit Index deriving Typeable
+data SeqState = Stopped | Running Ticks Limit Index deriving (Typeable,Data)
 
-seq_init :: (Typeable a) =>
+seq_init :: (Data a) =>
   RTE c a -> ExclusiveArea c -> InterRunnableVariable a c -> RTE c (StdRet ())
 seq_init setup excl state = do
         rteEnter excl
@@ -45,7 +45,7 @@ seq_tick step excl state = do
         rteIrvWrite state s'
         rteExit excl
 
-seq_onoff :: (Typeable a) =>
+seq_onoff :: (Data a) =>
      (t -> RTE c a) -> ExclusiveArea c -> InterRunnableVariable a c
   -> (t -> RTE c ())
 seq_onoff onoff excl state on = do
@@ -55,7 +55,7 @@ seq_onoff onoff excl state on = do
         rteExit excl
         return ()
 
-sequencer :: Typeable a =>
+sequencer :: Data a =>
   RTE c SeqState -> (Index -> RTE c SeqState) -> (a -> RTE c SeqState)
   -> AR c (ProvidedOperation a () ())
 sequencer setup step ctrl = do
@@ -182,10 +182,10 @@ pressure_seq = component $ do
 --------------------------------------------------------------
 
 control ::
-  (Typeable slip, Ord slip,  Fractional slip,
-   Typeable pres, Num pres,
-   Typeable r1, 
-   Typeable q1) =>
+  (Data slip, Ord slip,  Fractional slip,
+   Data pres, Num pres,
+   Data r1, 
+   Data q1) =>
   InterRunnableVariable   slip  c  -> 
   RequiredOperation pres  q1    c  -> 
   RequiredOperation Bool  r1    c  -> 
