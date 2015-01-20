@@ -61,10 +61,10 @@ sequencer :: Data a =>
 sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
-        runnable Concurrent [Init] (seq_init setup excl state)
-        runnable (MinInterval 0) [Timed 0.001] (seq_tick step excl state)
+        runnable Concurrent [Init]              (seq_init setup excl state)
+        runnable (MinInterval 0) [Timed 0.001]  (seq_tick step  excl state)
         onoff <- providedOperation
-        serverRunnable (MinInterval 0) [onoff] (seq_onoff ctrl excl state)
+        serverRunnable (MinInterval 0) [onoff]  (seq_onoff ctrl excl state)
         return (seal onoff)
 
 --------------------------------------------------------------
@@ -124,13 +124,17 @@ relief_seq = component $ do
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
+type PresSeq = ( RequiredDataElem Accel, 
+                 ProvidedOp Index (), 
+                 ProvidedDataElem Valve)
+
 pressure_setup :: ProvidedDataElement Valve c -> RTE c SeqState
 pressure_setup valve = do
         rteWrite valve True
         return Stopped
 
 pressure_step :: 
-  ProvidedDataElement  Bool   c  -> 
+  ProvidedDataElement  Valve  c  -> 
   RequiredDataElement  Accel  c  -> 
   Index -> RTE c SeqState
 pressure_step valve accel 0 = do
@@ -161,10 +165,7 @@ pressure_ctrl valve accel 0 = do
         rteWrite valve False
         return Stopped
 
-type Pres = ( RequiredDataElem Accel, 
-              ProvidedOp Index (), 
-              ProvidedDataElem Valve)
-pressure_seq :: AR c Pres
+pressure_seq :: AR c PresSeq
 pressure_seq = component $ do
         valve <- providedDataElement
         accel <- requiredDataElement
@@ -182,14 +183,13 @@ pressure_seq = component $ do
 --------------------------------------------------------------
 
 control ::
-  (Data slip, Ord slip,  Fractional slip, Show slip,
-   Data pres, Num pres,
+  (Data pres, Num pres,
    Data r1, 
    Data q1) =>
-  InterRunnableVariable   slip  c  -> 
+  InterRunnableVariable   Slip  c  -> 
   RequiredOperation pres  q1    c  -> 
   RequiredOperation Bool  r1    c  -> 
-  RequiredQueueElement    slip  c  -> 
+  RequiredQueueElement    Slip  c  -> 
   RTE c (StdRet ())
 control memo onoff_pressure onoff_relief slipstream = do
         Ok slip   <- rteReceive slipstream

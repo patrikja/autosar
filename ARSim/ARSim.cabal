@@ -20,7 +20,7 @@ executable ARSim
   main-is:             NewABS.hs
   other-modules:       NewARSim
   other-extensions:    FlexibleContexts, FlexibleInstances, GADTs, MultiParamTypeClasses, FunctionalDependencies, RankNTypes, ExistentialQuantification
-  build-depends:       base >=4.6 && <4.8, operational, easyplot, mtl, containers, random
+  build-depends:       base >=4.6 && <4.8, operational, easyplot, mtl, containers, random, syb
 
   -- hs-source-dirs:      
   default-language:    Haskell2010
