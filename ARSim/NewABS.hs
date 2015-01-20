@@ -3,8 +3,6 @@ module Main where
 
 import NewARSim
 import Control.Monad
-import qualified Data.Map as Map
-import Data.Dynamic
 import Graphics.EasyPlot
 import System.Random
 
@@ -24,9 +22,9 @@ import System.Random
 type Ticks = Int
 type Limit = Int
 type Index = Int
-data SeqState = Stopped | Running Ticks Limit Index deriving Typeable
+data SeqState = Stopped | Running Ticks Limit Index deriving (Typeable,Data)
 
-seq_init :: (Typeable a) =>
+seq_init :: (Data a) =>
   RTE c a -> ExclusiveArea c -> InterRunnableVariable a c -> RTE c (StdRet ())
 seq_init setup excl state = do
         rteEnter excl
@@ -47,7 +45,7 @@ seq_tick step excl state = do
         rteIrvWrite state s'
         rteExit excl
 
-seq_onoff :: (Typeable a) =>
+seq_onoff :: (Data a) =>
      (t -> RTE c a) -> ExclusiveArea c -> InterRunnableVariable a c
   -> (t -> RTE c ())
 seq_onoff onoff excl state on = do
@@ -57,7 +55,7 @@ seq_onoff onoff excl state on = do
         rteExit excl
         return ()
 
-sequencer :: Typeable a =>
+sequencer :: Data a =>
   RTE c SeqState -> (Index -> RTE c SeqState) -> (a -> RTE c SeqState)
   -> AR c (ProvidedOperation a () ())
 sequencer setup step ctrl = do
@@ -184,10 +182,10 @@ pressure_seq = component $ do
 --------------------------------------------------------------
 
 control ::
-  (Typeable slip, Ord slip,  Fractional slip, Show slip,
-   Typeable pres, Num pres,
-   Typeable r1, 
-   Typeable q1) =>
+  (Data slip, Ord slip,  Fractional slip, Show slip,
+   Data pres, Num pres,
+   Data r1, 
+   Data q1) =>
   InterRunnableVariable   slip  c  -> 
   RequiredOperation pres  q1    c  -> 
   RequiredOperation Bool  r1    c  -> 
@@ -242,7 +240,7 @@ wheel_ctrl (i,slipstream) = component $ do
 scaleValve_r :: Bool -> Double
 scaleValve_r = (+2.0) . fromIntegral . fromEnum
 scaleValve_p :: Bool -> Double
-scaleValve_p = (+5.0) . fromIntegral . fromEnum
+scaleValve_p = (+4.0) . fromIntegral . fromEnum
 
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
@@ -262,14 +260,14 @@ loop velostreams slipstreams = do
         let v0 = maximum velos
         mapM (\(v,pe) -> rteSend pe (slip v0 v)) (velos `zip` slipstreams)
 
-slip :: (Fractional a, Eq a) => a -> a -> a
-slip 0.0  v  = 1.0
+slip :: Double -> Double -> Double
+slip 0.0  _v = 1.0   -- no slip
 slip v0   v  = v/v0
 
 main_loop :: AR c ([RequiredDataElem Velo], [ProvidedQueueElem Slip])
 main_loop = component $ do
-        velostreams <- mapM (const requiredDataElement)   [1..4]
-        slipstreams <- mapM (const providedQueueElement)  [1..4]
+        velostreams <- replicateM 4 requiredDataElement
+        slipstreams <- replicateM 4 providedQueueElement
         runnable (MinInterval 0) [Timed 0.01] (loop velostreams slipstreams)
         return (map seal velostreams, map seal slipstreams)
         
@@ -293,14 +291,27 @@ abs_system = component $ do
 -------------------------------------------------------------------
 wheel_f :: Index -> Time -> Bool -> Bool -> Velo -> (Accel, Velo)
 wheel_f i time pressure relief velo 
-        | time < 1.0                = ( 0,    velo)
-        | i /= 2                    = (-4.5,  velo-0.045)
+        | time < 1.0                = veloStep 0          velo
+        | i /= 2                    = veloStep (-4.5)     velo
         -- let wheel 2 skid...
-        | pressure && not relief    = (-10,   velo-0.1)
-        | relief && not pressure    = ( 1,    velo+0.01)
-        | otherwise                 = (-3,    velo-0.03)
+        -- We "postulate" a reasonable approximation of the wheel speed (ignoring the actual valves). Ideally the whole car dynamics whould be in another module (in Simulink).
+        | time < 1.8                = veloStep (-10)      velo
+        | time < 2.5                = veloStep (-2/0.7)   velo
+        | time < 3                  = veloStep (0.5/0.5)  velo
+        | time < 3.4                = veloStep (-1.5/0.4) velo
+        | time < 4                  = veloStep (-3/0.6)   velo
+        | time < 4.5                = veloStep (-4/0.5)   velo
+        | otherwise                 = veloStep 0          velo
+-- The "pressure logic" is something like this, but a propoer treatment need integration over time and knowledge of vehicle speed and other physical parameters.
+--        | pressure && not relief    = veloStep (-10)      velo   
+--        | relief && not pressure    = veloStep (-1)       velo
+--        | otherwise                 = veloStep (-3)       velo
+
+veloStep :: Accel -> Velo -> (Accel, Velo)
+veloStep a v = (a, v + a*0.01)
 
 type Wheel = Wheel' ()
+
 
 type Wheel' c = (RequiredDataElement Valve  c,
                  RequiredDataElement Valve  c,
@@ -324,7 +335,7 @@ simul wheels irv = do
         rteIrvWrite irv (t, velos')
         return ()
 
-mk_wheel :: Double -> AR c (Wheel' c)
+mk_wheel :: Int -> AR c (Wheel' c)
 mk_wheel i = do
         r_act  <- requiredDataElementInit False
         p_act  <- requiredDataElementInit True
@@ -343,10 +354,10 @@ car = do
         return (map seal4 wheels)
 
 init_v :: Velo
-init_v = 0
+init_v = 18
 
 init_a :: Accel
-init_a = 18
+init_a = 0
 
 -------------------------------------------------------------------------
 -- A test setup consists of the ABS implementation and the simulated car 
