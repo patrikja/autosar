@@ -233,14 +233,14 @@ wheel_ctrl (i,slipstream) = component $ do
         connect onoff_pressure ctrl_p
         connect onoff_relief ctrl_r
         when (i==2) $ do
-            probeWrite "relief 2"    valve_r scaleValve_r
-            probeWrite "pressure 2"  valve_p scaleValve_p
+            probeWrite "relief 2"    valve_r
+            probeWrite "pressure 2"  valve_p
         return (accel_r, accel_p, valve_r, valve_p)
 
-scaleValve_r :: Bool -> Double
-scaleValve_r = (+2.0) . fromIntegral . fromEnum
-scaleValve_p :: Bool -> Double
-scaleValve_p = (+4.0) . fromIntegral . fromEnum
+-- scaleValve_r :: Bool -> Double
+-- scaleValve_r = (+2.0) . fromIntegral . fromEnum
+-- scaleValve_p :: Bool -> Double
+-- scaleValve_p = (+4.0) . fromIntegral . fromEnum
 
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
@@ -342,8 +342,8 @@ mk_wheel i = do
         v_sens <- providedDataElementInit init_v
         a_sens <- providedDataElementInit init_a
         when (i<=2) $ do
-            probeWrite ("wheel "++show i++" speed")         v_sens  id
-            probeWrite ("wheel "++show i++" acceleration")  a_sens  id
+            probeWrite ("wheel "++show i++" speed")         v_sens
+            probeWrite ("wheel "++show i++" acceleration")  a_sens
         return (r_act, p_act, v_sens, a_sens)
 
 car :: AR c [Wheel]
@@ -385,26 +385,26 @@ conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
         connect valve_p p_act
 
 main1 :: IO Bool
-main1 = makePlot (runARSim TrivialSched 5.0 test)
+main1 = makePlot (timedARSim TrivialSched 5.0 test)
 
 main2 :: IO Bool
 main2 = do g <- getStdGen
-           let out = runARSim (RandomSched g) 5.0 test
-           mapM putStrLn [ ms | (t,ms) <- logs out ]
+           let out = timedARSim (RandomSched g) 5.0 test
+           -- mapM putStrLn [ ms | (t,ms) <- logs out ]
            makePlot out
 
-makePlot :: Output -> IO Bool
-makePlot output = plot (PS "plot.ps") curves
+makePlot :: [(String, Measurement Double)] -> IO Bool
+makePlot ms = plot (PS "plot.ps") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
-                  | (str,pts) <- measurements output ]
+                  | (str,pts) <- ms ]
         color "pressure 2"              = Red
         color "relief 2"                = Blue
         color "wheel speed 2"           = Green
         color "wheel acceleration 2"    = Violet
         color _                         = Black
         discrete []                     = []
-        discrete ((t,v):vs)             = (t,v) : disc v vs
-          where disc v0 ((t,v):vs)      = (t,v0) : (t+eps,v) : disc v vs
+        discrete (((_,t),v):vs)         = (t,v) : disc v vs
+          where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
                 disc _ _                = []
                 eps                     = 0.0001
 

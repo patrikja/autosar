@@ -1,4 +1,4 @@
-{-#LANGUAGE GADTs#-}
+{-#LANGUAGE GADTs, DeriveDataTypeable, StandaloneDeriving #-}
 module Dynamics(Value, toValue, value, value', Data, Typeable) where
 
 import Data.Dynamic
@@ -11,7 +11,25 @@ toValue = Value
 
 data Value where
   Value :: Data a => a -> Value
-  
+  deriving (Typeable)
+
+-- deriving instance Data Value
+
+instance Data.Data.Data Value where
+  gfoldl k_a1Pp z_a1Pq (Value a1_a1Pr)
+    = (z_a1Pq Value `k_a1Pp` a1_a1Pr)
+  gunfold cbr pure _ = cbr (pure (Value :: () -> Value)) where
+  toConstr (Value _) = cValue
+  dataTypeOf _ = tValue
+
+tValue :: Data.Data.DataType
+cValue :: Data.Data.Constr
+tValue
+  = Data.Data.mkDataType "Dynamics.Value" [cValue]
+cValue
+  = Data.Data.mkConstr Dynamics.tValue "Value" [] Data.Data.Prefix
+
+
 instance Show Value where
   show (Value a) = gshow a
 
@@ -24,8 +42,13 @@ value' = fromJust . value
 
 
 
+
+
 --Test
-run = mapM_ print [Value (5.0 :: Double),Value "Hello", Value (Just (True,[False])) ]
+run = mapM_ print [ Value (5.0 :: Double)
+                  , Value "Hello"
+                  , Value (Just (True,[False])) 
+                  , Value (Value (Value True))]
 
 -- | Generic show: an alternative to \"deriving Show\"
 gshow :: Data a => a -> String

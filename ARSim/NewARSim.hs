@@ -78,6 +78,7 @@ data StdRet a               = Ok a
                             | UNCONNECTED
                             | TIMEOUT
                             | IN_EXCLUSIVE_AREA
+                            deriving Show
 
 newtype RequiredDataElement a c     = RE Address
 newtype ProvidedDataElement a c     = PE Address
@@ -130,7 +131,7 @@ data Proc                   = forall c .
 
 type Conn                   = (Address, Address)
 
-type Probe                  = (String, Label -> Maybe Double)
+type Probe                  = (String, Label -> Maybe Value)
 
 type Address                = Int
 
@@ -163,7 +164,7 @@ apInit conn mp p            = p
 data ARInstr c a where
     NewAddress              :: ARInstr c Address
     NewProcess              :: Proc -> ARInstr c ()
-    NewProbe                :: String -> (Label -> Maybe Double) -> ARInstr c ()
+    NewProbe                :: String -> (Label -> Maybe Value) -> ARInstr c ()
     NewInit                 :: Address -> Value -> ARInstr c ()
     Component               :: (forall c. AR c a) -> ARInstr c a
     Connect                 :: Connectable a b => a -> b -> ARInstr c ()
@@ -212,22 +213,22 @@ instance Connectable (RequiredOp a b) (ProvidedOp a b) where
 class Addressed a where
         address                     :: [a] -> [Address]
 
-instance Addressed (ProvidedDataElem a) where
+instance Addressed (ProvidedDataElement a c) where
         address xs                  = [ n | PE n <- xs ]
 
-instance Addressed (RequiredDataElem a) where
+instance Addressed (RequiredDataElement a c) where
         address xs                  = [ n | RE n <- xs ]
         
-instance Addressed (ProvidedQueueElem a) where
+instance Addressed (ProvidedQueueElement a c) where
         address xs                  = [ n | PQ n <- xs ]
 
-instance Addressed (RequiredQueueElem a) where
+instance Addressed (RequiredQueueElement a c) where
         address xs                  = [ n | RQ n <- xs ]
         
-instance Addressed (ProvidedOp a b) where
+instance Addressed (ProvidedOperation a b c) where
         address xs                  = [ n | PO n <- xs ]
 
-instance Addressed (RequiredOp a b) where
+instance Addressed (RequiredOperation a b c) where
         address xs                  = [ n | RO n <- xs ]
 
 
@@ -331,25 +332,29 @@ seal5 (a1,a2,a3,a4,a5)      = (seal a1, seal a2, seal a3, seal a4, seal a5)
 seal6 (a1,a2,a3,a4,a5,a6)   = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6)
 
 
-probeRead                   :: Data a => String -> RequiredDataElement a c -> (a -> Double) -> AR c' ()
-probeRead s (RE a) f        = singleton $ NewProbe s g
+-- probeLabels :: Addressed a => 
+
+probeRead                   :: Data a => String -> RequiredDataElement a c -> AR c' ()
+probeRead s (RE a)        = singleton $ NewProbe s g
   where 
-    g (RD b (Ok v)) | a==b  = (Just . f . fromDyn) v
+    g (RD b (Ok v)) | a==b  = Just v
     g _                     = Nothing
 
-probeWrite                  :: Data a => String -> ProvidedDataElement a c -> (a -> Double) -> AR c' ()
-probeWrite s (PE a) f       = singleton $ NewProbe s g
-  where 
-    g (WR b v) | a==b       = (Just . f . fromDyn) v
-    g _                     = Nothing
+probeWrite                  :: Data a => String -> ProvidedDataElement a c -> AR c' ()
+probeWrite s p            = probeWrite' s p id
 
+probeWrite'                  :: (Data b, Data a) => String -> ProvidedDataElement a c -> (a -> b) -> AR c' ()
+probeWrite' s (PE a) f    = singleton $ NewProbe s g
+  where 
+    g (WR b v) | a==b       = Just (toValue $ f $ value' v)
+    g _                     = Nothing
 
 data Label                  = ENTER Address
                             | EXIT  Address
                             | IRVR  Address (StdRet Value)
                             | IRVW  Address Value
                             | RCV   Address (StdRet Value)
-                            | SND   Address Value(StdRet Value)
+                            | SND   Address Value (StdRet Value)
                             | RD    Address (StdRet Value)
                             | WR    Address Value
                             | UP    Address (StdRet Value)
@@ -368,16 +373,16 @@ labelText l = case l of
           ENTER a            -> "ENTER:"++show a
           EXIT  a            -> "EXIT:"++show a
           IRVR  a ret        -> "IRVR:"++show a
-          IRVW  a dyn        -> "IRVW:"++show a
+          IRVW  a val        -> "IRVW:"++show a++":"++show val
           RCV   a ret        -> "RCV:"++show a
-          SND   a dyn ret    -> "SND:"++show a
+          SND   a val ret    -> "SND:"++show a++":"++show val
           RD    a ret        -> "RD:"++show a
-          WR    a dyn        -> "WR:"++show a
+          WR    a val        -> "WR:"++show a++":"++show val
           UP    a ret        -> "UP:"++show a
           INV   a            -> "INV:"++show a
-          CALL  a dyn ret    -> "CALL:"++show a
+          CALL  a val ret    -> "CALL:"++show a++":"++show val
           RES   a ret        -> "RES:"++show a
-          RET   a dyn        -> "RET:"++show a
+          RET   a val        -> "RET:"++show a++":"++show val
           NEW   a            -> "NEW:"++show a
           TERM  a            -> "TERM:"++show a
           TICK  a            -> "TICK:"++show a
@@ -552,7 +557,10 @@ explore conn _ _ _                      = []
 type Logs                   = [String]
 
 type SchedulerOption        = (Label, Logs, [Proc])
-type Transition             = (Int, Label, Logs, [Proc])
+data Transition             = Trans {transChoice  :: Int
+                                    , transLabel  :: Label
+                                    , transLogs   :: Logs
+                                    , transProcs  :: [Proc]}
 type Scheduler m            = [SchedulerOption] -> m Transition
 type Trace                  = (SimState, [Transition])
 
@@ -564,7 +572,7 @@ simulation sched sys        = do trs <- simulate sched conn (procs state1)
 
 simulate sched conn procs
   | null alts               = return []
-  | otherwise               = do trans@(_,_,_,procs1) <- maximumProgress sched alts
+  | otherwise               = do trans@Trans{transProcs = procs1} <- maximumProgress sched alts
                                  liftM (trans:) $ simulate sched conn procs1
   where alts                = step conn procs
         
@@ -577,7 +585,7 @@ maximumProgress sched alts
         isDelta _             = False
 
 trivialSched                :: Scheduler Identity
-trivialSched alts           = return (0, label, logs, procs)
+trivialSched alts           = return (Trans 0 label logs procs)
   where (label,logs,procs)  = head alts
 
 roundRobinSched             :: Scheduler (State Int)
@@ -585,24 +593,30 @@ roundRobinSched alts        = do m <- get
                                  let n = (m+1) `mod` length alts
                                      (label,logs,procs) = alts!!n
                                  put n
-                                 return (n, label, logs, procs)
+                                 return (Trans n label logs procs)
 
 randomSched                 :: Scheduler (State StdGen)
 randomSched alts            = do n <- state next
                                  let (label,logs,procs) = alts!!(n `mod` length alts)
-                                 return (n, label, logs, procs)
+                                 return (Trans n label logs procs)
 
-data SchedChoice            = TrivialSched
-                            | RoundRobinSched
-                            | RandomSched StdGen
 
-runSim                      :: SchedChoice -> (forall c . AR c a) -> (a,Trace)
-runSim TrivialSched sys     = runIdentity (simulation trivialSched sys)
-runSim RoundRobinSched sys  = evalState (simulation roundRobinSched sys) 0
-runSim (RandomSched g) sys  = evalState (simulation randomSched sys) g
+data SchedChoice            where
+  TrivialSched        :: SchedChoice
+  RoundRobinSched     :: SchedChoice
+  RandomSched         :: StdGen -> SchedChoice
+  -- This can be used to define the all the other cases
+  AnySched            :: Monad m => Scheduler m -> (forall a. m a -> a) -> SchedChoice
 
-type Measurement            = [(Time,Double)]
 
+runSim                         :: SchedChoice -> (forall c . AR c a) -> (a,Trace)
+runSim TrivialSched sys        = runIdentity (simulation trivialSched sys)
+runSim RoundRobinSched sys     = evalState (simulation roundRobinSched sys) 0
+runSim (RandomSched g) sys     = evalState (simulation randomSched sys) g
+runSim (AnySched sch run) sys  = run (simulation sch sys)
+
+{-
+<<<<<<< Updated upstream
 data Output                 = Output {
                                   measurements :: [(String,Measurement)],
                                   logs         :: [(Time,String)]
@@ -633,3 +647,41 @@ collectLogs lim t ((_,DELTA d,_,_):trs)
                             = collectLogs lim (t+d) trs
 collectLogs lim t ((_,_,ls,_):trs)
                             = [ (t,v) | v <- ls ] ++ collectLogs lim t trs
+=======
+-}
+limitTicks :: Int -> Trace -> Trace 
+limitTicks t (a,trs) = (a,take t trs)
+
+limitTime :: Time -> Trace -> Trace
+limitTime t (a,trs) = (a,limitTimeTrs t trs) where
+  limitTimeTrs t _ | t < 0                 = []
+  limitTimeTrs t (del@(Trans{transLabel = DELTA d}):trs) = del:limitTimeTrs (t-d) trs
+  limitTimeTrs t []                        = []
+  limitTimeTrs t (x:xs)                    = x : limitTimeTrs t xs
+
+
+type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
+
+-- Gets ALL probes of a certain types, categorized by probe-ID. 
+-- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces. 
+runARSim :: Data a => Trace -> [(String,Measurement a)]
+runARSim t = [(s,internal m) |(s,m) <- runARSim' t] 
+
+internal :: Data a => Measurement Value -> Measurement a
+internal ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
+
+runARSim'                    :: Trace -> [(String,Measurement Value)]
+runARSim' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collect (probes state) 0.0 0 trs
+
+
+collect :: [Probe] -> Time -> Int -> [Transition] -> [(String,Measurement Value)]
+collect probes t n []     = []
+collect probes t n (Trans{transLabel = DELTA d}:trs)
+                            = collect probes (t+d) (n+1) trs
+collect probes t n (Trans{transLabel = label}:trs)
+                            = measurements ++ collect probes t (n+1) trs
+  where measurements        = [ (s,[((n,t),v)]) | (s,f) <- probes, Just v <- [f label] ]
+
+-- Run a simulation with a time limit, returning all probes of a type a. 
+timedARSim :: Data a => SchedChoice -> Time -> (forall c . AR c x) -> [(String,Measurement a)]
+timedARSim sch t sys = runARSim (snd $ runSim sch sys)

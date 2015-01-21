@@ -58,7 +58,7 @@ test            = do srv <- ticketDispenser
 
 x = runSim TrivialSched test
 
-run = mapM_ putStrLn $ take 40 $ map (\(x,y,z) -> labelText y) (snd $ snd x)
+run = mapM_ putStrLn $ take 40 $ map (\trans -> labelText $ transLabel trans) (snd $ snd x)
 
 
 {-
