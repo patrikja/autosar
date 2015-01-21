@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module NewARSim (module NewARSim, Typeable, Data) where
+module NewARSim (module NewARSim, Typeable, Data, mkStdGen, StdGen) where
               
 import Control.Monad.Operational
 import Control.Monad.Identity hiding (void)
@@ -367,6 +367,7 @@ data Label                  = ENTER Address
                             | TICK  Address
                             | DELTA Time
                             | VETO
+                            deriving Show
 
 labelText :: Label -> String
 labelText l = case l of
@@ -564,6 +565,9 @@ data Transition             = Trans {transChoice  :: Int
 type Scheduler m            = [SchedulerOption] -> m Transition
 type Trace                  = (SimState, [Transition])
 
+traceLabels :: Trace -> [Label]
+traceLabels = map transLabel . snd
+
 simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
                                  return (res, (state1,trs))
@@ -684,4 +688,4 @@ collect probes t n (Trans{transLabel = label}:trs)
 
 -- Run a simulation with a time limit, returning all probes of a type a. 
 timedARSim :: Data a => SchedChoice -> Time -> (forall c . AR c x) -> [(String,Measurement a)]
-timedARSim sch t sys = runARSim (snd $ runSim sch sys)
+timedARSim sch t sys = runARSim (limitTime t $ snd $ runSim sch sys)

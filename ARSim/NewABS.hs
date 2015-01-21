@@ -233,14 +233,14 @@ wheel_ctrl (i,slipstream) = component $ do
         connect onoff_pressure ctrl_p
         connect onoff_relief ctrl_r
         when (i==2) $ do
-            probeWrite "relief 2"    valve_r
-            probeWrite "pressure 2"  valve_p
+            probeWrite' "relief 2"    valve_r scaleValve_r
+            probeWrite' "pressure 2"  valve_p scaleValve_p
         return (accel_r, accel_p, valve_r, valve_p)
 
--- scaleValve_r :: Bool -> Double
--- scaleValve_r = (+2.0) . fromIntegral . fromEnum
--- scaleValve_p :: Bool -> Double
--- scaleValve_p = (+4.0) . fromIntegral . fromEnum
+scaleValve_r :: Bool -> Double
+scaleValve_r = (+2.0) . fromIntegral . fromEnum
+scaleValve_p :: Bool -> Double
+scaleValve_p = (+4.0) . fromIntegral . fromEnum
 
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
@@ -385,13 +385,23 @@ conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
         connect valve_p p_act
 
 main1 :: IO Bool
-main1 = makePlot (timedARSim TrivialSched 5.0 test)
+main1 = showProgress >>= makePlot . runARSim -- (timedARSim TrivialSched 5.0 test)
 
+showProgress :: IO Trace
+showProgress = do
+  let trace = limitTime 5.0 $ snd $ runSim TrivialSched test -- (RandomSched (mkStdGen 111))
+  mapM_ print (f $ traceLabels $ trace)
+  return trace
+  where f xs = scanl (-) 5.0 [d|(DELTA d,n)<-zip xs [1..]]
+
+
+{-
 main2 :: IO Bool
 main2 = do g <- getStdGen
            let out = timedARSim (RandomSched g) 5.0 test
            -- mapM putStrLn [ ms | (t,ms) <- logs out ]
            makePlot out
+-}
 
 makePlot :: [(String, Measurement Double)] -> IO Bool
 makePlot ms = plot (PS "plot.ps") curves
@@ -409,7 +419,7 @@ makePlot ms = plot (PS "plot.ps") curves
                 eps                     = 0.0001
 
 main :: IO Bool
-main = main2
+main = main1
 
 {-
 rmethod rport excl irv = do
