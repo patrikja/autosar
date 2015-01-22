@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
-module ServerTest where
+module TickedDispenser where
 
 import NewARSim
 import Test.QuickCheck
@@ -57,12 +57,35 @@ test            = do srv <- ticketDispenser
                      return (map address [out1, out2, out3, out4])
 
 
-x = runSim TrivialSched test
 
-run = mapM_ putStrLn $ take 40 $ map (\trans -> labelText $ transLabel trans) (snd $ snd x)
+
+
+main = quickCheck prop_nodupes
+
+prop_nodupes :: Int -> Small Int -> Bool
+prop_nodupes g (Small n) = tickets == nub tickets where
+  tickets = rerun_nodupes g n
+
+-- Use this to get the actual tickets for a given counterexample
+rerun_nodupes :: Int -> Int -> [Int]
+rerun_nodupes g n = map snd $ probe trace "out"
+  where
+    trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+
+-- A property that passes.
+prop_nodupes_triv :: Small Int -> Bool
+prop_nodupes_triv (Small n) = tickets == nub tickets where
+  tickets = map snd $ probe trace "out" :: [Int]
+  trace = limitTrans ((abs $ n) +1) $ execSim TrivialSched test
 
 
 {-
+
+-- Hilarious that this instance is not in the library
+-- instance Arbitrary StdGen where
+--  arbitrary = mkStdGen `fmap` arbitrary -- I'm sure Michal has objections to this definition
+
+
 -- Extract the tickets reported by the clients from the trace.
 collectTickets :: ((forall c. AR c [Tag]) -> (Trace,[Tag])) -> Int -> [Int]
 collectTickets sim k = [v |VInt v <- sendsTo ps t] where

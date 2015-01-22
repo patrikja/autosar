@@ -391,9 +391,10 @@ main1 = do
 
 showProgress :: IO Trace
 showProgress = do
-  let trace = limitTime 5.0 $ snd $ runSim (RandomSched (mkStdGen 111)) test
-      progress = probe trace "A"
-  mapM_ (putStrLn . snd) progress
+  let trace = limitTime 5.0 $ execSim (RandomSched (mkStdGen 111)) test
+  --     progress = probe trace "A"
+  -- mapM_ (putStrLn . snd) progress
+  printLogs trace
   return trace
 
 scaleValve_r :: Bool -> Double

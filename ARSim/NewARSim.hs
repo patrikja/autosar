@@ -621,6 +621,9 @@ traceTrans = snd
 traceProbes :: Trace -> [Probe]
 traceProbes = probes . fst
 
+traceLogs :: Trace -> Logs
+traceLogs = concat . map transLogs . traceTrans
+
 
 simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
@@ -663,7 +666,7 @@ data SchedChoice            where
   TrivialSched        :: SchedChoice
   RoundRobinSched     :: SchedChoice
   RandomSched         :: StdGen -> SchedChoice
-  -- This can be used to define the all the other cases
+  -- This can be used to define all the other cases
   AnySched            :: Monad m => Scheduler m -> (forall a. m a -> a) -> SchedChoice
 
 
@@ -673,8 +676,11 @@ runSim RoundRobinSched sys     = evalState (simulation roundRobinSched sys) 0
 runSim (RandomSched g) sys     = evalState (simulation randomSched sys) g
 runSim (AnySched sch run) sys  = run (simulation sch sys)
 
-limitTicks :: Int -> Trace -> Trace 
-limitTicks t (a,trs) = (a,take t trs)
+execSim :: SchedChoice -> (forall c . AR c a) -> Trace
+execSim sch sys = snd $ runSim sch sys
+
+limitTrans :: Int -> Trace -> Trace 
+limitTrans t (a,trs) = (a,take t trs)
 
 limitTime :: Time -> Trace -> Trace
 limitTime t (a,trs) = (a,limitTimeTrs t trs) where
@@ -683,6 +689,8 @@ limitTime t (a,trs) = (a,limitTimeTrs t trs) where
   limitTimeTrs t []                        = []
   limitTimeTrs t (x:xs)                    = x : limitTimeTrs t xs
 
+printLogs :: Trace -> IO ()
+printLogs = mapM_ (\(id,v) -> putStrLn (id ++ ":" ++ show v)) . traceLogs
 
 type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
 
