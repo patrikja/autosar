@@ -402,14 +402,6 @@ scaleValve_p :: Bool -> Double
 scaleValve_p = (+4.0) . fromIntegral . fromEnum
 
 
-{-
-main2 :: IO Bool
-main2 = do g <- getStdGen
-           let out = timedARSim (RandomSched g) 5.0 test
-           -- mapM putStrLn [ ms | (t,ms) <- logs out ]
-           makePlot out
--}
-
 makePlot :: [(String, Measurement Double)] -> IO Bool
 makePlot ms = plot (PS "plot.ps") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)

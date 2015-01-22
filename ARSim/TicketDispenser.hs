@@ -20,6 +20,7 @@ ticketDispenser = component $
                      -- Code of the remote operation: return the ticket number and update state.
                      let rtBody = do Ok v <- rteIrvRead cur
                                      rteIrvWrite cur (v+1)
+                                     printlog "out" v
                                      return v
                      -- serverRunnableN "Server" Concurrent [requestTicketP] (\() -> rtBody)
                      serverRunnable Concurrent [requestTicketP] (\() -> rtBody)

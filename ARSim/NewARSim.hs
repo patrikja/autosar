@@ -344,8 +344,6 @@ probeRead s x              = singleton $ NewProbe s g
   where 
     g (RD b (Ok v))    | a==b    = Just v
     g (RCV b (Ok v))   | a==b    = Just v
-    -- g (SND b _ (Ok v))  | a==b -- Is SND a read? Is v of type a?
-    -- f (CALL b _ (Ok v)) | a==b -- Is CALL a read?
     g (IRVR b (Ok v))  | a==b    = Just v
     g (RES b (Ok v))   | a==b    = Just v
     g _                         = Nothing
@@ -357,8 +355,8 @@ probeWrite s x            = singleton $ NewProbe s g
   where 
     g (IRVW b v)     | a==b     = Just v
     g (WR b v)       | a==b     = Just v
-    -- g (SND b v _)    | a==b     = Just v -- Not sure about these.
-    -- g (CALL b v _)   | a==b     = Just v
+    g (SND b v _)    | a==b     = Just v -- Not sure about these.
+--    g (CALL b v _)   | a==b     = Just v
     g (RET b v)      | a==b     = Just v
     g _                     = Nothing
     a = address x
@@ -380,12 +378,12 @@ data Label                  = ENTER Address
                             | IRVR  Address (StdRet Value)
                             | IRVW  Address Value
                             | RCV   Address (StdRet Value)
-                            | SND   Address Value (StdRet Value)
+                            | SND   Address Value (StdRet ())
                             | RD    Address (StdRet Value)
                             | WR    Address Value
                             | UP    Address (StdRet Value)
                             | INV   Address
-                            | CALL  Address Value (StdRet Value)
+                            | CALL  Address Value (StdRet ())
                             | RES   Address (StdRet Value)
                             | RET   Address Value
                             | NEW   Address
@@ -455,7 +453,7 @@ maySay (RInst a c ex code)                     = maySay' (view code)
         maySay' (IrvRead  (IV s)   :>>= cont)  = IRVR  s NO_DATA
         maySay' (IrvWrite (IV s) v :>>= cont)  = IRVW  s (toValue v)
         maySay' (Receive (RQ e)    :>>= cont)  = RCV   e NO_DATA
-        maySay' (Send    (PQ e) v  :>>= cont)  = SND   e (toValue v) ok
+        maySay' (Send    (PQ e) v  :>>= cont)  = SND   e (toValue v) void
         maySay' (Read    (RE e)    :>>= cont)  = RD    e NO_DATA
         maySay' (Write   (PE e) v  :>>= cont)  = WR    e (toValue v)
         maySay' (IsUpdated  (RE e) :>>= cont)  = UP    e NO_DATA
@@ -483,12 +481,12 @@ say label     (RInst a c ex code)                       = say' label (view code)
         say' (IRVR _ res)   (IrvRead _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [RInst a c ex       (cont void)]
         say' (RCV _ res)    (Receive _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (SND _ _ res)  (Send _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (SND _ _ res)  (Send _ _     :>>= cont)    = [RInst a c ex       (cont res)]
         say' (RD _ res)     (Read _       :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (WR _ _)       (Write _ _    :>>= cont)    = [RInst a c ex       (cont void)]
         say' (UP _ res)     (IsUpdated _  :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
+        say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a c ex       (cont res)]
         say' (RES _    res) (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toValue ()))]
         say' (TERM _)       (Return _)                  = []
@@ -542,7 +540,7 @@ mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
 mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toValue u))
 mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
 mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)      
-       | trig conn a s  &&  a `notElem` cs                      = CALL a v ok
+       | trig conn a s  &&  a `notElem` cs                      = CALL a v void
        | trig conn a s                                          = CALL a v LIMIT
 mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
 --mayHear conn (RES a _)       (Op b [])         | a==b           = RES a NO_DATA
@@ -675,40 +673,6 @@ runSim RoundRobinSched sys     = evalState (simulation roundRobinSched sys) 0
 runSim (RandomSched g) sys     = evalState (simulation randomSched sys) g
 runSim (AnySched sch run) sys  = run (simulation sch sys)
 
-{-
-<<<<<<< Updated upstream
-data Output                 = Output {
-                                  measurements :: [(String,Measurement)],
-                                  logs         :: [(Time,String)]
-                              }
-
-runARSim                    :: SchedChoice -> Double -> (forall c . AR c a) -> Output
-runARSim choice limit sys   = Output {
-                                  measurements = rearrange $ collectMeas limit (probes state) 0.0 trs,
-                                  logs = collectLogs limit 0.0 trs
-                              }
-  where (_,(state,trs))     = runSim choice sys
-
-rearrange                   = Map.toList . Map.fromListWith (flip (++))
-
-collectMeas lim probes t [] = []
-collectMeas lim probes t _
-  | t > lim                 = []
-collectMeas lim probes t ((_,DELTA d,_,_):trs)
-                            = collectMeas lim probes (t+d) trs
-collectMeas lim probes t ((_,label,_,_):trs)
-                            = measurements ++ collectMeas lim probes t trs
-  where measurements        = [ (s,[(t,v)]) | (s,f) <- probes, Just v <- [f label] ]
-
-collectLogs lim t []        = []
-collectLogs lim t _
-  | t > lim                 = []
-collectLogs lim t ((_,DELTA d,_,_):trs)
-                            = collectLogs lim (t+d) trs
-collectLogs lim t ((_,_,ls,_):trs)
-                            = [ (t,v) | v <- ls ] ++ collectLogs lim t trs
-=======
--}
 limitTicks :: Int -> Trace -> Trace 
 limitTicks t (a,trs) = (a,take t trs)
 
@@ -770,7 +734,3 @@ collectLogs t n (Trans{transLabel = DELTA d}:trs)
 collectLogs t n (Trans{transLogs = logs}:trs)
                             = [ (i,[((n,t),v)]) | (i,v) <- logs ] ++ collectLogs t (n+1) trs
 
-
--- Run a simulation with a time limit, returning all probes of a type a. 
-timedARSim :: Data a => SchedChoice -> Time -> (forall c . AR c x) -> [(ProbeID,Measurement a)]
-timedARSim sch t sys = probeAll (limitTime t $ snd $ runSim sch sys)
