@@ -86,7 +86,7 @@ relief_step ::  ProvidedDataElement  Valve  c ->
                 Index -> RTE c SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
-        printlog ("Relief " ++ show a)
+        printlog "A" ("Relief " ++ show a)
         if a < 0 then do
                 rteWrite valve True
                 return (Running 0 (round (-a*10)) 1)
@@ -146,7 +146,7 @@ pressure_step valve accel 20 = do
 pressure_step valve accel n | even n = do
         rteWrite valve True
         Ok a <- rteRead accel
-        printlog ("Pressure " ++ show a)
+        printlog "A" ("Pressure " ++ show a)
         return (Running 0 (round (a*50)) (n+1))
 pressure_step valve accel n | odd n = do
         rteWrite valve False
@@ -196,12 +196,12 @@ control memo onoff_pressure onoff_relief slipstream = do
         Ok slip'  <- rteIrvRead memo
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
-                        printlog ("Slip " ++ show slip)
+                        printlog "A" ("Slip " ++ show slip)
                         rteCall onoff_pressure 0
                         rteCall onoff_relief True
                         return ()
                 (False, True) -> do
-                        printlog ("Slip " ++ show slip)
+                        printlog "A" ("Slip " ++ show slip)
                         rteCall onoff_relief False
                         rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
                         return ()
@@ -391,10 +391,10 @@ main1 = do
 
 showProgress :: IO Trace
 showProgress = do
-  let trace = limitTime 5.0 $ snd $ runSim TrivialSched test -- (RandomSched (mkStdGen 111))
-  mapM_ print (f $ traceLabels $ trace)
+  let trace = limitTime 5.0 $ snd $ runSim (RandomSched (mkStdGen 111)) test
+      progress = probe trace "A"
+  mapM_ (putStrLn . snd) progress
   return trace
-  where f xs = scanl (-) 5.0 [d|DELTA d<- xs]
 
 scaleValve_r :: Bool -> Double
 scaleValve_r = (+2.0) . fromIntegral . fromEnum

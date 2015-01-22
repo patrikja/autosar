@@ -35,7 +35,7 @@ data RTEop c a where
     Invalidate              :: ProvidedDataElement a c -> RTEop c (StdRet ())
     Call                    :: Data a => RequiredOperation a b c -> a -> RTEop c (StdRet ())
     Result                  :: Data b => RequiredOperation a b c -> RTEop c (StdRet b)
-    Printlog                :: String -> RTEop c ()
+    Printlog                :: Data a => ProbeID -> a -> RTEop c ()
 
 rteEnter                   :: ExclusiveArea c -> RTE c (StdRet ())
 rteExit                    :: ExclusiveArea c -> RTE c (StdRet ())
@@ -51,7 +51,7 @@ rteCall                    :: (Data a, Data b) => RequiredOperation a b c -> a -
 rteCallAsync               :: Data a => RequiredOperation a b c -> a -> RTE c (StdRet ())
 rteResult                  :: Data b => RequiredOperation a b c -> RTE c (StdRet b)
 
-printlog                    :: String -> RTE c ()
+printlog                    :: Data a => ProbeID -> a -> RTE c ()
 
 rteEnter       ex      = singleton $ Enter      ex
 rteExit        ex      = singleton $ Exit       ex
@@ -69,7 +69,7 @@ rteCall        rop  a  = rteCallAsync rop a >>= cont
 rteCallAsync   rop  a  = singleton $ Call       rop  a
 rteResult      rop     = singleton $ Result     rop
 
-printlog str                = singleton $ Printlog str
+printlog id val             = singleton $ Printlog id val
 
 data StdRet a               = Ok a
                             | NO_DATA
@@ -465,7 +465,7 @@ maySay (RInst a c ex code)                     = maySay' (view code)
         maySay' (Return v)                     = case c of
                                                      Just b  -> RET  b v
                                                      Nothing -> TERM a
-        maySay' (Printlog s        :>>= cont)  = maySay' (view (cont ()))
+        maySay' (Printlog i v      :>>= cont)  = maySay' (view (cont ()))
 maySay _                                       = VETO   -- most processes can't say anything
 
 
@@ -492,12 +492,12 @@ say label     (RInst a c ex code)                       = say' label (view code)
         say' (RES _    res) (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
         say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toValue ()))]
         say' (TERM _)       (Return _)                  = []
-        say' label          (Printlog s   :>>= cont)    = say' label (view (cont ()))
+        say' label          (Printlog i v :>>= cont)    = say' label (view (cont ()))
 
 
 mayLog (RInst a c ex code)                              = mayLog' (view code)
-  where mayLog' :: ProgramView (RTEop c) a -> [String]
-        mayLog' (Printlog s :>>= cont)                  = s : mayLog' (view (cont ()))
+  where mayLog' :: ProgramView (RTEop c) a -> Logs
+        mayLog' (Printlog i v :>>= cont)                = (i,toValue v) : mayLog' (view (cont ()))
         mayLog' _                                       = []
 mayLog _                                                = []
 
@@ -604,7 +604,7 @@ explore conn _ _ _                      = []
 
 -- The simulator proper ---------------------------------------------------------------------------------------
 
-type Logs                   = [String]
+type Logs                   = [(ProbeID,Value)]
 
 type SchedulerOption        = (Label, Logs, [Proc])
 data Transition             = Trans {transChoice  :: Int
@@ -731,11 +731,13 @@ probeS :: Trace -> ProbeID -> Measurement String
 probeS t pid = map (fmap show) $ probe' t pid
 
 probe' :: Trace -> ProbeID -> Measurement Value
-probe' t pid = concat $ go 0 0.0 (traceLabels t)
+probe' t pid = concat $ go 0 0.0 (traceTrans t)
   where
-    go n t (DELTA d:labs)  = go (n+1) (t+d) labs -- TODO:Should deltas really count at transitions?
-    go n t (lab:labs)      = [((n,t),v)|Just v <- map ($ lab) ps] : go (n+1) t labs
-    go _ _ _               = []
+    go n t (Trans{transLabel = DELTA d}:labs)  = go (n+1) (t+d) labs
+    go n t (tr:trs)         =  probes : logs : go (n+1) t trs
+      where probes          = [ ((n,t),v) | Just v <- map ($ (transLabel tr)) ps ]
+            logs            = [ ((n,t),v) | (i,v) <- transLogs tr, i == pid ]
+    go _ _ _                = []
     ps  = [runProbe p|p <- traceProbes t, probeID p == pid]
 
 
@@ -743,22 +745,31 @@ probe' t pid = concat $ go 0 0.0 (traceLabels t)
 -- Gets ALL probes of a certain type, categorized by probe-ID. 
 -- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces. 
 probeAll :: Data a => Trace -> [(ProbeID,Measurement a)]
-probeAll t = [(s,internal m) |(s,m) <- probeAll' t] 
+probeAll t = [(s,m') |(s,m) <- probeAll' t, let m' = internal m, not (null m') ]
 
 internal :: Data a => Measurement Value -> Measurement a
 internal ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
 
-probeAll'                    :: Trace -> [(ProbeID,Measurement Value)]
-probeAll' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collect (probes state) 0.0 0 trs
+probeAll'               :: Trace -> [(ProbeID,Measurement Value)]
+probeAll' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collected
+  where collected       = collect (probes state) 0.0 0 trs ++ collectLogs 0.0 0 trs
 
 
 collect :: [Probe] -> Time -> Int -> [Transition] -> [(ProbeID,Measurement Value)]
-collect probes t n []     = []
+collect probes t n []       = []
 collect probes t n (Trans{transLabel = DELTA d}:trs)
                             = collect probes (t+d) (n+1) trs
 collect probes t n (Trans{transLabel = label}:trs)
                             = measurements ++ collect probes t (n+1) trs
   where measurements        = [ (s,[((n,t),v)]) | (s,f) <- probes, Just v <- [f label] ]
+
+
+collectLogs t n []          = []
+collectLogs t n (Trans{transLabel = DELTA d}:trs)
+                            = collectLogs (t+d) (n+1) trs
+collectLogs t n (Trans{transLogs = logs}:trs)
+                            = [ (i,[((n,t),v)]) | (i,v) <- logs ] ++ collectLogs t (n+1) trs
+
 
 -- Run a simulation with a time limit, returning all probes of a type a. 
 timedARSim :: Data a => SchedChoice -> Time -> (forall c . AR c x) -> [(ProbeID,Measurement a)]
