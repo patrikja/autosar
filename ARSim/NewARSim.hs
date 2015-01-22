@@ -131,7 +131,13 @@ data Proc                   = forall c .
 
 type Conn                   = (Address, Address)
 
-type Probe                  = (String, Label -> Maybe Value)
+type ProbeID                = String
+type Probe                  = (ProbeID, Label -> Maybe Value)
+probeID :: Probe -> ProbeID
+probeID = fst
+runProbe :: Probe -> Label -> Maybe Value
+runProbe = snd
+
 
 type Address                = Int
 
@@ -210,26 +216,26 @@ instance Connectable (RequiredOp a b) (ProvidedOp a b) where
     connection (RO a) (PO b)    = (a,b)
 
 
-class Addressed a where
-        address                     :: [a] -> [Address]
+class Addressed f where
+        address                     :: f a c -> Address
 
-instance Addressed (ProvidedDataElement a c) where
-        address xs                  = [ n | PE n <- xs ]
+instance Addressed (ProvidedDataElement) where
+        address (PE n)              = n
 
-instance Addressed (RequiredDataElement a c) where
-        address xs                  = [ n | RE n <- xs ]
+instance Addressed (RequiredDataElement) where
+        address (RE n)              = n
         
-instance Addressed (ProvidedQueueElement a c) where
-        address xs                  = [ n | PQ n <- xs ]
+instance Addressed (ProvidedQueueElement) where
+        address (PQ n)              = n
 
-instance Addressed (RequiredQueueElement a c) where
-        address xs                  = [ n | RQ n <- xs ]
+instance Addressed (RequiredQueueElement) where
+        address (RQ n)              = n
         
-instance Addressed (ProvidedOperation a b c) where
-        address xs                  = [ n | PO n <- xs ]
+instance Addressed (ProvidedOperation a) where
+        address (PO n)              = n
 
-instance Addressed (RequiredOperation a b c) where
-        address xs                  = [ n | RO n <- xs ]
+instance Addressed (RequiredOperation a) where
+        address (RO n)              = n
 
 
 
@@ -332,22 +338,42 @@ seal5 (a1,a2,a3,a4,a5)      = (seal a1, seal a2, seal a3, seal a4, seal a5)
 seal6 (a1,a2,a3,a4,a5,a6)   = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6)
 
 
--- probeLabels :: Addressed a => 
-
-probeRead                   :: Data a => String -> RequiredDataElement a c -> AR c' ()
-probeRead s (RE a)        = singleton $ NewProbe s g
+-- TODO: add Reading/Writing classes instead of Addressed?
+probeRead                   :: (Data a, Addressed e) => String -> e a c -> AR c' ()
+probeRead s x              = singleton $ NewProbe s g
   where 
-    g (RD b (Ok v)) | a==b  = Just v
-    g _                     = Nothing
+    g (RD b (Ok v))    | a==b    = Just v
+    g (RCV b (Ok v))   | a==b    = Just v
+    -- g (SND b _ (Ok v))  | a==b -- Is SND a read? Is v of type a?
+    -- f (CALL b _ (Ok v)) | a==b -- Is CALL a read?
+    g (IRVR b (Ok v))  | a==b    = Just v
+    g (RES b (Ok v))   | a==b    = Just v
+    g _                         = Nothing
+    a = address x
 
-probeWrite                  :: Data a => String -> ProvidedDataElement a c -> AR c' ()
-probeWrite s p            = probeWrite' s p id
 
-probeWrite'                  :: (Data b, Data a) => String -> ProvidedDataElement a c -> (a -> b) -> AR c' ()
-probeWrite' s (PE a) f    = singleton $ NewProbe s g
+probeWrite                  :: (Data a, Addressed e) => String -> e a c -> AR c' ()
+probeWrite s x            = singleton $ NewProbe s g
   where 
-    g (WR b v) | a==b       = Just (toValue $ f $ value' v)
+    g (IRVW b v)     | a==b     = Just v
+    g (WR b v)       | a==b     = Just v
+    -- g (SND b v _)    | a==b     = Just v -- Not sure about these.
+    -- g (CALL b v _)   | a==b     = Just v
+    g (RET b v)      | a==b     = Just v
     g _                     = Nothing
+    a = address x
+{-
+probeWrite'                 :: (Data b, Data a, Addressed e) => String -> e a c -> AR c' ()
+probeWrite' s x f    = singleton $ NewProbe s g
+  where 
+    g (WR b v) | a==b       = Just (toValue $ f $ value' v) -- TODO: Do we know this is always of type a?
+    
+    
+    g _                     = Nothing
+    a = address x
+-}
+
+
 
 data Label                  = ENTER Address
                             | EXIT  Address
@@ -389,6 +415,29 @@ labelText l = case l of
           TICK  a            -> "TICK:"++show a
           DELTA t            -> "DELTA:"++show t
           VETO               -> "VETO"
+
+labelAddress :: Label -> Maybe Address 
+labelAddress l = case l of
+          ENTER a            -> Just a
+          EXIT  a            -> Just a
+          IRVR  a ret        -> Just a
+          IRVW  a val        -> Just a
+          RCV   a ret        -> Just a
+          SND   a val ret    -> Just a
+          RD    a ret        -> Just a
+          WR    a val        -> Just a
+          UP    a ret        -> Just a
+          INV   a            -> Just a
+          CALL  a val ret    -> Just a
+          RES   a ret        -> Just a
+          RET   a val        -> Just a
+          NEW   a            -> Just a
+          TERM  a            -> Just a
+          TICK  a            -> Just a
+          DELTA t            -> Nothing
+          VETO               -> Nothing
+
+
 
 maySay :: Proc -> Label
 maySay (Run a 0.0 Pending n s)
@@ -566,7 +615,14 @@ type Scheduler m            = [SchedulerOption] -> m Transition
 type Trace                  = (SimState, [Transition])
 
 traceLabels :: Trace -> [Label]
-traceLabels = map transLabel . snd
+traceLabels = map transLabel . traceTrans
+
+traceTrans :: Trace -> [Transition]
+traceTrans = snd
+
+traceProbes :: Trace -> [Probe]
+traceProbes = probes . fst
+
 
 simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
@@ -666,19 +722,37 @@ limitTime t (a,trs) = (a,limitTimeTrs t trs) where
 
 type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
 
--- Gets ALL probes of a certain types, categorized by probe-ID. 
+-- Gets all measured values with a particular probe-ID and type
+probe :: Data a => Trace -> ProbeID -> Measurement a
+probe t pid = internal $ probe' t pid
+
+-- Get string representations of all measured values with a particular probe-ID
+probeS :: Trace -> ProbeID -> Measurement String
+probeS t pid = map (fmap show) $ probe' t pid
+
+probe' :: Trace -> ProbeID -> Measurement Value
+probe' t pid = concat $ go 0 0.0 (traceLabels t)
+  where
+    go n t (DELTA d:labs)  = go (n+1) (t+d) labs -- TODO:Should deltas really count at transitions?
+    go n t (lab:labs)      = [((n,t),v)|Just v <- map ($ lab) ps] : go (n+1) t labs
+    go _ _ _               = []
+    ps  = [runProbe p|p <- traceProbes t, probeID p == pid]
+
+
+
+-- Gets ALL probes of a certain type, categorized by probe-ID. 
 -- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces. 
-runARSim :: Data a => Trace -> [(String,Measurement a)]
-runARSim t = [(s,internal m) |(s,m) <- runARSim' t] 
+probeAll :: Data a => Trace -> [(ProbeID,Measurement a)]
+probeAll t = [(s,internal m) |(s,m) <- probeAll' t] 
 
 internal :: Data a => Measurement Value -> Measurement a
 internal ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
 
-runARSim'                    :: Trace -> [(String,Measurement Value)]
-runARSim' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collect (probes state) 0.0 0 trs
+probeAll'                    :: Trace -> [(ProbeID,Measurement Value)]
+probeAll' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collect (probes state) 0.0 0 trs
 
 
-collect :: [Probe] -> Time -> Int -> [Transition] -> [(String,Measurement Value)]
+collect :: [Probe] -> Time -> Int -> [Transition] -> [(ProbeID,Measurement Value)]
 collect probes t n []     = []
 collect probes t n (Trans{transLabel = DELTA d}:trs)
                             = collect probes (t+d) (n+1) trs
@@ -687,5 +761,5 @@ collect probes t n (Trans{transLabel = label}:trs)
   where measurements        = [ (s,[((n,t),v)]) | (s,f) <- probes, Just v <- [f label] ]
 
 -- Run a simulation with a time limit, returning all probes of a type a. 
-timedARSim :: Data a => SchedChoice -> Time -> (forall c . AR c x) -> [(String,Measurement a)]
-timedARSim sch t sys = runARSim (limitTime t $ snd $ runSim sch sys)
+timedARSim :: Data a => SchedChoice -> Time -> (forall c . AR c x) -> [(ProbeID,Measurement a)]
+timedARSim sch t sys = probeAll (limitTime t $ snd $ runSim sch sys)

@@ -53,7 +53,7 @@ test            = do srv <- ticketDispenser
                      connect r2 srv
                      connect r3 srv
                      connect r4 srv
-                     return (address [out1, out2, out3, out4])
+                     return (map address [out1, out2, out3, out4])
 
 
 x = runSim TrivialSched test
