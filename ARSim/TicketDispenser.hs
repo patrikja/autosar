@@ -17,6 +17,8 @@ ticketDispenser = component $
                   do requestTicketP <- providedOperation
                      -- Variable holding number of issued tickets.
                      cur            <- interRunnableVariable (0 :: Int)
+                     probeRead "Read" cur
+                     probeWrite "Write" cur
                      -- Code of the remote operation: return the ticket number and update state.
                      let rtBody = do Ok v <- rteIrvRead cur
                                      rteIrvWrite cur (v+1)
@@ -68,15 +70,23 @@ prop_nodupes g (Small n) = tickets == nub tickets where
 
 -- Use this to get the actual tickets for a given counterexample
 rerun_nodupes :: Int -> Int -> [Int]
-rerun_nodupes g n = map snd $ probe trace "out"
+rerun_nodupes g n = map measureValue $ probe trace "out"
   where
     trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
 
 -- A property that passes.
 prop_nodupes_triv :: Small Int -> Bool
 prop_nodupes_triv (Small n) = tickets == nub tickets where
-  tickets = map snd $ probe trace "out" :: [Int]
+  tickets = map measureValue $ probe trace "out" :: [Int]
   trace = limitTrans ((abs $ n) +1) $ execSim TrivialSched test
+
+
+printTrace :: Int -> Int -> IO ()
+printTrace g n = mapM_ printMeasure (probes trace ["Read","Write"] :: [Measure Int]) where
+  trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+
+printMeasure :: Show a => Measure a -> IO ()
+printMeasure m = putStrLn $ measureID m ++ ": " ++ show (measureValue m)
 
 
 {-

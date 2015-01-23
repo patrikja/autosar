@@ -385,15 +385,18 @@ main1 :: IO Bool
 main1 = do 
   t <- showProgress 
   let doubles = probeAll t
-      bools1   = map (fmap scaleValve_r) (probe t "relief 2" :: Measurement Bool)
-      bools2   = map (fmap scaleValve_p) (probe t "pressure 2")
-  makePlot (("relief 2",bools1):("pressure  2",bools2):doubles)
+      bools   = map scale (probeAll t)
+      -- bools1   = map (fmap scaleValve_r) (probe t "relief 2" :: Measurement Bool)
+      -- bools2   = map (fmap scaleValve_p) (probe t "pressure 2")
+  makePlot (bools ++ doubles)
+
+scale :: (ProbeID, Measurement Bool) -> (ProbeID, Measurement Double)
+scale ("relief 2",m)   = ("relief 2",map (fmap scaleValve_r) m)
+scale ("pressure 2",m) = ("pressure 2",map (fmap scaleValve_p) m)
 
 showProgress :: IO Trace
 showProgress = do
   let trace = limitTime 5.0 $ execSim (RandomSched (mkStdGen 111)) test
-  --     progress = probe trace "A"
-  -- mapM_ (putStrLn . snd) progress
   printLogs trace
   return trace
 

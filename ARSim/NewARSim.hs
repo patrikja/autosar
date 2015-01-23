@@ -5,6 +5,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module NewARSim (module NewARSim, Typeable, Data, mkStdGen, StdGen) where
               
@@ -111,11 +112,11 @@ data Invocation             = Concurrent
 -- Simulator state ------------------------------------------------------------
 
 data SimState               = SimState {
-                                    procs    :: [Proc],
-                                    conns    :: [Conn],
-                                    probes   :: [Probe],
-                                    initvals :: Map.Map Address Value,
-                                    nextA    :: Address
+                                    procs       :: [Proc],
+                                    conns       :: [Conn],
+                                    simProbes   :: [Probe],
+                                    initvals    :: Map.Map Address Value,
+                                    nextA       :: Address
                                 }
 
 data Proc                   = forall c . 
@@ -157,7 +158,7 @@ data Static c               = Static {
 
 type ConnRel = Address -> Address -> Bool
 
-state0                      = SimState { procs = [], conns = [], probes = [], initvals = Map.empty, nextA = 0 }
+state0                      = SimState { procs = [], conns = [], simProbes = [], initvals = Map.empty, nextA = 0 }
 
 apInit conn mp p@(DElem a f NO_DATA)
                             = case [ v | (b,a') <- conn, a'==a, Just v <- [Map.lookup b mp] ] of
@@ -188,7 +189,7 @@ runAR sys st                = run sys st
     run' (NewProcess p :>>= sys) st
                             = run (sys ()) (st { procs = p : procs st })
     run' (NewProbe s f :>>= sys) st
-                            = run (sys ()) (st { probes = (s,f) : probes st })
+                            = run (sys ()) (st { simProbes = (s,f) : simProbes st })
     run' (NewInit a v :>>= sys) st
                             = run (sys ()) (st { initvals = Map.insert a v (initvals st) })
     run' (Component subsys :>>= sys) st
@@ -218,6 +219,9 @@ instance Connectable (RequiredOp a b) (ProvidedOp a b) where
 
 class Addressed f where
         address                     :: f a c -> Address
+
+instance Addressed InterRunnableVariable where
+        address (IV n)              = n
 
 instance Addressed (ProvidedDataElement) where
         address (PE n)              = n
@@ -619,7 +623,7 @@ traceTrans :: Trace -> [Transition]
 traceTrans = snd
 
 traceProbes :: Trace -> [Probe]
-traceProbes = probes . fst
+traceProbes = simProbes . fst
 
 traceLogs :: Trace -> Logs
 traceLogs = concat . map transLogs . traceTrans
@@ -692,39 +696,62 @@ limitTime t (a,trs) = (a,limitTimeTrs t trs) where
 printLogs :: Trace -> IO ()
 printLogs = mapM_ (\(id,v) -> putStrLn (id ++ ":" ++ show v)) . traceLogs
 
-type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
+debug :: Trace -> IO ()
+debug = mapM_ print . traceLabels where
+
+
+
+data Measure a = Measure {measureID     :: ProbeID
+                         , measureTime  :: Time
+                         , measureTrans :: Int
+                         , measureValue :: a
+                         } deriving Functor
 
 -- Gets all measured values with a particular probe-ID and type
-probe :: Data a => Trace -> ProbeID -> Measurement a
-probe t pid = internal $ probe' t pid
+probe :: Data a => Trace -> ProbeID -> [Measure a]
+probe t pid = internal $ probes' t [pid]
 
 -- Get string representations of all measured values with a particular probe-ID
-probeS :: Trace -> ProbeID -> Measurement String
-probeS t pid = map (fmap show) $ probe' t pid
+probeString :: Trace -> ProbeID -> [Measure String]
+probeString t pid = map (fmap show) $ probes' t [pid]
 
-probe' :: Trace -> ProbeID -> Measurement Value
-probe' t pid = concat $ go 0 0.0 (traceTrans t)
+-- Get all measured values for a set of probe-IDs and a type
+probes :: Data a => Trace -> [ProbeID] -> [Measure a]
+probes t pids = internal $ probes' t pids
+
+probes' :: Trace -> [ProbeID] -> [Measure Value]
+probes' t pids = concat $ go 0 0.0 (traceTrans t)
   where
     go n t (Trans{transLabel = DELTA d}:labs)  = go (n+1) (t+d) labs
     go n t (tr:trs)         =  probes : logs : go (n+1) t trs
-      where probes          = [ ((n,t),v) | Just v <- map ($ (transLabel tr)) ps ]
-            logs            = [ ((n,t),v) | (i,v) <- transLogs tr, i == pid ]
+      where probes          = [ Measure i t n v | (Just v,i) <- filtered (transLabel tr)]
+            logs            = [ Measure i t n v | (i,v) <- transLogs tr, i `elem` pids ]
     go _ _ _                = []
-    ps  = [runProbe p|p <- traceProbes t, probeID p == pid]
+    ps = [p|p <- traceProbes t, probeID p `elem` pids]
+    filtered lab = [(runProbe p lab, probeID p)|p <- ps]
+
+internal :: Data a => [Measure Value] -> [Measure a]
+internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValue m))]
 
 
+
+
+-- Code below this point is a bit outdated. 
+
+
+type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
 
 -- Gets ALL probes of a certain type, categorized by probe-ID. 
 -- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces. 
 probeAll :: Data a => Trace -> [(ProbeID,Measurement a)]
-probeAll t = [(s,m') |(s,m) <- probeAll' t, let m' = internal m, not (null m') ]
+probeAll t = [(s,m') |(s,m) <- probeAll' t, let m' = internal' m, not (null m') ]
 
-internal :: Data a => Measurement Value -> Measurement a
-internal ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
+internal' :: Data a => Measurement Value -> Measurement a
+internal' ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
 
 probeAll'               :: Trace -> [(ProbeID,Measurement Value)]
 probeAll' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collected
-  where collected       = collect (probes state) 0.0 0 trs ++ collectLogs 0.0 0 trs
+  where collected       = collect (simProbes state) 0.0 0 trs ++ collectLogs 0.0 0 trs
 
 
 collect :: [Probe] -> Time -> Int -> [Transition] -> [(ProbeID,Measurement Value)]
