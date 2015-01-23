@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
-module TickedDispenser where
+module TicketDispenser where
 
 import NewARSim
 import Test.QuickCheck
@@ -22,7 +22,7 @@ ticketDispenser = component $
                      -- Code of the remote operation: return the ticket number and update state.
                      let rtBody = do Ok v <- rteIrvRead cur
                                      rteIrvWrite cur (v+1)
-                                     printlog "out" v
+                                     printlog "SendTicket" v
                                      return v
                      -- serverRunnableN "Server" Concurrent [requestTicketP] (\() -> rtBody)
                      serverRunnable Concurrent [requestTicketP] (\() -> rtBody)
@@ -70,14 +70,14 @@ prop_nodupes g (Small n) = tickets == nub tickets where
 
 -- Use this to get the actual tickets for a given counterexample
 rerun_nodupes :: Int -> Int -> [Int]
-rerun_nodupes g n = map measureValue $ probe trace "out"
+rerun_nodupes g n = map measureValue $ probe trace "SendTicket"
   where
     trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
 
 -- A property that passes.
 prop_nodupes_triv :: Small Int -> Bool
 prop_nodupes_triv (Small n) = tickets == nub tickets where
-  tickets = map measureValue $ probe trace "out" :: [Int]
+  tickets = map measureValue $ probe trace "SendTicket" :: [Int]
   trace = limitTrans ((abs $ n) +1) $ execSim TrivialSched test
 
 
@@ -87,6 +87,12 @@ printTrace g n = mapM_ printMeasure (probes trace ["Read","Write"] :: [Measure I
 
 printMeasure :: Show a => Measure a -> IO ()
 printMeasure m = putStrLn $ measureID m ++ ": " ++ show (measureValue m)
+
+
+printTrace' :: Int -> Int -> IO ()
+printTrace' g n = mapM_ printMeasure (probes trace ["Read","Write","SendTicket"] :: [Measure Int]) where
+  trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+
 
 
 {-
