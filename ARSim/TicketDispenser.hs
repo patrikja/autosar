@@ -1,9 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
-<<<<<<< HEAD
-module TicketDispenser where
-=======
 module Main where
->>>>>>> 533bcfd
 
 import NewARSim
 import Test.QuickCheck
@@ -21,23 +17,15 @@ ticketDispenser = component $
                      -- Create a port for remote operation.
                   do requestTicketP <- providedOperation
                      -- Variable holding number of issued tickets.
-<<<<<<< HEAD
-                     cur            <- interRunnableVariable (0 :: Int)
-                     probeRead "Read" cur
-                     probeWrite "Write" cur
-=======
                      cur <- interRunnableVariable (0 :: Int)
                      excl <- exclusiveArea
->>>>>>> 533bcfd
+                     probeRead "Read" cur
+                     probeWrite "Write" cur
                      -- Code of the remote operation: return the ticket number and update state.
                      let rtBody = do --rteEnter excl
                                      Ok v <- rteIrvRead cur
                                      rteIrvWrite cur (v+1)
-<<<<<<< HEAD
-                                     printlog "SendTicket" v
-=======
                                      --rteExit excl
->>>>>>> 533bcfd
                                      return v
                      -- serverRunnableN "Server" Concurrent [requestTicketP] (\() -> rtBody)
                      serverRunnable Concurrent [requestTicketP] (\() -> rtBody)
@@ -51,7 +39,7 @@ client n        = component $
                   do requestTicketR <- requiredOperation
                      -- In a loop: Obtain a ticket and send its value to the output port.
                      let clientLoop = do Ok v <- rteCall requestTicketR ()
-                                         printlog "out" v
+                                         printlog "Ticket" v
                                          clientLoop
                      -- runnableN ("Client" ++ show n) Concurrent [Init] clientLoop
                      runnable Concurrent [Init] clientLoop
@@ -62,12 +50,12 @@ test :: AR c ()
 test            = do srv <- ticketDispenser
                      r1 <- client 1
                      r2 <- client 2
---                     r3 <- client 3 
---                     r4 <- client 4
+                     r3 <- client 3 
+                     r4 <- client 4
                      connect r1 srv
                      connect r2 srv
---                     connect r3 srv
---                     connect r4 srv
+                     connect r3 srv
+                     connect r4 srv
 
 
 main = quickCheck prop_nodupes
@@ -86,21 +74,15 @@ prop_nodupes g (Small n) = tickets == nub tickets where
 
 -- Use this to get the actual tickets for a given counterexample
 rerun_nodupes :: Int -> Int -> [Int]
-rerun_nodupes g n = map measureValue $ probe trace "SendTicket"
+rerun_nodupes g n = map measureValue $ probe trace "Ticket"
   where
-<<<<<<< HEAD
     trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
 
 -- A property that passes.
 prop_nodupes_triv :: Small Int -> Bool
 prop_nodupes_triv (Small n) = tickets == nub tickets where
-  tickets = map measureValue $ probe trace "SendTicket" :: [Int]
+  tickets = map measureValue $ probe trace "Ticket" :: [Int]
   trace = limitTrans ((abs $ n) +1) $ execSim TrivialSched test
-=======
-    trace = limitTrans ((abs $ n) +1) $ execSim sched test
-    sched = (RandomSched (mkStdGen g))
---    sched = TrivialSched
->>>>>>> 533bcfd
 
 
 printTrace :: Int -> Int -> IO ()
@@ -112,7 +94,7 @@ printMeasure m = putStrLn $ measureID m ++ ": " ++ show (measureValue m)
 
 
 printTrace' :: Int -> Int -> IO ()
-printTrace' g n = mapM_ printMeasure (probes trace ["Read","Write","SendTicket"] :: [Measure Int]) where
+printTrace' g n = mapM_ printMeasure (probes trace ["Read","Write","Ticket"] :: [Measure Int]) where
   trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
 
 
