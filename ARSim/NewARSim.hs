@@ -693,8 +693,10 @@ limitTime t (a,trs) = (a,limitTimeTrs t trs) where
   limitTimeTrs t []                        = []
   limitTimeTrs t (x:xs)                    = x : limitTimeTrs t xs
 
-printLogs :: Trace -> IO ()
-printLogs = mapM_ (\(id,v) -> putStrLn (id ++ ":" ++ show v)) . traceLogs
+printLogs :: Trace -> IO Trace
+printLogs trace = do
+    mapM_ (\(id,v) -> putStrLn (id ++ ":" ++ show v)) $ traceLogs trace
+    return trace
 
 debug :: Trace -> IO ()
 debug = mapM_ print . traceLabels where

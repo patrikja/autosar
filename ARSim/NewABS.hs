@@ -292,12 +292,14 @@ wheel_f i time pressure relief velo
         | i /= 2                    = veloStep (-4.5)     velo
         -- let wheel 2 skid...
         -- We "postulate" a reasonable approximation of the wheel speed (ignoring the actual valves). Ideally the whole car dynamics whould be in another module (in Simulink).
-        | time < 1.8                = veloStep (-10)      velo
-        | time < 2.5                = veloStep (-2/0.7)   velo
-        | time < 3                  = veloStep (0.5/0.5)  velo
-        | time < 3.4                = veloStep (-1.5/0.4) velo
-        | time < 4                  = veloStep (-3/0.6)   velo
-        | time < 4.5                = veloStep (-4/0.5)   velo
+        | time < 1.6                = veloStep (-10)      velo
+        | time < 2                  = veloStep (-4)       velo
+        | time < 2.5                = veloStep (-3)       velo
+        | time < 3                  = veloStep 0.0        velo
+        | time < 3.4                = veloStep (-4.5)     velo
+        | time < 4                  = veloStep (-5)       velo
+        | time < 4.3                = veloStep (-8.4)     velo
+        | time < 4.7                = veloStep (-4)       velo
         | otherwise                 = veloStep 0          velo
 -- The "pressure logic" is something like this, but a propoer treatment need integration over time and knowledge of vehicle speed and other physical parameters.
 --        | pressure && not relief    = veloStep (-10)      velo   
@@ -381,45 +383,35 @@ conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
         connect valve_r r_act
         connect valve_p p_act
 
-main1 :: IO Bool
-main1 = do 
-  t <- showProgress 
-  let doubles = probeAll t
-      bools   = map scale (probeAll t)
-      -- bools1   = map (fmap scaleValve_r) (probe t "relief 2" :: Measurement Bool)
-      -- bools2   = map (fmap scaleValve_p) (probe t "pressure 2")
-  makePlot (bools ++ doubles)
 
-scale :: (ProbeID, Measurement Bool) -> (ProbeID, Measurement Double)
-scale ("relief 2",m)   = ("relief 2",map (fmap scaleValve_r) m)
-scale ("pressure 2",m) = ("pressure 2",map (fmap scaleValve_p) m)
-
-showProgress :: IO Trace
-showProgress = do
-  let trace = limitTime 5.0 $ execSim (RandomSched (mkStdGen 111)) test
-  printLogs trace
-  return trace
-
-scaleValve_r :: Bool -> Double
-scaleValve_r = (+2.0) . fromIntegral . fromEnum
-scaleValve_p :: Bool -> Double
-scaleValve_p = (+4.0) . fromIntegral . fromEnum
-
-
-makePlot :: [(String, Measurement Double)] -> IO Bool
-makePlot ms = plot (PS "plot.ps") curves
+makePlot :: Trace -> IO Bool
+makePlot trace = plot (PS "plot.ps") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
                   | (str,pts) <- ms ]
         color "pressure 2"              = Red
         color "relief 2"                = Blue
-        color "wheel speed 2"           = Green
-        color "wheel acceleration 2"    = Violet
+        color "wheel 2 speed"           = Green
+        color "wheel 2 acceleration"    = Violet
         color _                         = Black
         discrete []                     = []
         discrete (((_,t),v):vs)         = (t,v) : disc v vs
           where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
                 disc _ _                = []
                 eps                     = 0.0001
+        ms                              = ("relief 2",bools1):("pressure 2",bools2):doubles
+        doubles                         = probeAll trace
+        bools1                          = map (fmap scaleValve_r) (probe trace "relief 2")
+        bools2                          = map (fmap scaleValve_p) (probe trace "pressure 2")
+
+scaleValve_r :: Bool -> Double
+scaleValve_r = (+2.0) . fromIntegral . fromEnum
+scaleValve_p :: Bool -> Double
+scaleValve_p = (+4.0) . fromIntegral . fromEnum
+
+main1 :: IO Bool
+main1 = printLogs trace >> makePlot trace
+  where trace = limitTime 5.0 $ execSim (RandomSched (mkStdGen 111)) test
+
 
 main :: IO Bool
 main = main1
