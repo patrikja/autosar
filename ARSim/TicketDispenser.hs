@@ -1,10 +1,11 @@
 {-# LANGUAGE RankNTypes #-}
-module TickedDispenser where
+module Main where
 
 import NewARSim
 import Test.QuickCheck
 import Test.QuickCheck.Property
 import Data.List(nub)
+import System.Random
 
 
 
@@ -16,52 +17,55 @@ ticketDispenser = component $
                      -- Create a port for remote operation.
                   do requestTicketP <- providedOperation
                      -- Variable holding number of issued tickets.
-                     cur            <- interRunnableVariable (0 :: Int)
+                     cur <- interRunnableVariable (0 :: Int)
+                     excl <- exclusiveArea
                      -- Code of the remote operation: return the ticket number and update state.
-                     let rtBody = do Ok v <- rteIrvRead cur
+                     let rtBody = do --rteEnter excl
+                                     Ok v <- rteIrvRead cur
                                      rteIrvWrite cur (v+1)
-                                     printlog "out" v
+                                     --rteExit excl
                                      return v
                      -- serverRunnableN "Server" Concurrent [requestTicketP] (\() -> rtBody)
                      serverRunnable Concurrent [requestTicketP] (\() -> rtBody)
                      -- Export the port of the operation.
                      return (seal requestTicketP)
 
-client :: Int -> AR c (RequiredOperation () Int (), ProvidedQueueElement Int ())
+client :: Int -> AR c (RequiredOperation () Int ())
 client n        = component $
                      -- Create a port for calling a remote operation and an output port for
                      -- reporting obtained tickets.
                   do requestTicketR <- requiredOperation
-                     outputPort <- providedQueueElement
                      -- In a loop: Obtain a ticket and send its value to the output port.
                      let clientLoop = do Ok v <- rteCall requestTicketR ()
-                                         rteSend outputPort v
+                                         printlog "out" v
                                          clientLoop
                      -- runnableN ("Client" ++ show n) Concurrent [Init] clientLoop
                      runnable Concurrent [Init] clientLoop
-                     -- Export both ports.
-                     return (seal2 (requestTicketR, outputPort))
+                     return (seal requestTicketR)
 
--- Create a server instance and 4 client instances, connect them and export the output ports of the clients
--- as the observable output.
-test :: AR c [Address]
+-- Create a server instance and 4 client instances and connect them
+test :: AR c ()
 test            = do srv <- ticketDispenser
-                     (r1, out1) <- client 1
-                     (r2, out2) <- client 2
-                     (r3, out3) <- client 3 
-                     (r4, out4) <- client 4
+                     r1 <- client 1
+                     r2 <- client 2
+--                     r3 <- client 3 
+--                     r4 <- client 4
                      connect r1 srv
                      connect r2 srv
-                     connect r3 srv
-                     connect r4 srv
-                     return (map address [out1, out2, out3, out4])
-
-
-
+--                     connect r3 srv
+--                     connect r4 srv
 
 
 main = quickCheck prop_nodupes
-
+{-
+main = do g <- getStdGen
+          let tickets = map snd $ probe trace "out" :: [Int]
+              trace = limitTrans 50 $ execSim sched test
+              sched = RandomSched g
+--              sched = TrivialSched
+--              sched = RoundRobinSched
+          print tickets
+-}
 prop_nodupes :: Int -> Small Int -> Bool
 prop_nodupes g (Small n) = tickets == nub tickets where
   tickets = rerun_nodupes g n
@@ -70,13 +74,9 @@ prop_nodupes g (Small n) = tickets == nub tickets where
 rerun_nodupes :: Int -> Int -> [Int]
 rerun_nodupes g n = map snd $ probe trace "out"
   where
-    trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
-
--- A property that passes.
-prop_nodupes_triv :: Small Int -> Bool
-prop_nodupes_triv (Small n) = tickets == nub tickets where
-  tickets = map snd $ probe trace "out" :: [Int]
-  trace = limitTrans ((abs $ n) +1) $ execSim TrivialSched test
+    trace = limitTrans ((abs $ n) +1) $ execSim sched test
+    sched = (RandomSched (mkStdGen g))
+--    sched = TrivialSched
 
 
 {-
