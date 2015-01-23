@@ -58,48 +58,51 @@ test            = do srv <- ticketDispenser
                      connect r4 srv
 
 
-main = quickCheck prop_nodupes
-{-
-main = do g <- getStdGen
-          let tickets = map snd $ probe trace "out" :: [Int]
-              trace = limitTrans 50 $ execSim sched test
-              sched = RandomSched g
---              sched = TrivialSched
---              sched = RoundRobinSched
-          print tickets
--}
-prop_nodupes :: Int -> Small Int -> Bool
-prop_nodupes g (Small n) = tickets == nub tickets where
-  tickets = rerun_nodupes g n
 
--- Use this to get the actual tickets for a given counterexample
-rerun_nodupes :: Int -> Int -> [Int]
-rerun_nodupes g n = map measureValue $ probe trace "Ticket"
-  where
-    trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+mainTrivial = quickCheck prop_nodupes_triv
 
--- A property that passes.
+-- A property that passes, uses the trivial scheduler.
 prop_nodupes_triv :: Small Int -> Bool
 prop_nodupes_triv (Small n) = tickets == nub tickets where
   tickets = map measureValue $ probe trace "Ticket" :: [Int]
   trace = limitTrans ((abs $ n) +1) $ execSim TrivialSched test
 
 
-printTrace :: Int -> Int -> IO ()
-printTrace g n = mapM_ printMeasure (probes trace ["Read","Write"] :: [Measure Int]) where
-  trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
 
-printMeasure :: Show a => Measure a -> IO ()
-printMeasure m = putStrLn $ measureID m ++ ": " ++ show (measureValue m)
+main = quickCheck prop_nodupes
 
+type RandomSeed     = Int
+type SimulationTime = Small Int
+prop_nodupes :: RandomSeed -> SimulationTime -> Property
+prop_nodupes g (Small n) = report $ tickets == nub tickets where
+  tickets = run_nodupes g n
+  report  = counterexample ("\n"++showTrace g n) -- Reports a trace 
 
-printTrace' :: Int -> Int -> IO ()
-printTrace' g n = mapM_ printMeasure (probes trace ["Read","Write","Ticket"] :: [Measure Int]) where
-  trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+-- Use this to get the actual tickets for a given counterexample
+run_nodupes :: RandomSeed -> Int -> [Int]
+run_nodupes g n = map measureValue $ probe trace "Ticket"
+  where
+    trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+
+showTrace :: RandomSeed -> Int -> String
+showTrace g n = unlines $ map showMeasure (probes trace ["Read","Write","Ticket"] :: [Measure Int]) 
+  where
+    trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+
+showMeasure :: Show a => Measure a -> String
+showMeasure m = measureID m ++ ": " ++ show (measureValue m)
 
 
 
 {-
+
+
+printTrace' g n = putStrLn $ showTrace g n
+
+printTrace :: Int -> Int -> IO ()
+printTrace g n = mapM_ (putStrLn . showMeasure) (probes trace ["Read","Write"] :: [Measure Int]) where
+  trace = limitTrans ((abs $ n) +1) $ execSim (RandomSched (mkStdGen g)) test
+
 
 -- Hilarious that this instance is not in the library
 -- instance Arbitrary StdGen where
