@@ -398,15 +398,15 @@ makePlot trace = plot (PS "plot.ps") curves
           where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
                 disc _ _                = []
                 eps                     = 0.0001
-        ms                              = ("relief 2",bools1):("pressure 2",bools2):doubles
+        ms                              = bools ++ doubles
         doubles                         = probeAll trace
-        bools1                          = map (fmap scaleValve_r) (probe trace "relief 2")
-        bools2                          = map (fmap scaleValve_p) (probe trace "pressure 2")
+        bools                           = map scale (probeAll trace)
 
-scaleValve_r :: Bool -> Double
-scaleValve_r = (+2.0) . fromIntegral . fromEnum
-scaleValve_p :: Bool -> Double
-scaleValve_p = (+4.0) . fromIntegral . fromEnum
+scale :: (ProbeID, Measurement Bool) -> (ProbeID, Measurement Double)
+scale ("relief 2",m)    = ("relief 2",map (fmap scaleValve) m)
+  where scaleValve      = (+2.0) . fromIntegral . fromEnum
+scale ("pressure 2",m)  = ("pressure 2",map (fmap scaleValve) m)
+  where scaleValve      = (+4.0) . fromIntegral . fromEnum
 
 main1 :: IO Bool
 main1 = printLogs trace >> makePlot trace
