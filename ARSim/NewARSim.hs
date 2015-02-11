@@ -609,7 +609,7 @@ explore conn _ _ _                      = []
 type Logs                   = [(ProbeID,Value)]
 
 type SchedulerOption        = (Label, Logs, [Proc])
-data Transition             = Trans {transChoice  :: Int
+data Transition             = Trans { transChoice :: Int
                                     , transLabel  :: Label
                                     , transLogs   :: Logs
                                     , transProcs  :: [Proc]}
@@ -703,38 +703,39 @@ debug = mapM_ print . traceLabels where
 
 
 
-data Measure a = Measure {measureID     :: ProbeID
+data Measure a = Measure { measureID    :: ProbeID
                          , measureTime  :: Time
                          , measureTrans :: Int
                          , measureValue :: a
-                         } deriving Functor
+                         } deriving (Functor, Show)
+
+measureTimeValue m = (measureTime m, measureValue m)
 
 -- Gets all measured values with a particular probe-ID and type
-probe :: Data a => Trace -> ProbeID -> [Measure a]
-probe t pid = internal $ probes' t [pid]
+probe :: Data a => ProbeID -> Trace -> [Measure a]
+probe pid t = internal $ probes' [pid] t
 
 -- Get string representations of all measured values with a particular probe-ID
-probeString :: Trace -> ProbeID -> [Measure String]
-probeString t pid = map (fmap show) $ probes' t [pid]
+probeString :: ProbeID -> Trace -> [Measure String]
+probeString pid t = map (fmap show) $ probes' [pid] t
 
 -- Get all measured values for a set of probe-IDs and a type
-probes :: Data a => Trace -> [ProbeID] -> [Measure a]
-probes t pids = internal $ probes' t pids
+probes :: Data a => [ProbeID] -> Trace -> [Measure a]
+probes pids t = internal $ probes' pids t
 
-probes' :: Trace -> [ProbeID] -> [Measure Value]
-probes' t pids = concat $ go 0 0.0 (traceTrans t)
+probes' :: [ProbeID] -> Trace -> [Measure Value]
+probes' pids t = concat $ go 0 0.0 (traceTrans t)
   where
     go n t (Trans{transLabel = DELTA d}:labs)  = go (n+1) (t+d) labs
     go n t (tr:trs)         =  probes : logs : go (n+1) t trs
-      where probes          = [ Measure i t n v | (Just v,i) <- filtered (transLabel tr)]
+      where probes          = [ Measure i t n v | (Just v,i) <- filtered (transLabel tr) ]
             logs            = [ Measure i t n v | (i,v) <- transLogs tr, i `elem` pids ]
     go _ _ _                = []
-    ps = [p|p <- traceProbes t, probeID p `elem` pids]
-    filtered lab = [(runProbe p lab, probeID p)|p <- ps]
+    ps                      = [ p | p <- traceProbes t, probeID p `elem` pids ]
+    filtered lab            = [ (runProbe p lab, probeID p) | p <- ps ]
 
 internal :: Data a => [Measure Value] -> [Measure a]
 internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValue m))]
-
 
 
 
@@ -752,7 +753,7 @@ internal' :: Data a => Measurement Value -> Measurement a
 internal' ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
 
 probeAll'               :: Trace -> [(ProbeID,Measurement Value)]
-probeAll' (state,trs)   = Map.toList $ Map.fromListWith (++) $ collected
+probeAll' (state,trs)   = Map.toList $ Map.fromListWith (flip (++)) $ collected
   where collected       = collect (simProbes state) 0.0 0 trs ++ collectLogs 0.0 0 trs
 
 

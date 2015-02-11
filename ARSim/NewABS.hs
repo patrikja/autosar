@@ -86,7 +86,7 @@ relief_step ::  ProvidedDataElement  Valve  c ->
                 Index -> RTE c SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
-        printlog "A" ("Relief " ++ show a)
+        printlog "" ("Relief " ++ show a)
         if a < 0 then do
                 rteWrite valve True
                 return (Running 0 (round (-a*10)) 1)
@@ -146,7 +146,7 @@ pressure_step valve accel 20 = do
 pressure_step valve accel n | even n = do
         rteWrite valve True
         Ok a <- rteRead accel
-        printlog "A" ("Pressure " ++ show a)
+        printlog "" ("Pressure " ++ show a)
         return (Running 0 (round (a*50)) (n+1))
 pressure_step valve accel n | odd n = do
         rteWrite valve False
@@ -196,12 +196,12 @@ control memo onoff_pressure onoff_relief slipstream = do
         Ok slip'  <- rteIrvRead memo
         case (slip < 0.8, slip' < 0.8) of
                 (True, False) -> do
-                        printlog "A" ("Slip " ++ show slip)
+                        printlog "" ("Slip " ++ show slip)
                         rteCall onoff_pressure 0
                         rteCall onoff_relief True
                         return ()
                 (False, True) -> do
-                        printlog "A" ("Slip " ++ show slip)
+                        printlog "" ("Slip " ++ show slip)
                         rteCall onoff_relief False
                         rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
                         return ()
@@ -249,13 +249,15 @@ wheel_ctrl (i,slipstream) = component $ do
 -- controller its updated slip ratio.
 --------------------------------------------------------------
 
+fromOk (Ok v) = v
+
 loop :: [RequiredDataElement   Velo  c] -> 
         [ProvidedQueueElement  Velo  c] ->
         RTE c [StdRet ()]
 loop velostreams slipstreams = do
-        velos <- mapM (\re -> do Ok v <- rteRead re; return v) velostreams
+        velos <- mapM (liftM fromOk . rteRead) velostreams
         let v0 = maximum velos
-        mapM (\(v,pe) -> rteSend pe (slip v0 v)) (velos `zip` slipstreams)
+        mapM (\(v,p) -> rteSend p (slip v0 v)) (velos `zip` slipstreams)
 
 slip :: Double -> Double -> Double
 slip 0.0  _v = 1.0   -- no slip
@@ -393,14 +395,15 @@ makePlot trace = plot (PS "plot.ps") curves
         color "wheel 2 speed"           = Green
         color "wheel 2 acceleration"    = Violet
         color _                         = Black
-        discrete []                     = []
-        discrete (((_,t),v):vs)         = (t,v) : disc v vs
-          where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
-                disc _ _                = []
-                eps                     = 0.0001
         ms                              = bools ++ doubles
         doubles                         = probeAll trace
         bools                           = map scale (probeAll trace)
+
+discrete []                     = []
+discrete (((_,t),v):vs)         = (t,v) : disc v vs
+  where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
+        disc _ _                = []
+        eps                     = 0.0001
 
 scale :: (ProbeID, Measurement Bool) -> (ProbeID, Measurement Double)
 scale ("relief 2",m)    = ("relief 2",map (fmap scaleValve) m)
@@ -416,29 +419,3 @@ main1 = printLogs trace >> makePlot trace
 main :: IO Bool
 main = main1
 
-{-
-rmethod rport excl irv = do
-        Ok v <- rteRead rport
-        rteEnter excl
-        Ok s <- rteIrvRead irv
-        rteIrvWrite irv (s+v)
-        rteExit excl
-
-wmethod pport peek = do
-        x <- peek
-        rteWrite pport (7+x)
-
-peek irv = do
-        Ok v <- rteIrvRead irv
-        return v
-
-tricky = do (rp,peek)   <- component $ do rport <- requiredDataElement
-                                          excl <- exclusiveArea
-                                          irv <- interRunnableVariable (0::Int)
-                                          runnable Concurrent [ReceiveE rport] (rmethod rport excl irv)
-                                          return (seal rport, peek irv)
-            pp          <- component $ do pport <- providedDataElement
-                                          runnable Concurrent [Timed 1.0] (wmethod pport peek)
-                                          return (seal pport)
-            connect pp rp
--}
