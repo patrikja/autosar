@@ -78,17 +78,17 @@ delem(E:P:I, _U, _)                      ---hear(A,inv)--->          delem(E:P:I
 %%%%% Calling a server
 
 rinst(R:I, C, XS, rte_call(O:P,V,K))     ---say(O:P:I,call(V,O:P:I,Res))--->  rinst(R:I, C, XS, ap(K,Res))
-    :- server_call_point(R:I, async(O:P)) ; Res \= ok   .
+    :- serverCallPoint(R:I, async(O:P)) ; Res \= ok   .
 rinst(R:I, C, XS, rte_call(O:P,V,K))     ---say(O:P:I,call(V,O:P:I,ok))--->   rinst(R:I, C, XS, rte_result(O:P,K))
-    :- server_call_point(R:I, sync(O:P))  .
+    :- serverCallPoint(R:I, sync(O:P))  .
 runnable(R:I, K, T, serving(Cs,Vs), N)   ---hear(A,call(V,C,ok))--->          runnable(R:I, K, T, serving(Cs1,Vs1), N)
     :-
-    A==>O:P:I, events(R:I, op_invoked(O:P)),
+    A==>O:P:I, events(R:I, operationInvoked(O:P)),
     \+ member(C,Cs), append(Cs,[C],Cs1), append(Vs,[V],Vs1)
     .
 runnable(R:I, K, T, serving(Cs,Vs), N)   ---hear(A,call(_V,C,limit))--->      runnable(R:I, K, T, serving(Cs,Vs), N)
     :-
-    A==>O:P:I, events(R:I, op_invoked(O:P)),
+    A==>O:P:I, events(R:I, operationInvoked(O:P)),
     member(C, Cs)
     .
 
@@ -110,15 +110,15 @@ runnable(A, K, T, Act, N)                ---hear(A,term)--->    runnable(A, K, T
 runnable(A, K, 0, pending, N)            ---say(A,new)--->    [ runnable(A, K, T, idle, N1)
                                                               , rinst(A, nil, [], ap(K,void)) ]
     :-
-    (N == 0 ; can_be_invoked_concurrently(A)),
-    minimum_start_interval(A, T),
+    (N == 0 ; canBeInvokedConcurrently(A)),
+    minimumStartInterval(A, T),
     N1 is N+1
     .
 runnable(A, K, 0, serving([C|Cs],[V|Vs]), N) ---say(A,new)--->   [ runnable(A, K, T, serving(Cs,Vs), N1)
                                                                  , rinst(A, C, [], ap(K,V)) ]
     :-
-    (N == 0 ; can_be_invoked_concurrently(A)),
-    minimum_start_interval(A, T), 
+    (N == 0 ; canBeInvokedConcurrently(A)),
+    minimumStartInterval(A, T), 
     N1 is N+1
     .
 
