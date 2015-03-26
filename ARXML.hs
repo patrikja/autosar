@@ -117,6 +117,8 @@ toDest "NV-DATA-INTERFACE" = RSENvDataInterface
 toDest "APPLICATION-ARRAY-DATA-TYPE" = RSEApplicationArrayDataType
 toDest "APPLICATION-SW-COMPONENT-TYPE" = RSEApplicationSwComponentType
 toDest "SENSOR-ACTUATOR-SW-COMPONENT-TYPE" = RSESensorActuatorSwComponentType
+toDest "SERVICE-SW-COMPONENT-TYPE" = RSEServiceSwComponentType
+toDest "ECU-ABSTRACTION-SW-COMPONENT-TYPE" = RSEEcuAbstractionSwComponentType
 toDest "COMPOSITION-SW-COMPONENT-TYPE" = RSECompositionSwComponentType
 toDest "SW-COMPONENT-PROTOTYPE" = RSESwComponentPrototype
 toDest "VARIABLE-AND-PARAMETER-INTERFACE-MAPPING" = RSEVariableAndParameterInterfaceMapping
@@ -171,6 +173,8 @@ toPElement e
   | isElem "SWC-IMPLEMENTATION" e = Just (SwcImplementationPElement (toSwcImplementation e))
   | isElem "SENDER-RECEIVER-INTERFACE" e = Just (SenderReceiverInterfacePElement (toSenderReceiverInterface e))
   | isElem "SENSOR-ACTUATOR-SW-COMPONENT-TYPE" e = Just (SensorActuatorSwComponentTypePElement (toSensorActuatorSwComponentType e))
+  | isElem "SERVICE-SW-COMPONENT-TYPE" e = Just (ServiceSwComponentTypePElement (toServiceSwComponentType e))
+  | isElem "ECU-ABSTRACTION-SW-COMPONENT-TYPE" e = Just (EcuAbstractionSwComponentTypePElement (toEcuAbstractionSwComponentType e))
   | isElem "NV-BLOCK-SW-COMPONENT-TYPE" e = Just (NvBlockSwComponentTypePElement (toNvBlockSwComponentType e))
   | isElem "COMPOSITION-SW-COMPONENT-TYPE" e = Just (CompositionSwComponentTypePElement (toCompositionSwComponentType e))
   | isElem "PORT-INTERFACE-MAPPING-SET" e = Just (PortInterfaceMappingSetPElement (toPortInterfaceMappingSet e))
@@ -448,6 +452,15 @@ toNvBlockSwComponentType e = NvBlockSwComponentType {
 toSensorActuatorSwComponentType e = SensorActuatorSwComponentType {
   sensorActuatorSwComponentType_atomicSwComponentType = toAtomicSwComponentType e,
   sensorActuator = fmap aref $ optElem "SENSOR-ACTUATOR-REF" e
+  }
+
+toServiceSwComponentType e = ServiceSwComponentType {
+  serviceSwComponentType_atomicSwComponentType = toAtomicSwComponentType e
+  }
+
+toEcuAbstractionSwComponentType e = EcuAbstractionSwComponentType {
+  ecuAbstractionSwComponentType_atomicSwComponentType = toAtomicSwComponentType e,
+  ecuAbstractionSwComponentType_hardwareElement = map aref $ elems "ECU-ABSTRACTION-REF" e
   }
 
 toSenderReceiverInterface e = SenderReceiverInterface {
