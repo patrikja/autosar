@@ -1,5 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Static info examples %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+:- consult('semantics.pl').
+
 e:p0:i ==> e:p3:i.
 _ ==> _ :- false.
 
@@ -16,18 +18,10 @@ server_call_point(r1:i, sync(o:p2)).
 
 %%%%%%%%%%%%%%%%
 
-example1(L,R) :- 
+example(L,R) :-
 %  Cont1 = fn(X,rte_exit(x, Cont2)),
 %  Cont2 = fn(X,rte_exit(x, fn(Y,return(void)))),
   Proc1 = rinst(r1:i,nil,[],rte_enter(x,_Cont1)),
   Proc2 = rinst(r2:i,nil,[],rte_enter(x,_Cont2)),
-  Block = [excl(x:i,free), Proc1, Proc2],
-  [[excl(z:i,free), []] | Block] ---L---> R.
-
-
-badexample(L,R) :- 
-  Proc1 = rinst(r1:i,nil,[],rte_enter(x,_Cont1)),
-  Proc2 = rinst(r2:i,nil,[],rte_enter(x,_Cont2)),
-  Block = [excl(x:i,free), Proc1, Proc2],
-  [Block | excl(z:i,free)] ---L---> R.
-
+  Block = [excl(x:i,free) | [Proc1 | [Proc2 | []]]],
+  [excl(z:i,free) | Block] --- L ---> R.
