@@ -33,6 +33,7 @@ TSing    . Term7 ::= "[" Term "]" ;
 TNil     . Term7 ::= "[" "]" ;
 TPair    . Term7 ::= "(" Term "," Term ")" ;
 TParen   . Term7 ::= "(" Term ")" ;
+TString  . Term7 ::= TokString ;
 
 TAtom    . Term7 ::= Atom ;
 VarT     . Term7 ::= Var ;
@@ -45,7 +46,7 @@ coercions Term 7;
 
 
 Atm      . Atom ::=  LIdent ;
-SAtom    . Atom ::=  LString ;
+SAtom    . Atom ::=  LitString ;
 
 V        . Var ::= UIdent ;
 A        . Var ::= Wild ;
@@ -63,7 +64,8 @@ separator nonempty Term "," ;
 
 -- Token definitions
 
-token LString '\'' (char - '\'')* '\'' ;
+token LitString '\'' (char - '\'')* '\'' ;
+token TokString '"' (char - '"')* '"' ;
 token UIdent (upper (letter | digit | '_' )*) ;
 token LIdent (lower (letter | digit | '_' | '-')*) ;
 token Wild   '_' (letter | digit | '_')* ;

@@ -1,3 +1,30 @@
+% Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
+%                          Patrik Jansson and Josef Svenningsson
+% All rights reserved.
+%
+% Redistribution and use in source and binary forms, with or without
+% modification, are permitted provided that the following conditions are met:
+%
+%    * Redistributions of source code must retain the above copyright notice,
+%      this list of conditions and the following disclaimer.
+%    * Redistributions in binary form must reproduce the above copyright
+%      notice, this list of conditions and the following disclaimer in the
+%      documentation and/or other materials provided with the distribution.
+%    * Neither the name of the Chalmers University of Technology nor the names of its
+%      contributors may be used to endorse or promote products derived from this
+%      software without specific prior written permission.
+%
+% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+% DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+% FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+% DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+% SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+% CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+% OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+% OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 :- op(901, xfy, ':').
 :- op(902, xfx, '==>').
 :- op(905, xfx, '---').
@@ -26,23 +53,23 @@
 %%%%% Exclusive areas
 
 % Strict stack-based locking enforced: reduction gets stuck otherwise
-%   (TODO: comment about flagging error on attempted "bad" rte_exit?)
-rinst(R:I, C, Xs, rte_enter(X,K))        --- say(X:I,enter) --->     rinst(R:I, C, [X|Xs], ap(K,ok))  .
-rinst(R:I, C, [X|Xs], rte_exit(X,K))     --- say(X:I,exit) --->      rinst(R:I, C, Xs, ap(K,ok))      .
+%   (TODO: comment about flagging error on attempted "bad" rte_Exit?)
+rinst(R:I, C, Xs, rte_Enter(X,K))        --- say(X:I,enter) --->     rinst(R:I, C, [X|Xs], ap(K,ok))  .
+rinst(R:I, C, [X|Xs], rte_Exit(X,K))     --- say(X:I,exit) --->      rinst(R:I, C, Xs, ap(K,ok))      .
 excl(X:I, free)                          --- hear(X:I,enter) --->    excl(X:I, taken)                    .
 excl(X:I, taken)                         --- hear(X:I,exit) --->     excl(X:I, free)                     .
 
 %%%%% Inter-runnable variables
 
-rinst(R:I, C, Xs, rte_irv_read(S,K))     --- say(S:I,irvr(V)) --->     rinst(R:I, C, Xs, ap(K,V))  .
-rinst(R:I, C, Xs, rte_irv_write(S,K))    --- say(S:I,irvw(_V)) --->    rinst(R:I, C, Xs, ap(K,ok)) .
+rinst(R:I, C, Xs, rte_IrvRead(S,K))      --- say(S:I,irvr(V)) --->     rinst(R:I, C, Xs, ap(K,V))  .
+rinst(R:I, C, Xs, rte_IrvWrite(S,K))     --- say(S:I,irvw(_V)) --->    rinst(R:I, C, Xs, ap(K,ok)) .
 irv(S:I, V)                              --- hear(S:I,irvr(V)) --->    irv(S:I, V)                    .
 irv(S:I, _)                              --- hear(S:I,irvw(V)) --->    irv(S:I, V)                    .
 
 %%%%% Sending/receiving
 
-rinst(R:I, C, Xs, rte_receive(E:P,K))    --- say(E:P:I,rcv(V)) --->        rinst(R:I, C, Xs, ap(K,V)) .
-rinst(R:I, C, Xs, rte_send(E:P,V,K))     --- say(E:P:I,snd(V,Res)) --->    rinst(R:I, C, Xs, ap(K,Res)).
+rinst(R:I, C, Xs, rte_Receive(E:P,K))    --- say(E:P:I,rcv(V)) --->        rinst(R:I, C, Xs, ap(K,V)) .
+rinst(R:I, C, Xs, rte_Send(E:P,V,K))     --- say(E:P:I,snd(V,Res)) --->    rinst(R:I, C, Xs, ap(K,Res)).
 
 qelem(E:P:I, N, [V|Vs])                  --- hear(E:P:I,rcv(V)) --->       qelem(E:P:I, N, Vs)    .
 qelem(E:P:I, N, [])                      --- hear(E:P:I,rcv(no_data)) ---> qelem(E:P:I, N, [])    .
@@ -53,33 +80,33 @@ qelem(E:P:I, N, Vs)                      --- hear(A,snd(_V,limit)) --->    qelem
 qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,Res)) --->       qelem(E:P:I, N, Vs1)
     :-    A==>E:P:I, length(Vs,X), X < N, append(Vs,[V],Vs1), Res \= ok    .
 
-% data_received(E:P) is a static property of of this runnable
+% dataReceived(E:P) is a static property of this runnable
 %   from pending it will move on to spawn an rinst which will execute some "data handler" code
 runnable(R:I, K, T, _, N)                --- hear(A,snd(_V,ok)) --->   runnable(R:I, K, T, pending, N)
-    :-    A==>E:P:I, events(R:I, data_received(E:P))    .
+    :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
 runnable(R:I, K, T, Act, N)              --- hear(A,snd(_V,limit)) --->runnable(R:I, K, T, Act, N)
-    :-    A==>E:P:I, events(R:I, data_received(E:P))    .
+    :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
 
 %%%%% Reading/writing (unbuffered versions of rcv and snd)
 
-rinst(R:I, C, XS, rte_read(E:P,K))       --- say(E:P:I,rd(V)) --->     rinst(R:I, C, XS, ap(K,V)) .
-rinst(R:I, C, XS, rte_write(E:P,V,K))    --- say(E:P:I,wr(V)) --->     rinst(R:I, C, XS, ap(K,ok)).
+rinst(R:I, C, XS, rte_Read(E:P,K))       --- say(E:P:I,rd(V)) --->     rinst(R:I, C, XS, ap(K,V)) .
+rinst(R:I, C, XS, rte_Write(E:P,V,K))    --- say(E:P:I,wr(V)) --->     rinst(R:I, C, XS, ap(K,ok)).
 delem(E:P:I, _U, V)                      --- hear(E:P:I,rd(V)) --->    delem(E:P:I, false, V)        .
 delem(E:P:I, _U, _)                      --- hear(A,wr(V)) --->        delem(E:P:I, true, V)
     :-    A==>E:P:I .
 runnable(R:I, K, T, _, N)                --- hear(A,wr(_V)) --->       runnable(R:I, K, T, pending, N)
-    :-    A==>E:P:I, events(R:I, data_received(E:P))    .
-rinst(R:I, C, XS, rte_is_updated(E:P,K)) --- say(E:P:I,up(U)) --->     rinst(R:I, C, XS, ap(K,U)) .
-rinst(R:I, C, XS, rte_invalidate(E:P,K)) --- say(E:P:I,inv) --->       rinst(R:I, C, XS, ap(K,ok)).
+    :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
+rinst(R:I, C, XS, rte_IsUpdated(E:P,K))  --- say(E:P:I,up(U)) --->     rinst(R:I, C, XS, ap(K,U)) .
+rinst(R:I, C, XS, rte_Invalidate(E:P,K)) --- say(E:P:I,inv) --->       rinst(R:I, C, XS, ap(K,ok)).
 delem(E:P:I, U, V)                       --- hear(E:P:I,up(U)) --->    delem(E:P:I, U, V)            .
 delem(E:P:I, _U, _)                      --- hear(A,inv) --->          delem(E:P:I, true, invalid)
     :-    A==>E:P:I .
 
 %%%%% Calling a server
 
-rinst(R:I, C, XS, rte_call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,Res)) --->  rinst(R:I, C, XS, ap(K,Res))
+rinst(R:I, C, XS, rte_Call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,Res)) --->  rinst(R:I, C, XS, ap(K,Res))
     :- serverCallPoint(R:I, async(O:P)) ; Res \= ok   .
-rinst(R:I, C, XS, rte_call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,ok)) --->   rinst(R:I, C, XS, rte_result(O:P,K))
+rinst(R:I, C, XS, rte_Call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,ok)) --->   rinst(R:I, C, XS, rte_Result(O:P,K))
     :- serverCallPoint(R:I, sync(O:P))  .
 runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(V,C,ok)) --->          runnable(R:I, K, T, serving(Cs1,Vs1), N)
     :-
@@ -94,7 +121,7 @@ runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(_V,C,limit)) --->      
 
 %%%%% Obtaining a server result
 
-rinst(R:I, C, XS, rte_result(O:P,K))  --- say(O:P:I,res(V)) --->        rinst(R:I, C, XS, ap(K,V))  .
+rinst(R:I, C, XS, rte_Result(O:P,K))  --- say(O:P:I,res(V)) --->        rinst(R:I, C, XS, ap(K,V))  .
 rinst(A, O:P:I, [], return(V))        --- say(O:P:I,ret(V)) --->        rinst(A, nil, [], return(void)).
 opres(O:P:I, [V|Vs])                  --- hear(O:P:I,res(V)) --->       opres(O:P:I, Vs)               .
 opres(O:P:I, [])                      --- hear(O:P:I,res(no_data)) ---> opres(O:P:I, [])
@@ -181,4 +208,4 @@ eval(E, R)              :-    E =.. [H|As], funWithArgsToEvaluate(H), !, eval(As
 eval(V, V)              :-    atom(V), !  .
 eval(E, R)              :-    R is E      .
 
-funWithArgsToEvaluate(H):- name(H,N), (append('rte_',_,N) ; N = 'return').
+funWithArgsToEvaluate(H):- name(H,N), (append("rte_",_,N) ; N = "return").
