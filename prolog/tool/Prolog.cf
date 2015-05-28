@@ -13,6 +13,7 @@ NPred    . Predicate ::= "!";
 
 -- OTerm    . Term ::= Term Op Term;
 LCons    . Term1 ::= Term1 ":" Term2 ;
+
 TEq      . Term2 ::= Term3 "=" Term3 ;
 TNEq     . Term2 ::= Term3 "\\=" Term3 ;
 TIs      . Term2 ::= Term3 "is" Term3 ;
@@ -22,11 +23,16 @@ TNEqEq   . Term2 ::= Term3 "\\==" Term3 ;
 TLess    . Term2 ::= Term3 "<" Term3 ;
 TGE      . Term2 ::= Term3 ">=" Term3 ;
 TRule    . Term2 ::= Term3 "==>" Term3 ;
+
 TFrom    . Term3 ::= Term5 "---" Term5 ;
+
 TMinus   . Term4 ::= Term4 "-" Term5 ;
 TPlus    . Term4 ::= Term4 "+" Term4 ;
+
 TTo      . Term5 ::= Term6 "--->" Term6 ;
+
 Semi     . Term6 ::= Term7 ";" Term7 ;
+
 TCons    . Term7 ::= "[" Term "|" Term "]" ;
 TDouble  . Term7 ::= "[" Term "," Term "]" ;
 TSing    . Term7 ::= "[" Term "]" ;

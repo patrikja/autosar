@@ -1,10 +1,13 @@
 2014-11-05:
 
   TODO: write technical report
-  Done: a Prolog version to enable "running" the model directly 
-  Not done: Split runnables into two kinds (would duplicate all "byte code execution" rules)
+  Done: a Prolog version to enable "running" the model directly
+  Not a good idea: Split runnables into two kinds (would duplicate all "byte code execution" rules).
+    (There are in practice two kinds of runnables and rinst:
+     synchonous and asyncronous. rinst(A, nil, ...) is the async
+     version.)
 
-2014-10-07: 
+2014-10-07:
 
   * Sketch a description to identify parts in need of improvements.
   * Prolog implementation? (or embedded in Haskell DSL for Functional-Logic programming?)
