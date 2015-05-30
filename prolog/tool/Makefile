@@ -1,6 +1,9 @@
 GHC = ghc-7.6.3
 
-all:
+test: compile
+	Prolog/Test ../semantics.pl > parsed_semantics
+
+compile:
 	bnfc -d Prolog.cf
 	happy -gca Prolog/Par.y
 	alex -g Prolog/Lex.x
