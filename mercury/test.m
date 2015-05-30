@@ -7,6 +7,12 @@
 :- pred parent(person,person).
 :- pred sibling(person,person).
 :- pred cousin(person,person).
+:- mode parent(in,in) is semidet.
+:- mode parent(in,out) is nondet.
+:- mode parent(out,in) is nondet.
+:- mode parent(out,out) is multi.
+:- mode sibling(in,out) is nondet.
+:- mode cousin(in,out) is nondet.
 :- implementation.
 eq(X,X).
 parent(patrik,julia).
