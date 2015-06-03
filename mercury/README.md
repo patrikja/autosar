@@ -2,6 +2,8 @@
 
 [Prolog to Mercury](doc/mercury_trans_guide.html)
 
+http://www.mercurylang.org/information/doc-release/reference_manual.pdf
+
 mmc --make module.m
 
 # Install script for mercury (on Ubuntu 15.04)

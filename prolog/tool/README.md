@@ -1,3 +1,12 @@
+2015-06-03: Experimenting with a "functional prolog" syntax
+
+  semantics.fpl is an attempt at back-porting semantics.pl to a
+  language where functional patterns can be used as in mercury or
+  curry. It might be better to just use mercury or curry directly, but
+  that would mean a complete rewrite so I'll try to start easy.
+
+2016-05-26:
+
 As an attempt to keep the semantics in Prolog syntax but still enable
 a more paper-readable form I have started writing a converter from
 ProLog (perhaps extended with some layout) to LaTeX.  As a side-effect
