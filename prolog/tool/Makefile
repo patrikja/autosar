@@ -1,7 +1,8 @@
 GHC = ghc-7.6.3
 
 test: compile
-	Prolog/Test ../semantics.pl > parsed_semantics
+#	Prolog/Test ../semantics.pl > parsed_semantics
+	Prolog/Test ../semantics.fpl > parsed_semantics
 
 compile:
 	bnfc -d Prolog.cf

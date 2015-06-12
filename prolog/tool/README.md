@@ -1,3 +1,35 @@
+2015-06-12: Sorting out the different "equality" operators
+
+  V is E  -- binds logical variable to numerical value of E
+
+  This is a simple form of functional programming inside Prolog. It is
+  limited to cases when E is a numeric epxression (using literals,
+  operators, parentheses, and variables) as long as all the variables
+  are bound to numeric values.
+
+  Fails if the expression V is not a variable or is E does not
+  evaluate to a number.
+
+----
+
+  E1 = E2  -- tests if E1 and E2 can be unified.
+
+  To be unified they need to share the same structure or have a
+  variable on at least one side.
+
+----
+
+  E1 == E2 -- tests if E1 and E2 are currently "co-bound"
+
+  E1 =  4, E2 =  1+3, E1 == E2.  fails
+  E1 is 4, E2 is 1+3, E1 == E2.  succeeds
+
+----
+
+  E =.. Parts  -- converts between a term E and a list of its parts
+
+  1+3 =.. Parts. -- means Parts = [+,1,3]
+
 2015-06-03: Experimenting with a "functional prolog" syntax
 
   semantics.fpl is an attempt at back-porting semantics.pl to a
