@@ -1,5 +1,7 @@
 2015-06-12: Sorting out the different "equality" operators
 
+  Reading https://www.cpp.edu/~jrfisher/www/prolog_tutorial/4.html
+
   V is E  -- binds logical variable to numerical value of E
 
   This is a simple form of functional programming inside Prolog. It is
