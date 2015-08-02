@@ -1,95 +1,120 @@
-% -*- mode: Prolog -*-
-% Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
-%                          Patrik Jansson and Josef Svenningsson
-% All rights reserved.
-%
-% Redistribution and use in source and binary forms, with or without
-% modification, are permitted provided that the following conditions are met:
-%
-%    * Redistributions of source code must retain the above copyright notice,
-%      this list of conditions and the following disclaimer.
-%    * Redistributions in binary form must reproduce the above copyright
-%      notice, this list of conditions and the following disclaimer in the
-%      documentation and/or other materials provided with the distribution.
-%    * Neither the name of the Chalmers University of Technology nor the names of its
-%      contributors may be used to endorse or promote products derived from this
-%      software without specific prior written permission.
-%
-% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-% DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-% FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-% DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-% SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-% CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-% OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-% OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+(Pre-writing)
 
-:- op(901, xfy, ':').
-:- op(902, xfx, '==>').
-:- op(905, xfx, '---').
-:- op(906, xfx, '--->').
+The semantics uses a few operators to make the Prolog source code more
+like a labelled transition system:
 
+The operator \verb+:+ is used to separate different part of a the name of
+an entity a bit like ``.'' is used in Haskell and Java.
 
-%%%%% Combining reductions
+Different software components have input and output ports and (the
+names of) these are wired together with the relation \verb+==>+
 
-[]  --- hear(_A,_L) --->  []   .
+Finally the ternary operator ``Before \verb+---+ Label \verb+--->+
+After'' is used for the labeled transitions (reductions).
 
-% [ P | Ps ]  --- say(A,L) --->   [ P2 | Ps2 ]  :-   P  --- say(A,L) --->   P2  ,  Ps  --- hear(A,L) --->  Ps2 .
+The top level labels are of the form \verb+say(A,L)+,
+\verb+hear(A,L)+, and \verb+delta(T)+.
 
-[ P | Ps ]  --- say(A,L) --->   Rs            :-   P  --- say(A,L) --->   P2  ,  Ps  --- hear(A,L) --->  Ps2 ,
-                                                 flateval(P2, Ps2, Rs).
-[ P | Ps ]  --- say(A,L) --->   [ P2 | Ps2 ]  :-   P  --- hear(A,L) --->  P2  ,  Ps  --- say(A,L) --->   Ps2 .
-[ P | Ps ]  --- hear(A,L) --->  [ P2 | Ps2 ]  :-   P  --- hear(A,L) --->  P2  ,  Ps  --- hear(A,L) --->  Ps2 .
+The \verb+L+ can be of the following forms
 
-[ P | Ps ]  --- say(A,L) --->   [ P  | Ps2 ]  :-   Ps  --- say(A,L) --->   Ps2  ,  ignore((A,L),P)    .
-[ P | Ps ]  --- hear(A,L) --->  [ P  | Ps2 ]  :-   Ps  --- hear(A,L) --->  Ps2  ,  ignore((A,L),P)    .
-% Think of   ignore((A,L),P) :- P--- hear2(A,L) --->P.  But implemented to avoid overlap.
+\begin{verbatim}
+   I.R!new()
+   I.R!term()              I.R?term()
+   I.P.E!inv()             I.P.E?inv()
+   I.P.E!rcv(V)            I.P.E?rcv(V)
+                           I.P.E?rcv(no_data)
+   I.P.E!rd(V)             I.P.E?rd(V)
+   I.P.E!snd(V,Res)        I.P.E?snd(V,limit)
+                           I.P.E?snd(V,ok)
+   I.P.E!up(U)             I.P.E?up(U)
+   I.P.E!wr(V)             I.P.E?wr(V)
+   I.P.O!call(V,I.P.O,Res) I.P.O?call(V,C,limit)
+   I.P.O!call(V,I.P.O,ok)  I.P.O?call(V,C,ok)
+   I.P.O!res(V)            I.P.O?res(V)
+                           I.P.O?res(no_data)
+   I.P.O!ret(V)            I.P.O?ret(V)
+   I.S!irvr(V)             I.S?irvr(V)
+   I.S!irvw(V)             I.S?irvw(V)
+   I.X!enter()             I.X?enter()
+   I.X!exit()              I.X?exit()
+\end{verbatim}
 
-[]  --- delta(_T) --->  []    .
-[ P | Ps ]  --- delta(T) --->   [ P2 | Ps2 ]  :-   P  --- delta(T) --->   P2  ,    Ps  --- delta(T) --->  Ps2  .
+If we call head of the part after ``!'' or ``?'' the payload, we have
+the following payloads (sorted by the part before the punctuation):
 
+\begin{itemize}
+\item I.R:   new, term
+\item I.P.E: inv, rcv, rd, snd, up, wr
+\item I.P.O: call, res, ret
+\item I.S:   irvr, irvw
+\item I.X:   enter, exit
+\end{itemize}
 
-%%%%% Exclusive areas
+\subsection{Combining reductions}
 
-% Strict stack-based locking enforced: reduction gets stuck otherwise
-%   (TODO: comment about flagging error on attempted "bad" rte_Exit?)
+TODO: prettify and explain the function ``eval''.
+\begin{verbatim}
+[]          --- hear(_A,_L) --->  []   .
+[ P | Ps ]  --- say(A,L)    --->  concat(eval([P2 | Ps2]))  :-   P  --- say(A,L) --->   P2  ,  Ps  --- hear(A,L) --->  Ps2.
+[ P | Ps ]  --- say(A,L)    --->  [ P2 | Ps2 ]  :-   P  --- hear(A,L) --->  P2  ,  Ps  --- say(A,L) --->   Ps2 .
+[ P | Ps ]  --- hear(A,L)   --->  [ P2 | Ps2 ]  :-   P  --- hear(A,L) --->  P2  ,  Ps  --- hear(A,L) --->  Ps2 .
+[ P | Ps ]  --- say(A,L)    --->  [ P  | Ps2 ]  :-   Ps  --- say(A,L) --->   Ps2  ,  ignore((A,L),P)    .
+[ P | Ps ]  --- hear(A,L)   --->  [ P  | Ps2 ]  :-   Ps  --- hear(A,L) --->  Ps2  ,  ignore((A,L),P)    .
+\end{verbatim}
+Think of \verb+ignore((A,L),P) :- P --- hear2(A,L) --->P.+ but implemented to avoid overlap.
+\begin{verbatim}
+[]          --- delta(_T)   --->  []    .
+[ P | Ps ]  --- delta(T)    --->  [ P2 | Ps2 ]  :-   P  --- delta(T) --->   P2  ,    Ps  --- delta(T) --->  Ps2  .
+\end{verbatim}
+
+\subsection{Exclusive areas}
+
+Strict stack-based locking enforced: reduction gets stuck otherwise
+(TODO: comment about flagging error on attempted "bad" \verb+rte_Exit+?)
+\begin{verbatim}
 rinst(R:I, C, Xs, rte_Enter(X,K))        --- say(X:I,enter) --->     rinst(R:I, C, [X|Xs], ap(K,ok))  .
 rinst(R:I, C, [X|Xs], rte_Exit(X,K))     --- say(X:I,exit) --->      rinst(R:I, C, Xs, ap(K,ok))      .
 excl(X:I, free)                          --- hear(X:I,enter) --->    excl(X:I, taken)                    .
 excl(X:I, taken)                         --- hear(X:I,exit) --->     excl(X:I, free)                     .
+\end{verbatim}
 
-%%%%% Inter-runnable variables
+\subsection{Inter-runnable variables}
 
+\begin{verbatim}
 rinst(R:I, C, Xs, rte_IrvRead(S,K))      --- say(S:I,irvr(V)) --->     rinst(R:I, C, Xs, ap(K,V))  .
 rinst(R:I, C, Xs, rte_IrvWrite(S,K))     --- say(S:I,irvw(_V)) --->    rinst(R:I, C, Xs, ap(K,ok)) .
 irv(S:I, V)                              --- hear(S:I,irvr(V)) --->    irv(S:I, V)                    .
 irv(S:I, _)                              --- hear(S:I,irvw(V)) --->    irv(S:I, V)                    .
+\end{verbatim}
 
-%%%%% Sending/receiving
+\subsection{Sending/receiving}
 
+\begin{verbatim}
 rinst(R:I, C, Xs, rte_Receive(E:P,K))    --- say(E:P:I,rcv(V)) --->        rinst(R:I, C, Xs, ap(K,V)) .
 rinst(R:I, C, Xs, rte_Send(E:P,V,K))     --- say(E:P:I,snd(V,Res)) --->    rinst(R:I, C, Xs, ap(K,Res)).
 
 qelem(E:P:I, N, [V|Vs])                  --- hear(E:P:I,rcv(V)) --->       qelem(E:P:I, N, Vs)    .
 qelem(E:P:I, N, [])                      --- hear(E:P:I,rcv(no_data)) ---> qelem(E:P:I, N, [])    .
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,ok)) --->        qelem(E:P:I, N, Vs1)
-    :-    A==>E:P:I, length(Vs,X), X < N, append(Vs,[V],Vs1)    .
+qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,ok)) --->        qelem(E:P:I, N, Vs++[V])
+    :-    A==>E:P:I, length(Vs,X), X < N.
 qelem(E:P:I, N, Vs)                      --- hear(A,snd(_V,limit)) --->    qelem(E:P:I, N, Vs)
     :-    A==>E:P:I, length(Vs,N)    .
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,Res)) --->       qelem(E:P:I, N, Vs1)
-    :-    A==>E:P:I, length(Vs,X), X < N, append(Vs,[V],Vs1), Res \= ok    .
+qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,Res)) --->       qelem(E:P:I, N, VS++[V])
+    :-    A==>E:P:I, length(Vs,X), X < N, Res \= ok    .
+\end{verbatim}
 
-% dataReceived(E:P) is a static property of this runnable
-%   from pending it will move on to spawn an rinst which will execute some "data handler" code
+\verb+dataReceived(E:P)+ is a static property of this runnable
+  from pending it will move on to spawn an rinst which will execute some "data handler" code.
+\begin{verbatim}
 runnable(R:I, K, T, _, N)                --- hear(A,snd(_V,ok)) --->   runnable(R:I, K, T, pending, N)
     :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
 runnable(R:I, K, T, Act, N)              --- hear(A,snd(_V,limit)) --->runnable(R:I, K, T, Act, N)
     :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
+\end{verbatim}
 
-%%%%% Reading/writing (unbuffered versions of rcv and snd)
+\subsection{Reading/writing (unbuffered versions of rcv and snd)}
 
+\begin{verbatim}
 rinst(R:I, C, XS, rte_Read(E:P,K))       --- say(E:P:I,rd(V)) --->     rinst(R:I, C, XS, ap(K,V)) .
 rinst(R:I, C, XS, rte_Write(E:P,V,K))    --- say(E:P:I,wr(V)) --->     rinst(R:I, C, XS, ap(K,ok)).
 delem(E:P:I, _U, V)                      --- hear(E:P:I,rd(V)) --->    delem(E:P:I, false, V)        .
@@ -102,73 +127,84 @@ rinst(R:I, C, XS, rte_Invalidate(E:P,K)) --- say(E:P:I,inv) --->       rinst(R:I
 delem(E:P:I, U, V)                       --- hear(E:P:I,up(U)) --->    delem(E:P:I, U, V)            .
 delem(E:P:I, _U, _)                      --- hear(A,inv) --->          delem(E:P:I, true, invalid)
     :-    A==>E:P:I .
+\end{verbatim}
 
-%%%%% Calling a server
+\subsection{Calling a server}
 
+\begin{verbatim}
 rinst(R:I, C, XS, rte_Call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,Res)) --->  rinst(R:I, C, XS, ap(K,Res))
     :- serverCallPoint(R:I, async(O:P)) ; Res \= ok   .
 rinst(R:I, C, XS, rte_Call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,ok)) --->   rinst(R:I, C, XS, rte_Result(O:P,K))
     :- serverCallPoint(R:I, sync(O:P))  .
-runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(V,C,ok)) --->          runnable(R:I, K, T, serving(Cs1,Vs1), N)
+runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(V,C,ok)) --->          runnable(R:I, K, T, serving(CS++[C],Vs++[V]), N)
     :-
     A==>O:P:I, events(R:I, operationInvoked(O:P)),
-    \+ member(C,Cs), append(Cs,[C],Cs1), append(Vs,[V],Vs1)
+    \+ member(C, Cs)
     .
 runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(_V,C,limit)) --->      runnable(R:I, K, T, serving(Cs,Vs), N)
     :-
     A==>O:P:I, events(R:I, operationInvoked(O:P)),
     member(C, Cs)
     .
+\end{verbatim}
 
-%%%%% Obtaining a server result
+\subsection{Obtaining a server result}
 
+\begin{verbatim}
 rinst(R:I, C, XS, rte_Result(O:P,K))  --- say(O:P:I,res(V)) --->        rinst(R:I, C, XS, ap(K,V))  .
 rinst(A, O:P:I, [], return(V))        --- say(O:P:I,ret(V)) --->        rinst(A, nil, [], return(void)).
 opres(O:P:I, [V|Vs])                  --- hear(O:P:I,res(V)) --->       opres(O:P:I, Vs)               .
 opres(O:P:I, [])                      --- hear(O:P:I,res(no_data)) ---> opres(O:P:I, [])
     :-    async_result(O:P:I)   .
-opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, Vs1)
-    :-    append(Vs,[V],Vs1)    .
+opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, VS++[V]) .
+\end{verbatim}
 
-%%%%% Spawning and terminating
+\subsection{Spawning and terminating}
 
+\begin{verbatim}
 rinst(A, nil, [], return(_V))            --- say(A,term) --->     []    .
-runnable(A, K, T, Act, N)                --- hear(A,term) --->    runnable(A, K, T, Act, N1)  :- N1 is N-1  .
-% Note the "time left" state has to be zero for these rules to fire.
-runnable(A, K, 0, pending, N)            --- say(A,new) --->    [ runnable(A, K, T, idle, N1)
+runnable(A, K, T, Act, N)                --- hear(A,term) --->    runnable(A, K, T, Act, N-1).
+\end{verbatim}
+Note the "time left" state has to be zero for these rules to fire.
+
+\begin{verbatim}
+runnable(A, K, 0, pending, N)            --- say(A,new) --->    [ runnable(A, K, T, idle, N+1)
                                                                 , rinst(A, nil, [], ap(K,void)) ]
     :-
     (N == 0 ; canBeInvokedConcurrently(A)),
-    minimumStartInterval(A, T),
-    N1 is N+1
+    minimumStartInterval(A, T)
     .
-runnable(A, K, 0, serving([C|Cs],[V|Vs]), N) --- say(A,new) --->   [ runnable(A, K, T, serving(Cs,Vs), N1)
+runnable(A, K, 0, serving([C|Cs],[V|Vs]), N) --- say(A,new) --->   [ runnable(A, K, T, serving(Cs,Vs), N+1)
                                                                    , rinst(A, C, [], ap(K,V)) ]
     :-
     (N == 0 ; canBeInvokedConcurrently(A)),
-    minimumStartInterval(A, T),
-    N1 is N+1
+    minimumStartInterval(A, T)
     .
+\end{verbatim}
+\subsection{Passing time}
 
-%%%%% Passing time
-
+\begin{verbatim}
 timer(A, 0)                 --- say(A,tick) --->  timer(A, T)                :-    events(A, timing(T))    .
 runnable(A, K, T, _, N)     --- hear(A,tick) ---> runnable(A, K, T, pending, N) .
+\end{verbatim}
 
-% The "time left" state V is always decreasing in delta(T) steps, and never negative.
-timer(A, V)                 --- delta(T) --->     timer(A, V1)               :-    V >= T, V1 is V-T    .
-runnable(A, K, V, Act, N)   --- delta(T) --->     runnable(A, K, V1, Act, N) :-    V >= T, V1 is V-T    .
-runnable(A, K, 0, Act, N)   --- delta(_T) --->    runnable(A, K, 0, Act, N)  .
-rinst(A, C, XS, Code)       --- delta(_T) --->    rinst(A, C, XS, Code)      .
-excl(A, V)                  --- delta(_T) --->    excl(A, V)                 .
+The "time left" state V is always decreasing in delta(T) steps, and never negative.
+\begin{verbatim}
+timer(A, V)                 --- delta(T) --->     timer(A, V-T)               :-    V >= T.
+runnable(A, K, V, Act, N)   --- delta(T) --->     runnable(A, K, V-T, Act, N) :-    V >= T.
+runnable(A, K, 0, Act, N)   --- delta(_T) --->    runnable(A, K, 0, Act, N)   .
+rinst(A, C, XS, Code)       --- delta(_T) --->    rinst(A, C, XS, Code)       .
+excl(A, V)                  --- delta(_T) --->    excl(A, V)                  .
 irv(A, V)                   --- delta(_T) --->    irv(A, V)                  .
 qelem(A, N, Vs)             --- delta(_T) --->    qelem(A, N, Vs)            .
 delem(A, U, V)              --- delta(_T) --->    delem(A, U, V)             .
 opres(A, Vs)                --- delta(_T) --->    opres(A, Vs)               .
+\end{verbatim}
 
 
-%%%%% Ignoring broadcasts
+\subsection{Ignoring broadcasts}
 
+\begin{verbatim}
 ignore(_AL, rinst(_B,_C,_Xs,_K))   .
 ignore(_AL, timer(_B,_T))             .
 
@@ -178,23 +214,29 @@ ignore((A,_L), irv(B,_V))                       :- A \== B.
 ignore((A,_L), qelem(B,_N,_Vs))                 :- A \== B, \+ A==>B.
 ignore((A,_L), delem(B,_U,_V))                  :- A \== B, \+ A==>B.
 ignore((A,_L), opres(B,_Vs))                    :- A \== B, \+ A==>B.
+\end{verbatim}
 
 
-%%%%%  Helper predicate: flattening and evaluating reduction results
+\subsection{Helper predicate: flattening and evaluating reduction results}
 
+\begin{verbatim}
 flateval([],              Q, Q)  :- !  .
 flateval([ M | P ],       Q, R)  :- !, flateval(P, Q, R1),  flateval(M, R1, R)  .
 flateval(rinst(A,C,Xs,M), Q, [ rinst(A,C,Xs,N) | Q ])  :- !, eval(M, N)   .
 flateval(M,               Q, [ M               | Q ]).
+\end{verbatim}
 
-% Experiment with "treelike" process soup
+Experiment with "treelike" process soup
+\begin{verbatim}
 treeeval([],              [])         :- !  .
 treeeval([ M | P ],       [M2 | P2])  :- !, treeeval(M, M2), treeeval(P, P2).
 treeeval(rinst(A,C,Xs,M), [ rinst(A,C,Xs,N) | _Q ])  :- !, eval(M, N)   .
 treeeval(M,               [ M               | _Q ]).
+\end{verbatim}
 
-%%%%% Helper predicate: evaluating terms
+\subsection{Helper predicate: evaluating terms}
 
+\begin{verbatim}
 eval(V, V)              :-    var(V), !    .
 eval(ap(T,V), ap(T,V))  :-    var(T), !    .
 eval(ap(F,E), R)        :-    eval(F, fn(X,T)), !,    eval(E, V),    X = V,    eval(T, R)    .
@@ -210,3 +252,4 @@ eval(V, V)              :-    atom(V), !  .
 eval(E, R)              :-    R is E      .
 
 funWithArgsToEvaluate(H):- name(H,N), (append("rte_",_,N) ; N = "return").
+\end{verbatim}

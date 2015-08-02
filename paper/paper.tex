@@ -6,6 +6,8 @@
 \title{A semantics of core AUTOSAR}
 \author{Johan Nordlander \and Patrik Jansson}
 
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt plus 2pt minus 1pt}
 \begin{document}
 \maketitle
 \begin{abstract}
@@ -15,9 +17,9 @@
 \section{Introduction}
 \label{sec:Intro}
 
-The AUTOSAR standard is an open software component architecture for the automotive industry. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology. 
+The AUTOSAR standard is an open software component architecture for the automotive industry. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology.
 
-The standard has a rather wide scope and covers many features normally associated with complex operating systems, like I/O abstraction, concurrency, communication, distribution and real-time predictability. Unlike existing operating systems, however, AUTOSAR is not de facto defined in terms of a particular implementation. Instead, an explicit goal of AUTOSAR is to constitute an abstract specification that allows multiple competing realizations, and even systems built as an assembly of fragments from many different (and competing) vendors. Such a goal naturally puts the focus on the standard specification itself. 
+The standard has a rather wide scope and covers many features normally associated with complex operating systems, like I/O abstraction, concurrency, communication, distribution and real-time predictability. Unlike existing operating systems, however, AUTOSAR is not de facto defined in terms of a particular implementation. Instead, an explicit goal of AUTOSAR is to constitute an abstract specification that allows multiple competing realizations, and even systems built as an assembly of fragments from many different (and competing) vendors. Such a goal naturally puts the focus on the standard specification itself.
 
 Unfortunately, the AUTOSAR specification is not very rigorous, despite a sheer size of more than one hundred pdf documents and over 12,500 pages of text and UML diagrams in total. It is also not very abstract, in that it makes frequent references to assumed implementation techniques for the purpose of defining its semantics. In practice, the AUTOSAR standard becomes blurred with the specific behavior of one's chosen platform and development tools. And because the standard is open to interpretation, the interoperability of software components across tools and platforms is often seriously hampered. What is more, a single software component cannot easily be studied and understood in isolation, since its interactive behavior is only indirectly defined in terms of the concrete C-code and OS tasks that realize it and every interacting component.
 
@@ -65,7 +67,7 @@ TODO: links from rules and choices made here to the AUTSAR spec
 \section{Conclusions and Future Work}
 \label{sec:Conc}
 
-Return to the limitation - what is the next step (which can be lifted more easily) 
+Return to the limitation - what is the next step (which can be lifted more easily)
 
 \onecolumn
 \appendix
@@ -74,7 +76,9 @@ Return to the limitation - what is the next step (which can be lifted more easil
 
 % \inputminted{prolog}{../prolog/semantics.pl}
 
-\verbatiminput{../prolog/semantics.pl}
+\input{semantics.tex}
+
+
+% \verbatiminput{../prolog/semantics.pl}
 
 \end{document}
-
