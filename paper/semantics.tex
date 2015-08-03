@@ -4,7 +4,7 @@ The semantics uses a few operators to make the Prolog source code more
 like a labelled transition system:
 
 The operator \verb+:+ is used to separate different part of a the name of
-an entity a bit like ``.'' is used in Haskell and Java.
+an entity a bit like \verb+.+ is used in Haskell and Java.
 
 Different software components have input and output ports and (the
 names of) these are wired together with the relation \verb+==>+
@@ -39,33 +39,43 @@ The \verb+L+ can be of the following forms
    I.X!exit()              I.X?exit()
 \end{verbatim}
 
-If we call head of the part after ``!'' or ``?'' the payload, we have
-the following payloads (sorted by the part before the punctuation):
+If we call the head of the part after the punctuation (\verb+!+ or
+\verb+?+) the payload, we have the following payloads (sorted by the
+part before the punctuation):
 
 \begin{itemize}
-\item I.R:   new, term
-\item I.P.E: inv, rcv, rd, snd, up, wr
-\item I.P.O: call, res, ret
-\item I.S:   irvr, irvw
-\item I.X:   enter, exit
+\item \verb+I.R+:   \verb+new+, \verb+term+
+\item \verb+I.P.E+: \verb+inv+, \verb+rcv+, \verb+rd+, \verb+snd+, \verb+up+, \verb+wr+
+\item \verb+I.P.O+: \verb+call+, \verb+res+, \verb+ret+
+\item \verb+I.S+:   \verb+irvr+, \verb+irvw+
+\item \verb+I.X+:   \verb+enter+, \verb+exit+
 \end{itemize}
 
 \subsection{Combining reductions}
 
-TODO: prettify and explain the function ``eval''.
-\begin{verbatim}
-[]          --- hear(_A,_L) --->  []   .
-[ P | Ps ]  --- say(A,L)    --->  concat(eval([P2 | Ps2]))  :-   P  --- say(A,L) --->   P2  ,  Ps  --- hear(A,L) --->  Ps2.
-[ P | Ps ]  --- say(A,L)    --->  [ P2 | Ps2 ]  :-   P  --- hear(A,L) --->  P2  ,  Ps  --- say(A,L) --->   Ps2 .
-[ P | Ps ]  --- hear(A,L)   --->  [ P2 | Ps2 ]  :-   P  --- hear(A,L) --->  P2  ,  Ps  --- hear(A,L) --->  Ps2 .
-[ P | Ps ]  --- say(A,L)    --->  [ P  | Ps2 ]  :-   Ps  --- say(A,L) --->   Ps2  ,  ignore((A,L),P)    .
-[ P | Ps ]  --- hear(A,L)   --->  [ P  | Ps2 ]  :-   Ps  --- hear(A,L) --->  Ps2  ,  ignore((A,L),P)    .
-\end{verbatim}
-Think of \verb+ignore((A,L),P) :- P --- hear2(A,L) --->P.+ but implemented to avoid overlap.
-\begin{verbatim}
-[]          --- delta(_T)   --->  []    .
-[ P | Ps ]  --- delta(T)    --->  [ P2 | Ps2 ]  :-   P  --- delta(T) --->   P2  ,    Ps  --- delta(T) --->  Ps2  .
-\end{verbatim}
+TODO: prettify and explain the function ``eval''. (The relational version is included further down.)
+
+% \newcommand{\reduce}[3]{#1 \texttt{---} #2 \texttt{--->} #3}
+\newcommand{\reduce}[3]{\ensuremath{#1 \xrightarrow{#2} #3}}
+\newcommand{\ignore}[1]{\ensuremath{\mathit{ignore}#1}}
+\[
+\begin{array}{lll}
+  \reduce{[]}{hear(\_A,\_L)}{[]}. & &
+\\\reduce{[ P | Ps ]}{say(A,L)} {concat(eval([P2 | Ps2]))}  &:- \reduce{P}{say(A,L)}{P2}  ,&  \reduce{Ps}{hear(A,L)}{Ps2}.
+\\\reduce{[ P | Ps ]}{say(A,L)} {[ P2 | Ps2 ]}  &:- \reduce{P} {hear(A,L)}{P2}   ,&  \reduce{Ps}{say(A,L)} {Ps2} .
+\\\reduce{[ P | Ps ]}{hear(A,L)}{[ P2 | Ps2 ]}  &:- \reduce{P} {hear(A,L)}{P2}   ,&  \reduce{Ps}{hear(A,L)}{Ps2} .
+\\\reduce{[ P | Ps ]}{say(A,L)} {[ P  | Ps2 ]}  &:- \reduce{Ps}{say(A,L)} {Ps2}  ,&  \ignore{((A,L),P)}    .
+\\\reduce{[ P | Ps ]}{hear(A,L)}{[ P  | Ps2 ]}  &:- \reduce{Ps}{hear(A,L)}{Ps2}  ,&  \ignore{((A,L),P)}    .
+\\\reduce{[]}{\delta(\_T)}{[]}. & &
+\\\reduce{[ P | Ps ]}{\delta(T)}{[ P2 | Ps2 ]}  &:- \reduce{P}{\delta(T)}{P2}    ,&  \reduce{Ps}{\delta(T)}{Ps2}  .
+\end{array}
+\]
+
+Think of \ignore{((A,L),P)} :- \reduce{P}{hear(A,L)}{P}. but implemented to avoid overlap.
+
+TODO: can \ignore{((A,L),P)} be written before the other reduction on the RHS?
+
+
 
 \subsection{Exclusive areas}
 
