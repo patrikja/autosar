@@ -17,6 +17,9 @@ The top level labels are of the form \verb+say(A,L)+,
 
 The \verb+L+ can be of the following forms
 
+TODO: replace dot with colon.
+TODO: format (instead of verbatim)
+
 \begin{verbatim}
    I.R!new()
    I.R!term()              I.R?term()
@@ -55,66 +58,89 @@ part before the punctuation):
 
 TODO: prettify and explain the function ``eval''. (The relational version is included further down.)
 
-% \newcommand{\reduce}[3]{#1 \texttt{---} #2 \texttt{--->} #3}
-\newcommand{\reduce}[3]{\ensuremath{#1 \xrightarrow{#2} #3}}
-\newcommand{\ignore}[1]{\ensuremath{\mathit{ignore}#1}}
+% \newcommand{\Preduce}[3]{#1 \texttt{---} #2 \texttt{--->} #3}
+\newcommand{\Preduce}[3]{\ensuremath{#1 &\xrightarrow{#2}& #3}}
+\newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
+\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \[
-\begin{array}{lll}
-  \reduce{[]}{hear(\_A,\_L)}{[]}. & &
-\\\reduce{[ P | Ps ]}{say(A,L)} {concat(eval([P2 | Ps2]))}  &:- \reduce{P}{say(A,L)}{P2}  ,&  \reduce{Ps}{hear(A,L)}{Ps2}.
-\\\reduce{[ P | Ps ]}{say(A,L)} {[ P2 | Ps2 ]}  &:- \reduce{P} {hear(A,L)}{P2}   ,&  \reduce{Ps}{say(A,L)} {Ps2} .
-\\\reduce{[ P | Ps ]}{hear(A,L)}{[ P2 | Ps2 ]}  &:- \reduce{P} {hear(A,L)}{P2}   ,&  \reduce{Ps}{hear(A,L)}{Ps2} .
-\\\reduce{[ P | Ps ]}{say(A,L)} {[ P  | Ps2 ]}  &:- \reduce{Ps}{say(A,L)} {Ps2}  ,&  \ignore{((A,L),P)}    .
-\\\reduce{[ P | Ps ]}{hear(A,L)}{[ P  | Ps2 ]}  &:- \reduce{Ps}{hear(A,L)}{Ps2}  ,&  \ignore{((A,L),P)}    .
-\\\reduce{[]}{\delta(\_T)}{[]}. & &
-\\\reduce{[ P | Ps ]}{\delta(T)}{[ P2 | Ps2 ]}  &:- \reduce{P}{\delta(T)}{P2}    ,&  \reduce{Ps}{\delta(T)}{Ps2}  .
+\begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}
+  \Preduce{[]}{hear(\_A,\_L)}{[]}. & &
+\\\Preduce{[ P | Ps ]}{say(A,L)} {concat(eval([P2 | Ps2]))}  &\Pif& \Preduce{P}{say(A,L)}{P2}  ,&  \Preduce{Ps}{hear(A,L)}{Ps2}.
+\\\Preduce{[ P | Ps ]}{say(A,L)} {[ P2 | Ps2 ]}  &\Pif& \Preduce{P} {hear(A,L)}{P2}   ,&  \Preduce{Ps}{say(A,L)} {Ps2} .
+\\\Preduce{[ P | Ps ]}{hear(A,L)}{[ P2 | Ps2 ]}  &\Pif& \Preduce{P} {hear(A,L)}{P2}   ,&  \Preduce{Ps}{hear(A,L)}{Ps2} .
+\\\Preduce{[ P | Ps ]}{say(A,L)} {[ P  | Ps2 ]}  &\Pif& \Preduce{Ps}{say(A,L)} {Ps2}  ,&  \multicolumn{3}{c}{\Pignore{((A,L),P)}}    .
+\\\Preduce{[ P | Ps ]}{hear(A,L)}{[ P  | Ps2 ]}  &\Pif& \Preduce{Ps}{hear(A,L)}{Ps2}  ,&  \multicolumn{3}{c}{\Pignore{((A,L),P)}}    .
+\\\Preduce{[]}{\delta(\_T)}{[]}. & &
+\\\Preduce{[ P | Ps ]}{\delta(T)}{[ P2 | Ps2 ]}  &\Pif& \Preduce{P}{\delta(T)}{P2}    ,&  \Preduce{Ps}{\delta(T)}{Ps2}  .
 \end{array}
 \]
 
-Think of \ignore{((A,L),P)} :- \reduce{P}{hear(A,L)}{P}. but implemented to avoid overlap.
+Think of
+\(\begin{array}{r@{}c@{}l}\Pignore{((A,L),P)} \Pif
+  \Preduce{P}{hear(A,L)}{P}\end{array}\).
+but implemented to avoid overlap.
 
-TODO: can \ignore{((A,L),P)} be written before the other reduction on the RHS?
+TODO: can \Pignore{((A,L),P)} be written before the other reduction on the RHS?
 
 
 
 \subsection{Exclusive areas}
+%\newcommand{\rte}[1]{\mathit{rte_{#1}}}
+\newcommand{\rte}[1]{\ensuremath{\mathit{rte\_#1}}}
 
 Strict stack-based locking enforced: reduction gets stuck otherwise
-(TODO: comment about flagging error on attempted "bad" \verb+rte_Exit+?)
-\begin{verbatim}
-rinst(R:I, C, Xs, rte_Enter(X,K))        --- say(X:I,enter) --->     rinst(R:I, C, [X|Xs], ap(K,ok))  .
-rinst(R:I, C, [X|Xs], rte_Exit(X,K))     --- say(X:I,exit) --->      rinst(R:I, C, Xs, ap(K,ok))      .
-excl(X:I, free)                          --- hear(X:I,enter) --->    excl(X:I, taken)                    .
-excl(X:I, taken)                         --- hear(X:I,exit) --->     excl(X:I, free)                     .
-\end{verbatim}
-
+(TODO: comment about flagging error on attempted "bad" \rte{Exit}?)
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(R{:}I, C, Xs,     \rte{Enter}(X,K))}{say(X{:}I,enter)} {rinst(R{:}I, C, [X|Xs], ap(K,ok))}  .
+\\\Preduce{rinst(R{:}I, C, [X|Xs], \rte{Exit}(X,K))} {say(X{:}I,exit)}  {rinst(R{:}I, C, Xs,     ap(K,ok))}      .
+\\\Preduce{excl(X{:}I, free)}                     {hear(X{:}I,enter)}{excl(X{:}I, taken)}                 .
+\\\Preduce{excl(X{:}I, taken)}                    {hear(X{:}I,exit)} {excl(X{:}I, free)}                  .
+\end{array}
+\]
 \subsection{Inter-runnable variables}
 
-\begin{verbatim}
-rinst(R:I, C, Xs, rte_IrvRead(S,K))      --- say(S:I,irvr(V)) --->     rinst(R:I, C, Xs, ap(K,V))  .
-rinst(R:I, C, Xs, rte_IrvWrite(S,K))     --- say(S:I,irvw(_V)) --->    rinst(R:I, C, Xs, ap(K,ok)) .
-irv(S:I, V)                              --- hear(S:I,irvr(V)) --->    irv(S:I, V)                    .
-irv(S:I, _)                              --- hear(S:I,irvw(V)) --->    irv(S:I, V)                    .
-\end{verbatim}
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(R{:}I, C, Xs, \rte{IrvRead}(S,K))} {say(S{:}I,irvr(V))}  {rinst(R{:}I, C, Xs, ap(K,V))}  .
+\\\Preduce{rinst(R{:}I, C, Xs, \rte{IrvWrite}(S,K))}{say(S{:}I,irvw(\_V))}{rinst(R{:}I, C, Xs, ap(K,ok))} .
+\\\Preduce{irv(S{:}I, V)}                           {hear(S{:}I,irvr(V))} {irv(S{:}I, V)}                 .
+\\\Preduce{irv(S{:}I,\_)}                           {hear(S{:}I,irvw(V))} {irv(S{:}I, V)}                 .
+\end{array}
+\]
+
 
 \subsection{Sending/receiving}
 
-\begin{verbatim}
-rinst(R:I, C, Xs, rte_Receive(E:P,K))    --- say(E:P:I,rcv(V)) --->        rinst(R:I, C, Xs, ap(K,V)) .
-rinst(R:I, C, Xs, rte_Send(E:P,V,K))     --- say(E:P:I,snd(V,Res)) --->    rinst(R:I, C, Xs, ap(K,Res)).
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(R{:}I, C, Xs, \rte{Receive}(E{:}P,K))}{say(E{:}P{:}I,rcv(V))}    {rinst(R{:}I, C, Xs, ap(K,V))} .
+\\\Preduce{rinst(R{:}I, C, Xs, \rte{Send}(E{:}P,V,K))} {say(E{:}P{:}I,snd(V,Res))}{rinst(R{:}I, C, Xs, ap(K,Res))}.
+\end{array}
+\]
 
-qelem(E:P:I, N, [V|Vs])                  --- hear(E:P:I,rcv(V)) --->       qelem(E:P:I, N, Vs)    .
-qelem(E:P:I, N, [])                      --- hear(E:P:I,rcv(no_data)) ---> qelem(E:P:I, N, [])    .
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,ok)) --->        qelem(E:P:I, N, Vs++[V])
-    :-    A==>E:P:I, length(Vs,X), X < N.
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(_V,limit)) --->    qelem(E:P:I, N, Vs)
-    :-    A==>E:P:I, length(Vs,N)    .
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,Res)) --->       qelem(E:P:I, N, VS++[V])
-    :-    A==>E:P:I, length(Vs,X), X < N, Res \= ok    .
-\end{verbatim}
+\newcommand{\nodata}{\ensuremath{\mathit{no\_data}}}
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{qelem(E{:}P{:}I, N, [V|Vs])}{hear(E{:}P{:}I,rcv(V))}      {qelem(E{:}P{:}I, N, Vs)}    .
+\\\Preduce{qelem(E{:}P{:}I, N, [])}    {hear(E{:}P{:}I,rcv(\nodata))}{qelem(E{:}P{:}I, N, [])}    .
+\end{array}
+\]
 
-\verb+dataReceived(E:P)+ is a static property of this runnable
-  from pending it will move on to spawn an rinst which will execute some "data handler" code.
+
+\[
+\begin{array}{r@{}c@{}lcl}
+  \Preduce{qelem(E{:}P{:}I, N, Vs)}{hear(A,snd(V,ok))}{qelem(E{:}P{:}I, N, Vs++[V])}
+    &\Pif &   A\Rightarrow{}E{:}P{:}I, length(Vs) < N.
+\\\Preduce{qelem(E{:}P{:}I, N, Vs)}{hear(A,snd(\_V,limit))}{qelem(E{:}P{:}I, length(Vs), Vs)}
+    &\Pif &   A\Rightarrow{}E{:}P{:}I    .
+\\\Preduce{qelem(E{:}P{:}I, N, Vs)}{hear(A,snd(V,Res))}{qelem(E{:}P{:}I, N, Vs++[V])}
+    &\Pif &   A\Rightarrow{}E{:}P{:}I, length(Vs) < N, Res \neq ok    .
+\end{array}
+\]
+
+\(dataReceived(E{:}P)\) is a static property of this runnable
+  from pending it will move on to spawn an rinst which will execute some ``data handler'' code.
 \begin{verbatim}
 runnable(R:I, K, T, _, N)                --- hear(A,snd(_V,ok)) --->   runnable(R:I, K, T, pending, N)
     :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
@@ -166,7 +192,7 @@ rinst(A, O:P:I, [], return(V))        --- say(O:P:I,ret(V)) --->        rinst(A,
 opres(O:P:I, [V|Vs])                  --- hear(O:P:I,res(V)) --->       opres(O:P:I, Vs)               .
 opres(O:P:I, [])                      --- hear(O:P:I,res(no_data)) ---> opres(O:P:I, [])
     :-    async_result(O:P:I)   .
-opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, VS++[V]) .
+opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, Vs++[V]) .
 \end{verbatim}
 
 \subsection{Spawning and terminating}
