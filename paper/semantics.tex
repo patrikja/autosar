@@ -1,3 +1,8 @@
+% \newcommand{\Preduce}[3]{#1 \texttt{---} #2 \texttt{--->} #3}
+\newcommand{\Preduce}[3]{\ensuremath{#1 &\xrightarrow{#2}& #3}}
+\newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
+\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
+
 (Pre-writing)
 
 The semantics uses a few operators to make the Prolog source code more
@@ -7,10 +12,11 @@ The operator \verb+:+ is used to separate different part of a the name of
 an entity a bit like \verb+.+ is used in Haskell and Java.
 
 Different software components have input and output ports and (the
-names of) these are wired together with the relation \verb+==>+
+names of) these are wired together with the relation
+\ensuremath{\Rightarrow{}}.
 
-Finally the ternary operator ``Before \verb+---+ Label \verb+--->+
-After'' is used for the labeled transitions (reductions).
+Finally the ternary operator \(\begin{array}{r@{}c@{}l}\Preduce{\mathit{Before}}{\mathit{Label}}{\mathit{After}}\end{array}\) is
+used for the labeled transitions (reductions).
 
 The top level labels are of the form \verb+say(A,L)+,
 \verb+hear(A,L)+, and \verb+delta(T)+.
@@ -58,10 +64,6 @@ part before the punctuation):
 
 TODO: prettify and explain the function ``eval''. (The relational version is included further down.)
 
-% \newcommand{\Preduce}[3]{#1 \texttt{---} #2 \texttt{--->} #3}
-\newcommand{\Preduce}[3]{\ensuremath{#1 &\xrightarrow{#2}& #3}}
-\newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
-\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \[
 \begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}
   \Preduce{[]}{hear(\_A,\_L)}{[]}. & &
@@ -141,151 +143,188 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 
 \(dataReceived(E{:}P)\) is a static property of this runnable
   from pending it will move on to spawn an rinst which will execute some ``data handler'' code.
-\begin{verbatim}
-runnable(R:I, K, T, _, N)                --- hear(A,snd(_V,ok)) --->   runnable(R:I, K, T, pending, N)
-    :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
-runnable(R:I, K, T, Act, N)              --- hear(A,snd(_V,limit)) --->runnable(R:I, K, T, Act, N)
-    :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
-\end{verbatim}
+
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{runnable(R{:}I, K, T, \_, N)} {hear(A,snd(\_V,ok))}   {runnable(R{:}I, K, T, pending, N)}
+\\ \multicolumn{3}{l}{\qquad \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .}
+\\\Preduce{runnable(R{:}I, K, T, Act, N)}{hear(A,snd(\_V,limit))}{runnable(R{:}I, K, T, Act, N)}
+\\ \multicolumn{3}{l}{\qquad \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .}
+\end{array}
+\]
+
 
 \subsection{Reading/writing (unbuffered versions of rcv and snd)}
 
-\begin{verbatim}
-rinst(R:I, C, XS, rte_Read(E:P,K))       --- say(E:P:I,rd(V)) --->     rinst(R:I, C, XS, ap(K,V)) .
-rinst(R:I, C, XS, rte_Write(E:P,V,K))    --- say(E:P:I,wr(V)) --->     rinst(R:I, C, XS, ap(K,ok)).
-delem(E:P:I, _U, V)                      --- hear(E:P:I,rd(V)) --->    delem(E:P:I, false, V)        .
-delem(E:P:I, _U, _)                      --- hear(A,wr(V)) --->        delem(E:P:I, true, V)
-    :-    A==>E:P:I .
-runnable(R:I, K, T, _, N)                --- hear(A,wr(_V)) --->       runnable(R:I, K, T, pending, N)
-    :-    A==>E:P:I, events(R:I, dataReceived(E:P))    .
-rinst(R:I, C, XS, rte_IsUpdated(E:P,K))  --- say(E:P:I,up(U)) --->     rinst(R:I, C, XS, ap(K,U)) .
-rinst(R:I, C, XS, rte_Invalidate(E:P,K)) --- say(E:P:I,inv) --->       rinst(R:I, C, XS, ap(K,ok)).
-delem(E:P:I, U, V)                       --- hear(E:P:I,up(U)) --->    delem(E:P:I, U, V)            .
-delem(E:P:I, _U, _)                      --- hear(A,inv) --->          delem(E:P:I, true, invalid)
-    :-    A==>E:P:I .
-\end{verbatim}
+
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(R{:}I, C, XS, \rte{Read}(E{:}P,K))}       {say(E{:}P{:}I,rd(V))} {rinst(R{:}I, C, XS, ap(K,V))} .
+\\\Preduce{rinst(R{:}I, C, XS, \rte{Write}(E{:}P,V,K))}    {say(E{:}P{:}I,wr(V))} {rinst(R{:}I, C, XS, ap(K,ok))}.
+\\\Preduce{delem(E{:}P{:}I, \_U, V)}                       {hear(E{:}P{:}I,rd(V))}{delem(E{:}P{:}I, false, V)}        .
+\\\Preduce{delem(E{:}P{:}I, \_U, \_)}                      {hear(A,wr(V))}        {delem(E{:}P{:}I, true, V)}            \Pif    A\Rightarrow{}E{:}P{:}I .
+\\\Preduce{runnable(R{:}I, K, T, \_, N)}                   {hear(A,wr(\_V))}      {runnable(R{:}I, K, T, pending, N)}    \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .
+\\\Preduce{rinst(R{:}I, C, XS, \rte{IsUpdated}(E{:}P,K))}  {say(E{:}P{:}I,up(U))} {rinst(R{:}I, C, XS, ap(K,U))} .
+\\\Preduce{rinst(R{:}I, C, XS, \rte{Invalidate}(E{:}P,K))} {say(E{:}P{:}I,inv)}   {rinst(R{:}I, C, XS, ap(K,ok))}.
+\\\Preduce{delem(E{:}P{:}I, U, V)}                         {hear(E{:}P{:}I,up(U))}{delem(E{:}P{:}I, U, V)} .
+\\\Preduce{delem(E{:}P{:}I, \_U, \_)}                      {hear(A,inv)}          {delem(E{:}P{:}I, true, invalid)}      \Pif    A\Rightarrow{}E{:}P{:}I .
+\end{array}
+\]
+
 
 \subsection{Calling a server}
 
-\begin{verbatim}
-rinst(R:I, C, XS, rte_Call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,Res)) --->  rinst(R:I, C, XS, ap(K,Res))
-    :- serverCallPoint(R:I, async(O:P)) ; Res \= ok   .
-rinst(R:I, C, XS, rte_Call(O:P,V,K))     --- say(O:P:I,call(V,O:P:I,ok)) --->   rinst(R:I, C, XS, rte_Result(O:P,K))
-    :- serverCallPoint(R:I, sync(O:P))  .
-runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(V,C,ok)) --->          runnable(R:I, K, T, serving(CS++[C],Vs++[V]), N)
-    :-
-    A==>O:P:I, events(R:I, operationInvoked(O:P)),
-    \+ member(C, Cs)
-    .
-runnable(R:I, K, T, serving(Cs,Vs), N)   --- hear(A,call(_V,C,limit)) --->      runnable(R:I, K, T, serving(Cs,Vs), N)
-    :-
-    A==>O:P:I, events(R:I, operationInvoked(O:P)),
-    member(C, Cs)
-    .
-\end{verbatim}
+\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
+\newcommand{\Pbackslashplus}{\mathbin{\backslash\!{+}}}
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{say(O{:}P{:}I,call(V,O{:}P{:}I,Res))}{rinst(R{:}I, C, XS, ap(K,Res))}
+  \Pcontline{\Pif serverCallPoint(R{:}I, async(O{:}P)) ; Res \neq ok   .}
+\\\Preduce{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{say(O{:}P{:}I,call(V,O{:}P{:}I,ok))}{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}
+  \Pcontline{\Pif serverCallPoint(R{:}I, sync(O{:}P))  .}
+\\\Preduce{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{hear(A,call(V,C,ok))}{runnable(R{:}I, K, T, serving(CS++[C],Vs++[V]), N)}
+  \Pcontline{\begin{array}{l}
+               \Pif
+             \\A\Rightarrow{}O{:}P{:}I, events(R{:}I, operationInvoked(O{:}P)),
+             \\\Pbackslashplus member(C, Cs)
+             \\.
+             \end{array}}
+\\\Preduce{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{hear(A,call(\_V,C,limit))}{runnable(R{:}I, K, T, serving(Cs,Vs), N)}
+  \Pcontline{\begin{array}{l}
+               \Pif
+             \\A\Rightarrow{}O{:}P{:}I, events(R{:}I, operationInvoked(O{:}P)),
+             \\member(C, Cs)
+             \\.
+             \end{array}}
+\end{array}
+\]
+
 
 \subsection{Obtaining a server result}
 
-\begin{verbatim}
-rinst(R:I, C, XS, rte_Result(O:P,K))  --- say(O:P:I,res(V)) --->        rinst(R:I, C, XS, ap(K,V))  .
-rinst(A, O:P:I, [], return(V))        --- say(O:P:I,ret(V)) --->        rinst(A, nil, [], return(void)).
-opres(O:P:I, [V|Vs])                  --- hear(O:P:I,res(V)) --->       opres(O:P:I, Vs)               .
-opres(O:P:I, [])                      --- hear(O:P:I,res(no_data)) ---> opres(O:P:I, [])
-    :-    async_result(O:P:I)   .
-opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, Vs++[V]) .
-\end{verbatim}
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}{say(O{:}P{:}I,res(V))}         {rinst(R{:}I, C, XS, ap(K,V))}  .
+\\\Preduce{rinst(A, O{:}P{:}I, [], return(V))        }{say(O{:}P{:}I,ret(V))}         {rinst(A, nil, [], return(void))}.
+\\\Preduce{opres(O{:}P{:}I, [V|Vs])                  }{hear(O{:}P{:}I,res(V))}        {opres(O{:}P{:}I, Vs)}               .
+\\\Preduce{opres(O{:}P{:}I, [])                      }{hear(O{:}P{:}I,res(\nodata))}  {opres(O{:}P{:}I, [])}
+  \Pcontline{\Pif    async\_result(O{:}P{:}I)   .}
+\\\Preduce{opres(O{:}P{:}I, Vs)                      }{hear(O{:}P{:}I,ret(V))}        {opres(O{:}P{:}I, Vs++[V])} .
+\end{array}
+\]
+
 
 \subsection{Spawning and terminating}
 
-\begin{verbatim}
-rinst(A, nil, [], return(_V))            --- say(A,term) --->     []    .
-runnable(A, K, T, Act, N)                --- hear(A,term) --->    runnable(A, K, T, Act, N-1).
-\end{verbatim}
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{rinst(A, nil, [], return(\_V))}{say(A,term)}{[]}    .
+\\\Preduce{runnable(A, K, T, Act, N)}{hear(A,term)}{runnable(A, K, T, Act, N-1)}.
+\end{array}
+\]
+
 Note the "time left" state has to be zero for these rules to fire.
 
-\begin{verbatim}
-runnable(A, K, 0, pending, N)            --- say(A,new) --->    [ runnable(A, K, T, idle, N+1)
-                                                                , rinst(A, nil, [], ap(K,void)) ]
-    :-
-    (N == 0 ; canBeInvokedConcurrently(A)),
-    minimumStartInterval(A, T)
-    .
-runnable(A, K, 0, serving([C|Cs],[V|Vs]), N) --- say(A,new) --->   [ runnable(A, K, T, serving(Cs,Vs), N+1)
-                                                                   , rinst(A, C, [], ap(K,V)) ]
-    :-
-    (N == 0 ; canBeInvokedConcurrently(A)),
-    minimumStartInterval(A, T)
-    .
-\end{verbatim}
+\[
+\begin{array}{r@{}c@{}l}
+  \Preduce{runnable(A, K, 0, pending, N)}{say(A,new)}{\begin{array}{l}
+                                                        [ runnable(A, K, T, idle, N+1)
+                                                      \\, rinst(A, nil, [], ap(K,void)) ]
+                                                     \end{array}}
+  \Pcontline{\begin{array}{l}
+               \Pif
+             \\(N == 0 ; canBeInvokedConcurrently(A)),
+             \\minimumStartInterval(A, T)
+             \\.
+             \end{array}}
+\\\Preduce{runnable(A, K, 0, serving([C|Cs],[V|Vs]), N)}{say(A,new)}{[ runnable(A, K, T, serving(Cs,Vs), N+1)
+                                                                   , rinst(A, C, [], ap(K,V)) ]}
+  \Pcontline{\begin{array}{l}
+               \Pif
+             \\(N == 0 ; canBeInvokedConcurrently(A)),
+             \\minimumStartInterval(A, T)
+             \\.
+             \end{array}}
+\end{array}
+\]
+
 \subsection{Passing time}
 
-\begin{verbatim}
-timer(A, 0)                 --- say(A,tick) --->  timer(A, T)                :-    events(A, timing(T))    .
-runnable(A, K, T, _, N)     --- hear(A,tick) ---> runnable(A, K, T, pending, N) .
-\end{verbatim}
 
-The "time left" state V is always decreasing in delta(T) steps, and never negative.
-\begin{verbatim}
-timer(A, V)                 --- delta(T) --->     timer(A, V-T)               :-    V >= T.
-runnable(A, K, V, Act, N)   --- delta(T) --->     runnable(A, K, V-T, Act, N) :-    V >= T.
-runnable(A, K, 0, Act, N)   --- delta(_T) --->    runnable(A, K, 0, Act, N)   .
-rinst(A, C, XS, Code)       --- delta(_T) --->    rinst(A, C, XS, Code)       .
-excl(A, V)                  --- delta(_T) --->    excl(A, V)                  .
-irv(A, V)                   --- delta(_T) --->    irv(A, V)                  .
-qelem(A, N, Vs)             --- delta(_T) --->    qelem(A, N, Vs)            .
-delem(A, U, V)              --- delta(_T) --->    delem(A, U, V)             .
-opres(A, Vs)                --- delta(_T) --->    opres(A, Vs)               .
-\end{verbatim}
+\[
+\begin{array}{r@{}c@{}lcl}
+  \Preduce{timer(A, 0)             }{say(A,tick)} {timer(A, T)}                   & \Pif&    events(A, timing(T))    .
+\\\Preduce{runnable(A, K, T, \_, N)}{hear(A,tick)}{runnable(A, K, T, pending, N)} .
+\end{array}
+\]
 
+
+The ``time left'' state \(V\) is always decreasing in \(\delta(T)\) steps, and never negative.
+
+\[
+\begin{array}{r@{}c@{}lcl}
+  \Preduce{timer(A, V)              }{\delta(T)  }{timer(A, V-T)              } &\Pif&    V >= T.
+\\\Preduce{runnable(A, K, V, Act, N)}{\delta(T)  }{runnable(A, K, V-T, Act, N)} &\Pif&    V >= T.
+\\\Preduce{runnable(A, K, 0, Act, N)}{\delta(\_T)}{runnable(A, K, 0, Act, N)  }.
+\\\Preduce{rinst(A, C, XS, Code)    }{\delta(\_T)}{rinst(A, C, XS, Code)      }.
+\\\Preduce{excl(A, V)               }{\delta(\_T)}{excl(A, V)                 }.
+\\\Preduce{irv(A, V)                }{\delta(\_T)}{irv(A, V)                  }.
+\\\Preduce{qelem(A, N, Vs)          }{\delta(\_T)}{qelem(A, N, Vs)            }.
+\\\Preduce{delem(A, U, V)           }{\delta(\_T)}{delem(A, U, V)             }.
+\\\Preduce{opres(A, Vs)             }{\delta(\_T)}{opres(A, Vs)               }.
+\end{array}
+\]
 
 \subsection{Ignoring broadcasts}
 
-\begin{verbatim}
-ignore(_AL, rinst(_B,_C,_Xs,_K))   .
-ignore(_AL, timer(_B,_T))             .
+TODO: continue converting.
 
-ignore((A,_L), runnable(B, _K, _T, _Act, _N))   :- A \== B.
-ignore((A,_L), excl(B,_V))                      :- A \== B.
-ignore((A,_L), irv(B,_V))                       :- A \== B.
-ignore((A,_L), qelem(B,_N,_Vs))                 :- A \== B, \+ A==>B.
-ignore((A,_L), delem(B,_U,_V))                  :- A \== B, \+ A==>B.
-ignore((A,_L), opres(B,_Vs))                    :- A \== B, \+ A==>B.
+\begin{verbatim}
+ignore(\_AL, rinst(\_B,\_C,\_Xs,\_K))   .
+ignore(\_AL, timer(\_B,\_T))             .
+
+ignore((A,\_L), runnable(B, \_K, \_T, \_Act, \_N))   \Pif A \== B.
+ignore((A,\_L), excl(B,\_V))                         \Pif A \== B.
+ignore((A,\_L), irv(B,\_V))                          \Pif A \== B.
+ignore((A,\_L), qelem(B,\_N,\_Vs))                   \Pif A \== B, \+ A\Rightarrow{}B.
+ignore((A,\_L), delem(B,\_U,\_V))                    \Pif A \== B, \+ A\Rightarrow{}B.
+ignore((A,\_L), opres(B,\_Vs))                       \Pif A \== B, \+ A\Rightarrow{}B.
 \end{verbatim}
 
 
 \subsection{Helper predicate: flattening and evaluating reduction results}
 
 \begin{verbatim}
-flateval([],              Q, Q)  :- !  .
-flateval([ M | P ],       Q, R)  :- !, flateval(P, Q, R1),  flateval(M, R1, R)  .
-flateval(rinst(A,C,Xs,M), Q, [ rinst(A,C,Xs,N) | Q ])  :- !, eval(M, N)   .
+flateval([],              Q, Q)  \Pif !  .
+flateval([ M | P ],       Q, R)  \Pif !, flateval(P, Q, R1),  flateval(M, R1, R)  .
+flateval(rinst(A,C,Xs,M), Q, [ rinst(A,C,Xs,N) | Q ])  \Pif !, eval(M, N)   .
 flateval(M,               Q, [ M               | Q ]).
 \end{verbatim}
 
 Experiment with "treelike" process soup
 \begin{verbatim}
-treeeval([],              [])         :- !  .
-treeeval([ M | P ],       [M2 | P2])  :- !, treeeval(M, M2), treeeval(P, P2).
-treeeval(rinst(A,C,Xs,M), [ rinst(A,C,Xs,N) | _Q ])  :- !, eval(M, N)   .
-treeeval(M,               [ M               | _Q ]).
+treeeval([],              [])         \Pif !  .
+treeeval([ M | P ],       [M2 | P2])  \Pif !, treeeval(M, M2), treeeval(P, P2).
+treeeval(rinst(A,C,Xs,M), [ rinst(A,C,Xs,N) | \_Q ])  \Pif !, eval(M, N)   .
+treeeval(M,               [ M               | \_Q ]).
 \end{verbatim}
 
 \subsection{Helper predicate: evaluating terms}
 
 \begin{verbatim}
-eval(V, V)              :-    var(V), !    .
-eval(ap(T,V), ap(T,V))  :-    var(T), !    .
-eval(ap(F,E), R)        :-    eval(F, fn(X,T)), !,    eval(E, V),    X = V,    eval(T, R)    .
-eval(ap(T,_V), R)       :- !, eval(T, R)   .
-eval(fn(X,T), fn(X,T))  :- ! .
-eval(if(E,A,_B), R)     :-    E,    !, eval(A, R)    .
-eval(if(E,_A,B), R)     :-    \+ E, !, eval(B, R)    .
-eval((A,B), (A1,B1))    :- !, eval(A, A1),     eval(B, B1)    .
-eval([A|B], [A1|B1])    :- !, eval(A, A1),     eval(B, B1)    .
-eval((A:B), (A1:B1))    :- !, eval(A, A1),     eval(B, B1)    .
-eval(E, R)              :-    E =.. [H|As], funWithArgsToEvaluate(H), !, eval(As, Bs), R =.. [H|Bs].
-eval(V, V)              :-    atom(V), !  .
-eval(E, R)              :-    R is E      .
+eval(V, V)              \Pif    var(V), !    .
+eval(ap(T,V), ap(T,V))  \Pif    var(T), !    .
+eval(ap(F,E), R)        \Pif    eval(F, fn(X,T)), !,    eval(E, V),    X = V,    eval(T, R)    .
+eval(ap(T,\_V), R)       \Pif !, eval(T, R)   .
+eval(fn(X,T), fn(X,T))  \Pif ! .
+eval(if(E,A,\_B), R)     \Pif    E,    !, eval(A, R)    .
+eval(if(E,\_A,B), R)     \Pif    \+ E, !, eval(B, R)    .
+eval((A,B), (A1,B1))    \Pif !, eval(A, A1),     eval(B, B1)    .
+eval([A|B], [A1|B1])    \Pif !, eval(A, A1),     eval(B, B1)    .
+eval((A{:}B), (A1:B1))    \Pif !, eval(A, A1),     eval(B, B1)    .
+eval(E, R)              \Pif    E =.. [H|As], funWithArgsToEvaluate(H), !, eval(As, Bs), R =.. [H|Bs].
+eval(V, V)              \Pif    atom(V), !  .
+eval(E, R)              \Pif    R is E      .
 
-funWithArgsToEvaluate(H):- name(H,N), (append("rte_",_,N) ; N = "return").
+funWithArgsToEvaluate(H)\Pif name(H,N), (append("rte_",_,N) ; N = "return").
 \end{verbatim}
