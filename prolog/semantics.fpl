@@ -74,11 +74,11 @@ rinst(R:I, C, Xs, rte_Send(E:P,V,K))     --- say(E:P:I,snd(V,Res)) --->    rinst
 qelem(E:P:I, N, [V|Vs])                  --- hear(E:P:I,rcv(V)) --->       qelem(E:P:I, N, Vs)    .
 qelem(E:P:I, N, [])                      --- hear(E:P:I,rcv(no_data)) ---> qelem(E:P:I, N, [])    .
 qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,ok)) --->        qelem(E:P:I, N, Vs++[V])
-    :-    A==>E:P:I, length(Vs,X), X < N.
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(_V,limit)) --->    qelem(E:P:I, N, Vs)
-    :-    A==>E:P:I, length(Vs,N)    .
-qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,Res)) --->       qelem(E:P:I, N, VS++[V])
-    :-    A==>E:P:I, length(Vs,X), X < N, Res \= ok    .
+    :-    A==>E:P:I, length(Vs) < N.
+qelem(E:P:I, N, Vs)                      --- hear(A,snd(_V,limit)) --->    qelem(E:P:I, length(Vs), Vs)
+    :-    A==>E:P:I   .
+qelem(E:P:I, N, Vs)                      --- hear(A,snd(V,Res)) --->       qelem(E:P:I, N, Vs++[V])
+    :-    A==>E:P:I, length(Vs) < N, Res \= ok    .
 
 % dataReceived(E:P) is a static property of this runnable
 %   from pending it will move on to spawn an rinst which will execute some "data handler" code
@@ -126,7 +126,7 @@ rinst(A, O:P:I, [], return(V))        --- say(O:P:I,ret(V)) --->        rinst(A,
 opres(O:P:I, [V|Vs])                  --- hear(O:P:I,res(V)) --->       opres(O:P:I, Vs)               .
 opres(O:P:I, [])                      --- hear(O:P:I,res(no_data)) ---> opres(O:P:I, [])
     :-    async_result(O:P:I)   .
-opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, VS++[V]) .
+opres(O:P:I, Vs)                      --- hear(O:P:I,ret(V)) --->       opres(O:P:I, Vs++[V]) .
 
 %%%%% Spawning and terminating
 

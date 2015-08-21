@@ -1,3 +1,4 @@
+% -*- mode: Prolog -*-
 % Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
 %                          Patrik Jansson and Josef Svenningsson
 % All rights reserved.

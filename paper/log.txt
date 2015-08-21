@@ -1,3 +1,8 @@
+2015-08-02: Starting to "prettify" the semantics by hand
+
+  (Because the automatic translator idea has not worked out yet. We
+  may return to that idea later.)
+
 2014-11-05: Prolog support
 
   Three possible Prolog implementations for Ubuntu:
@@ -22,4 +27,3 @@ The appendix and perhaps also the main paper sections could include
 parts genertaed from that file if we can (with small effort) make a
 "prolog->LaTeX" converter. It might be good to start from this:
   https://hackage.haskell.org/package/NanoProlog
-

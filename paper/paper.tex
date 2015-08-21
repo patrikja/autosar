@@ -26,8 +26,7 @@
 \newcommand{\pending}{\mbox{\bf pending}}
 \newcommand{\serving}[2]{\mbox{\bf serving}(#1,#2)}
 
-\newcommand{\seq}[2]{#1\hspace{-0.7ex}:\hspace{-0.7ex}#2}
-\newcommand{\seqq}[3]{#1\hspace{-0.7ex}:\hspace{-0.7ex}#2\hspace{-0.7ex}:\hspace{-0.7ex}#3}
+\newcommand{\adr}[1]{\mbox{\em #1}}
 \newcommand{\sep}{\hspace{2ex}|\hspace{2ex}}
 
 \newcommand{\runnable}[4]{\mbox{\bf runnable}(#1,#2,#3,#4)}
@@ -60,6 +59,9 @@
 \newcommand{\ent}{\mbox{\small ent}}
 \newcommand{\ex}{\mbox{\small ex}}
 
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt plus 2pt minus 1pt}
+
 \begin{document}
 \maketitle
 \begin{abstract}
@@ -69,7 +71,7 @@
 \section{Introduction}
 \label{sec:Intro}
 
-The AUTOSAR standard is an open software component architecture for the automotive industry. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology. 
+The AUTOSAR standard is an open software component architecture for the automotive industry. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology.
 
 The standard has a rather wide scope and covers many features normally associated with complex operating systems, like I/O abstraction, concurrency, communication, distribution and real-time predictability. Unlike existing operating systems, however, AUTOSAR is not de facto defined in terms of a particular implementation. Instead, an explicit goal of AUTOSAR is to constitute an abstract specification that allows multiple and competing realizations, and even systems built as an assembly of fragments from many different (and competing) vendors. Such a goal naturally puts the focus on the standard specification itself. 
 
@@ -102,7 +104,7 @@ AUTOSAR models are completely static, which means that all components, runnables
 
 The formal approach we have chosen is that of a typical process calculus \cite{}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
-Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\seq{R}{I} $ means runnable $R$ of component $I$ and $\seqq{E}{P}{I}$ means element $E$ of port $P$ within component $I$. The following meta-variable conventions will be used:
+Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\adr{R:I} $ means runnable $R$ of component $I$ and $\adr{E:P:I}$ means element $E$ of port $P$ within component $I$. The following meta-variable conventions will be used:
 $$
 \begin{array}{rcll}
 	I	& \in		& \mbox{Component names} \\
@@ -114,28 +116,28 @@ $$
 	X	& \in		& \mbox{Exclusive area names} \\
 	\\
 	A	& \in		& \mbox{Addresses} \\
-	A	& ::=		& \seq{R}{I}   \sep   \seqq{E}{P}{I}   \sep   \seqq{O}{U}{I}   \sep   \seq{S}{I}   \sep   \seq{X}{I}   \\
+	A	& ::=		& \adr{R:I}   \sep   \adr{E:P:I}   \sep   \adr{O:U:I}   \sep   \adr{S:I}   \sep   \adr{X:I}   \\
 \end{array}
 $$
 Since AUTOSAR components can be arbitrarily nested, the component names $I$ can also be considered to have a similarly nested internal structure (component $I_1$ within component $I_2$ within component $I_3$, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite{}.
 
 The process terms of our calculus are as follows:
 \begin{itemize}
-\item $\runnable{\seq{R}{I}}{T}{\Act}{N}$  \newline
+\item $\runnable{\adr{R:I}}{T}{\Act}{N}$  \newline
 Common state for runnable $R$ of component $I$, showing $N$ current instances, $T$ seconds left until next possible instantiation, and activation state $\Act$.
-\item $\rinst{\seq{R}{I}}{C}{\Xs}{\Code}$ \newline
+\item $\rinst{\adr{R:I}}{C}{\Xs}{\Code}$ \newline
 An instance of runnable $R$ of component $I$, currently executing $\Code$ and owning the exclusive areas $\Xs$, possibly running on behalf of client $C$.
-\item $\excl{\seq{X}{I}}{B}$ \newline
+\item $\excl{\adr{X:I}}{B}$ \newline
 Exclusive area $X$ of component $I$, with boolean occupation state $B$.
-\item $\irv{\seq{S}{I}}{V}$ \newline
+\item $\irv{\adr{S:I}}{V}$ \newline
 Inter-runnable variable $S$ of component $I$, currently holding value $V$.
-\item $\delem{\seqq{E}{U}{I}}{B}{V}$ \newline
+\item $\delem{\adr{E:U:I}}{B}{V}$ \newline
 Non-queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
-\item $\qelem{\seqq{E}{U}{I}}{\Vs}$ \newline
+\item $\qelem{\adr{E:U:I}}{\Vs}$ \newline
 Queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value sequence $\Vs$.
-\item $\opres{\seqq{O}{U}{I}}{\Vs}$ \newline
+\item $\opres{\adr{O:U:I}}{\Vs}$ \newline
 Client-server operation $O$ in port $U$ of component $I$, currently holding result value sequence $\Vs$.
-\item $\timer{\seq{R}{I}}{T_p}{T}$ \newline
+\item $\timer{\adr{R:I}}{T_p}{T}$ \newline
 Timer state for runnable $R$ of component $I$ and period $T_p$, with $T$ seconds left of its current cycle.
 \end{itemize}
 
@@ -146,11 +148,11 @@ $$
 	N	& \in		& \mbox{Natural numbers} \\
 	B	& \in		& \mbox{Boolean values} \\
 	T	& \in		& \mbox{Time values} \\
-	C	& ::=		& \seqq{O}{U}{I} \sep \void \\
+	C	& ::=		& \adr{O:U:I} \sep \void \\
 	\Act	& ::=		& \idle \sep \pending \sep \serving{\Cs}{\Vs} \\
 \end{array}
 $$
-We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\seq{V}{\Vs}$ ($\seq{\Vs\,}{V}$). 
+We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\adr{V:Vs}$ ($\adr{Vs:V}$). 
 
 The code part of a runnable instance should technically be a representation of the C or Matlab function that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in every detail, a more abstract notion of executable code will be required. To this end, we have chosen to ignore all details of internal computations, and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. Because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style to allow any data-dependencies to be expressed.
 $$
@@ -254,7 +256,7 @@ The initial process $P_0$ is determined fully by the AUTOSAR model under study, 
 \item For each runnable $R$ of each component $I$, a term
 $$
 \begin{array}{c}
-	\runnable{\seq{R}{I}}{0.0}{\Act}{0}
+	\runnable{\adr{R:I}}{0.0}{\Act}{0}
 \end{array}
 $$
 where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an {\em OperationInvokedEvent}; else $\Act$ is $\pending$ if $R$ is triggered by an {\em InitEvent}; otherwise $\Act$ is $\idle$.
@@ -263,14 +265,14 @@ where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an {\em Op
 \item For each exclusive area $X$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\excl{\seq{X}{I}}{\false}
+	\excl{\adr{X:I}}{\false}
 \end{array}
 $$
 
 \item For each inter-runnable variable $S$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\irv{\seq{S}{I}}{V}
+	\irv{\adr{S:I}}{V}
 \end{array}
 $$
 where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\void$.
@@ -278,27 +280,27 @@ where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is 
 \item For each data element $E$ of each required port $U$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\qelem{\seqq{E}{U}{I}}{\epsilon}
+	\qelem{\adr{E:U:I}}{\epsilon}
 \end{array}
 $$
 if the {\em swImplPolicy} attribute of element $E$ is {\em queued}; otherwise, a term
 $$
 \begin{array}{c}
-	\delem{\seqq{E}{U}{I}}{\false}{\mbox{NO\_DATA}}
+	\delem{\adr{E:U:I}}{\false}{\mbox{NO\_DATA}}
 \end{array}
 $$
 
 \item For each operation $O$ of each required port $U$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\opres{\seqq{O}{U}{I}}{\epsilon}
+	\opres{\adr{O:U:I}}{\epsilon}
 \end{array}
 $$
 
 \item For each {\em TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\timer{\seq{R}{I}}{T}{0.0}
+	\timer{\adr{R:I}}{T}{0.0}
 \end{array}
 $$
 where $T$ is the period of the event.
@@ -307,11 +309,11 @@ where $T$ is the period of the event.
 
 Some further static model information will also be referenced by the transition rules. We refer to the {\em connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
 $$
-	\seqq{E}{U_1}{I_1} \Rightarrow \seqq{E}{U_2}{I_2} \;\;\mbox{for all elements $E$ of port $U_2$}
+	\adr{E:$U_1$:$I_1$} \Rightarrow \adr{E:$U_2$:$I_2$} \;\;\mbox{for all elements $E$ of port $U_2$}
 $$
 if there is a connector in the model from provided sender-receiver port $U_1$ of component $I_1$ to required port $U_2$ of component $I_2$; and
 $$
-	\seqq{O}{U_1}{I_1} \Rightarrow \seqq{O}{U_2}{I_2} \;\;\mbox{for all operations $O$ of port $U_1$}
+	\adr{O:$U_1$:$I_1$} \Rightarrow \adr{O:$U_2$:$I_2$} \;\;\mbox{for all operations $O$ of port $U_1$}
 $$
 if there is a connector in the model from required client-server port $U_1$ of component $I_1$ to provided port $U_2$ of component $I_2$.
 
@@ -320,30 +322,30 @@ We expect the {\em implementation} of a runnable to be available as a continuati
 \subsection{Exclusive areas}
 
 \begin{gather*}
-	\rinst{\seq{R}{I}}{C}{\Xs}{\Enter{X}{\Cont}}  \red{\say{X:I}{\ent}}  \\
-		\rinst{\seq{R}{I}}{C}{\seq X \Xs}{\Cont(\void)} \\
+	\rinst{\adr{R:I}}{C}{\Xs}{\Enter{X}{\Cont}}  \red{\say{X:I}{\ent}}  \\
+		\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Cont(\void)} \\
 	\\
-	\rinst{\seq{R}{I}}{C}{\seq X \Xs}{\Exit{X}{\Cont}}  \red{\say{X:I}{\ex}}  \\
-		\rinst{\seq{R}{I}}{C}{\Xs}{\Cont(\void)} \\
+	\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Exit{X}{\Cont}}  \red{\say{X:I}{\ex}}  \\
+		\rinst{\adr{R:I}}{C}{\Xs}{\Cont(\void)} \\
 	\\
-	\excl{\seq X I}{\false} \red{\hear{X:I}{\ent}} \excl{\seq X I}{\true} \\
+	\excl{\adr{X:I}}{\false} \red{\hear{X:I}{\ent}} \excl{\adr{X:I}}{\true} \\
 	\\
-	\excl{\seq X I}{\true} \red{\hear{X:I}{\ex}} \excl{\seq X I}{\false} \\
+	\excl{\adr{X:I}}{\true} \red{\hear{X:I}{\ex}} \excl{\adr{X:I}}{\false} \\
 	\\
 \end{gather*}
 
 \subsection{Inter-runnable variables}
 
 \begin{gather*}
-	\rinst{\seq{R}{I}}{C}{\Xs}{\IrvWrite{X}{\Cont}}  \red{\say{X:I}{\ent}}  \\
-		\rinst{\seq{R}{I}}{C}{\seq X \Xs}{\Cont(\void)} \\
+	\rinst{\adr{R:I}}{C}{\Xs}{\IrvWrite{X}{\Cont}}  \red{\say{X:I}{\ent}}  \\
+		\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Cont(\void)} \\
 	\\
-	\rinst{\seq{R}{I}}{C}{\seq X \Xs}{\Exit{X}{\Cont}}  \red{\say{X:I}{\ex}}  \\
-		\rinst{\seq{R}{I}}{C}{\Xs}{\Cont(\void)} \\
+	\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Exit{X}{\Cont}}  \red{\say{X:I}{\ex}}  \\
+		\rinst{\adr{R:I}}{C}{\Xs}{\Cont(\void)} \\
 	\\
-	\excl{\seq X I}{\false} \red{\hear{X:I}{\ent}} \excl{\seq X I}{\true} \\
+	\excl{\adr{X:I}}{\false} \red{\hear{X:I}{\ent}} \excl{\adr{X:I}}{\true} \\
 	\\
-	\excl{\seq X I}{\true} \red{\hear{X:I}{\ex}} \excl{\seq X I}{\false} \\
+	\excl{\adr{X:I}}{\true} \red{\hear{X:I}{\ex}} \excl{\adr{X:I}}{\false} \\
 	\\
 \end{gather*}
 
@@ -384,7 +386,7 @@ Timer initial offsets
 \section{Conclusions and Future Work}
 \label{sec:Conc}
 
-Return to the limitation - what is the next step (which can be lifted more easily) 
+Return to the limitation - what is the next step (which can be lifted more easily)
 
 \onecolumn
 \appendix
@@ -393,7 +395,9 @@ Return to the limitation - what is the next step (which can be lifted more easil
 
 % \inputminted{prolog}{../prolog/semantics.pl}
 
-\verbatiminput{../prolog/semantics.pl}
+\input{semantics.tex}
+
+
+% \verbatiminput{../prolog/semantics.pl}
 
 \end{document}
-

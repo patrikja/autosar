@@ -1,4 +1,4 @@
-paper.pdf: paper.tex
+paper.pdf: paper.tex semantics.tex
 	latexmk -pdf paper.tex
 
 clean:
