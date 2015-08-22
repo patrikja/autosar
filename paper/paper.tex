@@ -54,12 +54,12 @@
 \newcommand{\Result}    [3]{\rte{Result}(#1,#2,#3)}
 \newcommand{\Return}    [1]{\text{return}(#1)}
 
-\newcommand{\red}[1]{\xrightarrow{#1}}
-\newcommand{\say}[2]{#1 ! #2}
+\newcommand{\red} [1]{\xrightarrow{#1}}
+\newcommand{\say} [2]{#1 ! #2}
 \newcommand{\hear}[2]{#1 ? #2}
 
 \newcommand{\ent}{\text{\small ent}}
-\newcommand{\ex}{\text{\small ex}}
+\newcommand{\ex} {\text{\small ex}}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt plus 2pt minus 1pt}
@@ -104,10 +104,11 @@ AUTOSAR models are completely static, which means that all components, runnables
 \section{Syntax and preliminaries}
 \label{sec:Calc}
 
-The formal approach we have chosen is that of a typical process calculus \cite{}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
+The formal approach we have chosen is that of a typical process calculus \cite{TODO}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
 Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\adr{R:I}$ means runnable $R$ of component $I$ and $\adr{E:P:I}$ means element $E$ of port $P$ within component $I$. The following meta-variable conventions will be used:
-$$
+%
+\[
 \begin{array}{rcll}
 	I	& \in		& \text{Component names} \\
 	R	& \in		& \text{Runnable names} \\
@@ -120,8 +121,9 @@ $$
 	A	& \in		& \text{Addresses} \\
 	A	& ::=		& \adr{R:I}   \sep   \adr{E:P:I}   \sep   \adr{O:U:I}   \sep   \adr{S:I}   \sep   \adr{X:I}   \\
 \end{array}
-$$
-Since AUTOSAR components can be arbitrarily nested, the component names $I$ can also be considered to have a similarly nested internal structure (component $I_1$ within component $I_2$ within component $I_3$, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite{}.
+\]
+%
+Since AUTOSAR components can be arbitrarily nested, the component names $I$ can also be considered to have a similarly nested internal structure (component $I_1$ within component $I_2$ within component $I_3$, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite{TODO2}.
 
 The process terms of our calculus are as follows:
 \begin{itemize}
@@ -212,27 +214,27 @@ TODO: details on limitations: what's not covered by the calculus
 \label{sec:Sem}
 
 Our semantic approach defines the meaning of an AUTOSAR system as the possible chains of state changes that can be applied to the system's initial state; or equivalently, as the set of \emph{traces} that can be generated from the corresponding process term $P_0$. A trace is a possibly infinite sequence of transitions
-$$
+\[
 \begin{array}{c}
 	P_0 \red{L_1} P_1 \red{L_2} P_2 \red{L_3} \cdots
 \end{array}
-$$
+\]
 where each step
-$$
+\[
 \begin{array}{c}
 	P_{i-1} \red{L_i} P_i
 \end{array}
-$$
+\]
 states that the system state captured as process term $P_{i-1}$ can evolve into state $P_i$ by means of a single transition labelled $L_i$.
 
 
 The label $L$ of a transition can be ow two kinds, indicating that the affected process term either "says" or "hears" something during the transition. A label also always consists of an address $A$ paired with some additional detail $D$, as captured in the following label grammar:
-$$
+\[
 \begin{array}{rcll}
 	L	& ::=		& A!D		& \hspace{4em}\text{Say $A$ and $D$} \\
 		&		& A?D		& \hspace{4em}\text{Hear $A$ and $D$} \\
 \end{array}
-$$
+\]
 The possible forms of the extra label information $D$ will be introduced as the different transition rules are defined.
 
 Two processes $P$ and $Q$ can make transitions in parallel if they agree on what is being said or heard. Just as the saying/hearing intuition suggests, at most one of the processes can have the saying role in such an agreement. The following set of inference rules capture this intuition formally.
