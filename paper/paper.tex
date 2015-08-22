@@ -8,56 +8,58 @@
 \title{A semantics of core AUTOSAR}
 \author{Johan Nordlander \and Patrik Jansson}
 
-\newcommand{\V}[1]{\mbox{\it #1}}
-\newcommand{\Code}{\V{Code}}
-\newcommand{\Cont}{\V{Cont}}
+\newcommand{\V}[1]{\text{\it #1}}
+\newcommand{\Code} {\V{Code}}
+\newcommand{\Cont} {\V{Cont}}
 \newcommand{\State}{\V{State}}
-\newcommand{\Act}{\V{Act}}
-\newcommand{\Upd}{\V{Upd}}
-\newcommand{\Xs}{\V{Xs}}
-\newcommand{\Vs}{\V{Vs}}
-\newcommand{\Cs}{\V{Cs}}
+\newcommand{\Act}  {\V{Act}}
+\newcommand{\Upd}  {\V{Upd}}
+\newcommand{\Xs}   {\V{Xs}}
+\newcommand{\Vs}   {\V{Vs}}
+\newcommand{\Cs}   {\V{Cs}}
 
-\newcommand{\void}{\mbox{\bf void}}
-\newcommand{\nil}{\mbox{\bf nil}}
-\newcommand{\true}{\mbox{\bf true}}
-\newcommand{\false}{\mbox{\bf false}}
-\newcommand{\idle}{\mbox{\bf idle}}
-\newcommand{\pending}{\mbox{\bf pending}}
-\newcommand{\serving}[2]{\mbox{\bf serving}(#1,#2)}
+\newcommand{\kw}[1]{\textbf{#1}}
+\newcommand{\void}    {\kw{void}}
+\newcommand{\nil}     {\kw{nil}}
+\newcommand{\true}    {\kw{true}}
+\newcommand{\false}   {\kw{false}}
+\newcommand{\idle}    {\kw{idle}}
+\newcommand{\pending} {\kw{pending}}
+\newcommand{\serving}[2]{\kw{serving}(#1,#2)}
 
-\newcommand{\adr}[1]{\mbox{\em #1}}
+\newcommand{\adr}[1]{\emph{#1}}
 \newcommand{\sep}{\hspace{2ex}|\hspace{2ex}}
 
-\newcommand{\runnable}[4]{\mbox{\bf runnable}(#1,#2,#3,#4)}
-\newcommand{\rinst}[4]{\mbox{\bf rinst}(#1,#2,#3,#4)}
-\newcommand{\excl}[2]{\mbox{\bf excl}(#1,#2)}
-\newcommand{\irv}[2]{\mbox{\bf irv}(#1,#2)}
-\newcommand{\qelem}[2]{\mbox{\bf qelem}(#1,#2)}
-\newcommand{\delem}[3]{\mbox{\bf delem}(#1,#2,#3)}
-\newcommand{\opres}[2]{\mbox{\bf opres}(#1,#2)}
-\newcommand{\timer}[3]{\mbox{\bf timer}(#1,#2, #3)}
+\newcommand{\runnable}[4]{\kw{runnable}(#1,#2,#3,#4)}
+\newcommand{\rinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
+\newcommand{\excl}    [2]{\kw{excl}(#1,#2)}
+\newcommand{\irv}     [2]{\kw{irv}(#1,#2)}
+\newcommand{\qelem}   [2]{\kw{qelem}(#1,#2)}
+\newcommand{\delem}   [3]{\kw{delem}(#1,#2,#3)}
+\newcommand{\opres}   [2]{\kw{opres}(#1,#2)}
+\newcommand{\timer}   [3]{\kw{timer}(#1,#2, #3)}
 
-\newcommand{\Enter}[2]{\mbox{rte\_Enter}(#1,#2)}
-\newcommand{\Exit}[2]{\mbox{rte\_Exit}(#1,#2)}
-\newcommand{\IrvWrite}[3]{\mbox{rte\_IrvWrite}(#1,#2,#3)}
-\newcommand{\IrvRead}[2]{\mbox{rte\_IrvRead}(#1,#2)}
-\newcommand{\Send}[4]{\mbox{rte\_Send}(#1,#2,#3,#4)}
-\newcommand{\Receive}[3]{\mbox{rte\_Receive}(#1,#2,#3)}
-\newcommand{\Write}[4]{\mbox{rte\_Write}(#1,#2,#3,#4)}
-\newcommand{\Read}[3]{\mbox{rte\_Read}(#1,#2,#3)}
-\newcommand{\Invalidate}[3]{\mbox{rte\_Invalidate}(#1,#2,#3)}
-\newcommand{\IsUpdated}[3]{\mbox{rte\_IsUpdated}(#1,#2,#3)}
-\newcommand{\Call}[4]{\mbox{rte\_Call}(#1,#2,#3,#4)}
-\newcommand{\Result}[3]{\mbox{rte\_Result}(#1,#2,#3)}
-\newcommand{\Return}[1]{\mbox{return}(#1)}
+\newcommand{\rte}[1]{\text{rte\_#1}}
+\newcommand{\Enter}     [2]{\rte{Enter}(#1,#2)}
+\newcommand{\Exit}      [2]{\rte{Exit}(#1,#2)}
+\newcommand{\IrvWrite}  [3]{\rte{IrvWrite}(#1,#2,#3)}
+\newcommand{\IrvRead}   [2]{\rte{IrvRead}(#1,#2)}
+\newcommand{\Send}      [4]{\rte{Send}(#1,#2,#3,#4)}
+\newcommand{\Receive}   [3]{\rte{Receive}(#1,#2,#3)}
+\newcommand{\Write}     [4]{\rte{Write}(#1,#2,#3,#4)}
+\newcommand{\Read}      [3]{\rte{Read}(#1,#2,#3)}
+\newcommand{\Invalidate}[3]{\rte{Invalidate}(#1,#2,#3)}
+\newcommand{\IsUpdated} [3]{\rte{IsUpdated}(#1,#2,#3)}
+\newcommand{\Call}      [4]{\rte{Call}(#1,#2,#3,#4)}
+\newcommand{\Result}    [3]{\rte{Result}(#1,#2,#3)}
+\newcommand{\Return}    [1]{\text{return}(#1)}
 
 \newcommand{\red}[1]{\xrightarrow{#1}}
 \newcommand{\say}[2]{#1 ! #2}
 \newcommand{\hear}[2]{#1 ? #2}
 
-\newcommand{\ent}{\mbox{\small ent}}
-\newcommand{\ex}{\mbox{\small ex}}
+\newcommand{\ent}{\text{\small ent}}
+\newcommand{\ex}{\text{\small ex}}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt plus 2pt minus 1pt}
@@ -73,7 +75,7 @@
 
 The AUTOSAR standard is an open software component architecture for the automotive industry. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology.
 
-The standard has a rather wide scope and covers many features normally associated with complex operating systems, like I/O abstraction, concurrency, communication, distribution and real-time predictability. Unlike existing operating systems, however, AUTOSAR is not de facto defined in terms of a particular implementation. Instead, an explicit goal of AUTOSAR is to constitute an abstract specification that allows multiple and competing realizations, and even systems built as an assembly of fragments from many different (and competing) vendors. Such a goal naturally puts the focus on the standard specification itself. 
+The standard has a rather wide scope and covers many features normally associated with complex operating systems, like I/O abstraction, concurrency, communication, distribution and real-time predictability. Unlike existing operating systems, however, AUTOSAR is not de facto defined in terms of a particular implementation. Instead, an explicit goal of AUTOSAR is to constitute an abstract specification that allows multiple and competing realizations, and even systems built as an assembly of fragments from many different (and competing) vendors. Such a goal naturally puts the focus on the standard specification itself.
 
 Unfortunately, the AUTOSAR specification is not very rigorous, despite a sheer size of more than one hundred pdf documents and over 12,500 pages of text and UML diagrams in total. It is also not very abstract, in that it makes frequent references to assumed implementation techniques for the purpose of defining its semantics. In practice, the AUTOSAR standard becomes blurred with the specific behavior of one's chosen platform and development tools. And because the standard is open to interpretation, the interoperability of software components across tools and platforms is often seriously hampered. What is more, a single software component cannot easily be studied and understood in isolation, since its interactive behavior is only indirectly defined in terms of the concrete C-code and OS tasks that realize it and interaction environment.
 
@@ -89,13 +91,13 @@ TODO: Simple examples early (informally)
 \section{AUTOSAR}
 \label{sec:autosar}
 
-An AUTOSAR model is primarily a structure of interconnected {\bf software components} (SWCs). Links between SWCs are called {\bf connectors}, which attach to {\bf ports} exposed by the SWCs. A port is either {\bf required} or {\bf provided}, and then classified according to what {\bf interface} it exposes: {\bf sender-receiver}, {\bf client-server}, {\bf trigger} and {\bf mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more {\bf data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more {\bf operations}, that each give the signature of a procedure call and the possible errors that may result.
+An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs). Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
 
-Some components merely act as containers of other components structures, these are called {\bf composition} SWCs. In contrast, {\bf atomic} SWCs define their own behavior in terms of {\bf runnables} and {\bf inter-runnable variables}, primarily. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioral definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable  only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as {\bf event} declarations that determine under what conditions it will get executed.
+Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behavior in terms of \textbf{runnables} and \textbf{inter-runnable variables}, primarily. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioral definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable  only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
 
-A runnable under execution is called a {\bf runnable instance}, and these may execute concurrently even if they belong to the same SWC. Each runnable indicates whether it may be instantiated concurrently with itself. Runnable code can also use {\bf exclusive areas} (a form of mutex semaphores) to further control concurrent behavior.
+A runnable under execution is called a \textbf{runnable instance}, and these may execute concurrently even if they belong to the same SWC. Each runnable indicates whether it may be instantiated concurrently with itself. Runnable code can also use \textbf{exclusive areas} (a form of mutex semaphores) to further control concurrent behavior.
 
-To interact with ports, inter-runnable variables and exclusive areas, runnables utilize what is abstractly known as the {\bf virtual function bus} (VFB). Concretely, the VFB takes the shape of a C programming interface to the {\bf run-time environment} (RTE), custom-generated for each runnable on basis of its access constraints. Behind the RTE, a collection of OS kernels, communication stacks and other basic software modules implement the VBF services for the platform at hand. Complete AUTOSAR designs also typically contain {\bf ECU} and {\bf task assignments}, which are manually built tables that control how SWCs and runnables map onto the available hardware and OS resources, respectively.
+To interact with ports, inter-runnable variables and exclusive areas, runnables utilize what is abstractly known as the \textbf{virtual function bus} (VFB). Concretely, the VFB takes the shape of a C programming interface to the \textbf{run-time environment} (RTE), custom-generated for each runnable on basis of its access constraints. Behind the RTE, a collection of OS kernels, communication stacks and other basic software modules implement the VBF services for the platform at hand. Complete AUTOSAR designs also typically contain \textbf{ECU} and \textbf{task assignments}, which are manually built tables that control how SWCs and runnables map onto the available hardware and OS resources, respectively.
 
 AUTOSAR models are completely static, which means that all components, runnables, ports, connectors, etc, are created ahead of execution time. Runnable instances are an exception, but they are only identified by AUTOSAR for conceptual purposes and never part of any model syntax. This static nature renders AUTOSAR models very suitable to graphical notations, which by far is the most widespread representation format for AUTOSAR models. An graphical model example is shown in Figure~\ref{fig:model}.
 
@@ -104,18 +106,18 @@ AUTOSAR models are completely static, which means that all components, runnables
 
 The formal approach we have chosen is that of a typical process calculus \cite{}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
-Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\adr{R:I} $ means runnable $R$ of component $I$ and $\adr{E:P:I}$ means element $E$ of port $P$ within component $I$. The following meta-variable conventions will be used:
+Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\adr{R:I}$ means runnable $R$ of component $I$ and $\adr{E:P:I}$ means element $E$ of port $P$ within component $I$. The following meta-variable conventions will be used:
 $$
 \begin{array}{rcll}
-	I	& \in		& \mbox{Component names} \\
-	R	& \in		& \mbox{Runnable names} \\
-	U	& \in		& \mbox{Port names} \\
-	E	& \in		& \mbox{Sender-receiver element names} \\
-	O	& \in		& \mbox{Client-server operation names} \\
-	S	& \in		& \mbox{Inter-runnable variable names} \\
-	X	& \in		& \mbox{Exclusive area names} \\
+	I	& \in		& \text{Component names} \\
+	R	& \in		& \text{Runnable names} \\
+	U	& \in		& \text{Port names} \\
+	E	& \in		& \text{Sender-receiver element names} \\
+	O	& \in		& \text{Client-server operation names} \\
+	S	& \in		& \text{Inter-runnable variable names} \\
+	X	& \in		& \text{Exclusive area names} \\
 	\\
-	A	& \in		& \mbox{Addresses} \\
+	A	& \in		& \text{Addresses} \\
 	A	& ::=		& \adr{R:I}   \sep   \adr{E:P:I}   \sep   \adr{O:U:I}   \sep   \adr{S:I}   \sep   \adr{X:I}   \\
 \end{array}
 $$
@@ -144,15 +146,15 @@ Timer state for runnable $R$ of component $I$ and period $T_p$, with $T$ seconds
 In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\void$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\void$ otherwise. An activation state $\Act$ either toggles between $\idle$ and $\pending$, or it has the special shape $\serving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
 $$
 \begin{array}{rcll}
-	V	& \in		& \mbox{Values} \\
-	N	& \in		& \mbox{Natural numbers} \\
-	B	& \in		& \mbox{Boolean values} \\
-	T	& \in		& \mbox{Time values} \\
+	V	& \in		& \text{Values} \\
+	N	& \in		& \text{Natural numbers} \\
+	B	& \in		& \text{Boolean values} \\
+	T	& \in		& \text{Time values} \\
 	C	& ::=		& \adr{O:U:I} \sep \void \\
 	\Act	& ::=		& \idle \sep \pending \sep \serving{\Cs}{\Vs} \\
 \end{array}
 $$
-We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\adr{V:Vs}$ ($\adr{Vs:V}$). 
+We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\adr{V:Vs}$ ($\adr{Vs:V}$).
 
 The code part of a runnable instance should technically be a representation of the C or Matlab function that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in every detail, a more abstract notion of executable code will be required. To this end, we have chosen to ignore all details of internal computations, and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. Because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style to allow any data-dependencies to be expressed.
 $$
@@ -209,7 +211,7 @@ TODO: details on limitations: what's not covered by the calculus
 \section{Semantics}
 \label{sec:Sem}
 
-Our semantic approach defines the meaning of an AUTOSAR system as the possible chains of state changes that can be applied to the system's initial state; or equivalently, as the set of {\em traces} that can be generated from the corresponding process term $P_0$. A trace is a possibly infinite sequence of transitions
+Our semantic approach defines the meaning of an AUTOSAR system as the possible chains of state changes that can be applied to the system's initial state; or equivalently, as the set of \emph{traces} that can be generated from the corresponding process term $P_0$. A trace is a possibly infinite sequence of transitions
 $$
 \begin{array}{c}
 	P_0 \red{L_1} P_1 \red{L_2} P_2 \red{L_3} \cdots
@@ -227,8 +229,8 @@ states that the system state captured as process term $P_{i-1}$ can evolve into 
 The label $L$ of a transition can be ow two kinds, indicating that the affected process term either "says" or "hears" something during the transition. A label also always consists of an address $A$ paired with some additional detail $D$, as captured in the following label grammar:
 $$
 \begin{array}{rcll}
-	L	& ::=		& A!D		& \hspace{4em}\mbox{Say $A$ and $D$} \\
-		&		& A?D		& \hspace{4em}\mbox{Hear $A$ and $D$} \\
+	L	& ::=		& A!D		& \hspace{4em}\text{Say $A$ and $D$} \\
+		&		& A?D		& \hspace{4em}\text{Hear $A$ and $D$} \\
 \end{array}
 $$
 The possible forms of the extra label information $D$ will be introduced as the different transition rules are defined.
@@ -245,10 +247,10 @@ Two processes $P$ and $Q$ can make transitions in parallel if they agree on what
 	\and
 	\inferrule
 		{P \red{A?D} P' \\ Q \red{A?D} Q'}
-		{P | Q \red{A?D} P' | Q'}	
+		{P | Q \red{A?D} P' | Q'}
 \end{mathpar}
 
-The effect of these agreement rules closely resembles the idea of a {\em broadcast}: what one process says may be heard by every other process in a large parallel composition. This behavior serves us well, because in general, what one AUTOSAR runnable does may have impact on many -- if not all -- parts of the executing system. It is however important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over a parallel system is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things. 
+The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behavior serves us well, because in general, what one AUTOSAR runnable does may have impact on many -- if not all -- parts of the executing system. It is however important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over a parallel system is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
 
 The initial process $P_0$ is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
 \begin{enumerate}
@@ -259,7 +261,7 @@ $$
 	\runnable{\adr{R:I}}{0.0}{\Act}{0}
 \end{array}
 $$
-where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an {\em OperationInvokedEvent}; else $\Act$ is $\pending$ if $R$ is triggered by an {\em InitEvent}; otherwise $\Act$ is $\idle$.
+where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\pending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\idle$.
 % SWS_Rte_03524 (SWS_Rte_03526?) forbids mixing OperationInvokedEvents with other events for the same runnable
 
 \item For each exclusive area $X$ of each atomic component $I$, a term
@@ -283,10 +285,10 @@ $$
 	\qelem{\adr{E:U:I}}{\epsilon}
 \end{array}
 $$
-if the {\em swImplPolicy} attribute of element $E$ is {\em queued}; otherwise, a term
+if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued}; otherwise, a term
 $$
 \begin{array}{c}
-	\delem{\adr{E:U:I}}{\false}{\mbox{NO\_DATA}}
+	\delem{\adr{E:U:I}}{\false}{\text{NO\_DATA}}
 \end{array}
 $$
 
@@ -297,7 +299,7 @@ $$
 \end{array}
 $$
 
-\item For each {\em TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
+\item For each \emph{TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
 	\timer{\adr{R:I}}{T}{0.0}
@@ -307,17 +309,17 @@ where $T$ is the period of the event.
 
 \end{enumerate}
 
-Some further static model information will also be referenced by the transition rules. We refer to the {\em connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
+Some further static model information will also be referenced by the transition rules. We refer to the \emph{connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
 $$
-	\adr{E:$U_1$:$I_1$} \Rightarrow \adr{E:$U_2$:$I_2$} \;\;\mbox{for all elements $E$ of port $U_2$}
+	\adr{E:$U_1$:$I_1$} \Rightarrow \adr{E:$U_2$:$I_2$} \;\;\text{for all elements $E$ of port $U_2$}
 $$
 if there is a connector in the model from provided sender-receiver port $U_1$ of component $I_1$ to required port $U_2$ of component $I_2$; and
 $$
-	\adr{O:$U_1$:$I_1$} \Rightarrow \adr{O:$U_2$:$I_2$} \;\;\mbox{for all operations $O$ of port $U_1$}
+	\adr{O:$U_1$:$I_1$} \Rightarrow \adr{O:$U_2$:$I_2$} \;\;\text{for all operations $O$ of port $U_1$}
 $$
 if there is a connector in the model from required client-server port $U_1$ of component $I_1$ to provided port $U_2$ of component $I_2$.
 
-We expect the {\em implementation} of a runnable to be available as a continuation $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these function by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments and results will be replaced by the unit value $\void$. 
+We expect the \emph{implementation} of a runnable to be available as a continuation $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these function by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments and results will be replaced by the unit value $\void$.
 
 \subsection{Exclusive areas}
 
