@@ -37,17 +37,25 @@ import Data.Maybe
 import qualified Text.XML as XML
 import qualified Data.Text as Text
 import qualified System.Directory
+import qualified System.Environment
+import qualified System.Posix.Directory
 import qualified System.FilePath
 import Text.PrettyPrint
 
 
+main = do [f] <- System.Environment.getArgs
+          convertXML f
+
 convertXML f = do
     doc <- XML.readFile XML.def f
+    let dir = System.FilePath.dropExtension f
+    System.Directory.createDirectoryIfMissing True dir
+    System.Posix.Directory.changeWorkingDirectory dir
     optPackages [] $ XML.documentRoot doc
 
-optPackages path node = 
+optPackages path node =
     case optChild "AR-PACKAGES" node of
-        Nothing -> 
+        Nothing ->
             return ()
         Just node' -> do
             mapM (convertPackage path) $ children "AR-PACKAGE" node'
@@ -57,7 +65,7 @@ convertPackage path node = do
     out $ nl <> txt (pathStr path') <> nl
     write path name $ optElements path' node
     optPackages path' node
-  where 
+  where
     path' = name : path
     name = mkUp (shortName node)
 
@@ -114,7 +122,7 @@ convertPort node
         name = mkLo (shortName node)
         rComSpec = child "REQUIRED-COM-SPECS" node
         pComSpec = child "PROVIDED-COM-SPECS" node
-    
+
 convertComp node
     | isTag "SW-COMPONENT-PROTOTYPE" node =
         nest 4 $ txt name <+> txt "<-" <+> txt ref
@@ -151,11 +159,11 @@ convertDelegationConn node =
     case (optChild "R-PORT-IN-COMPOSITION-INSTANCE-REF" inner,
           optChild "P-PORT-IN-COMPOSITION-INSTANCE-REF" inner) of
         (Just rnode, _) ->
-            nest 4 $ txt "connect" <+> txt outp <+> 
+            nest 4 $ txt "connect" <+> txt outp <+>
             txt (lastPathVal "CONTEXT-COMPONENT-REF" rnode) <> txt "." <>
             txt (lastPathVal "TARGET-R-PORT-REF" rnode)
         (_, Just pnode) ->
-            nest 4 $ txt "connect" <+> 
+            nest 4 $ txt "connect" <+>
             txt (lastPathVal "CONTEXT-COMPONENT-REF" pnode) <> txt "." <>
             txt (lastPathVal "TARGET-P-PORT-REF" pnode) <+> txt outp
     where
@@ -195,13 +203,13 @@ hasChild tag node =
 
 optChild tag =
     listToMaybe . children tag
-    
+
 children tag =
-    filter (isTag tag) . allChildren 
+    filter (isTag tag) . allChildren
 
 grandChildren tag =
     List.concatMap allChildren . children tag
-    
+
 allChildren node =
     [ e | XML.NodeElement e <- XML.elementNodes node ]
 
@@ -216,7 +224,7 @@ nl = text "\n"
 out = putStr . render
 
 write revPath name doc
-    | isEmpty doc = 
+    | isEmpty doc =
         return ()
     | otherwise = do
         System.Directory.createDirectoryIfMissing True dirPath
