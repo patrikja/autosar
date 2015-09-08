@@ -5,6 +5,8 @@ A simplified model of programming in autosar
 
 ## Contents
 
+| Directory  | Comment |
+| ---------- | ------- |
 | ARSim/     | Simulator (written in Haskell)
 | prolog/    | Semantics (in Prolog)
 | FromXML/   | Translator from AUTOSAR XML to Haskell (in progress)    |
