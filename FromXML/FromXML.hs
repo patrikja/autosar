@@ -36,6 +36,7 @@ import qualified Data.List as List
 import Data.Maybe
 import qualified Text.XML as XML
 import qualified Data.Text as Text
+import           Data.Text (Text)
 import qualified System.Directory
 import qualified System.Environment
 import qualified System.Posix.Directory
@@ -43,9 +44,11 @@ import qualified System.FilePath
 import Text.PrettyPrint
 
 
+main :: IO ()
 main = do [f] <- System.Environment.getArgs
           convertXML f
 
+convertXML :: FilePath -> IO ()
 convertXML f = do
     doc <- XML.readFile XML.def f
     let dir = System.FilePath.dropExtension f
@@ -53,6 +56,8 @@ convertXML f = do
     System.Posix.Directory.changeWorkingDirectory dir
     optPackages [] $ XML.documentRoot doc
 
+type Path = [Text] -- reverse list of path elements
+optPackages :: Path -> XML.Element -> IO ()
 optPackages path node =
     case optChild "AR-PACKAGES" node of
         Nothing ->
@@ -61,6 +66,7 @@ optPackages path node =
             mapM (convertPackage path) $ children "AR-PACKAGE" node'
             return ()
 
+convertPackage :: Path -> XML.Element -> IO ()
 convertPackage path node = do
     out $ nl <> txt (pathStr path') <> nl
     write path name $ optElements path' node
@@ -69,7 +75,7 @@ convertPackage path node = do
     path' = name : path
     name = mkUp (shortName node)
 
-
+optElements :: Path -> XML.Element -> Doc
 optElements path node =
     case optChild "ELEMENTS" node of
         Nothing ->
@@ -78,12 +84,16 @@ optElements path node =
             txt "module" <+> txt (pathStr path) <+> txt "where" $$
             vmap (convertElement path) (allChildren node')
 
+convertElement :: Path -> XML.Element -> Doc
 convertElement path node =
     convert tag name node
   where
     name = leafVal "SHORT-NAME" node
     tag = tagOf node
 
+type Tag = Text
+type Name = Text
+convert :: Tag -> Name -> XML.Element -> Doc
 convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
     nl <> txt "data" <+> txt (mkUp name) <+> equals <+> lbrace $$
     nest 4 (vmap convertSignature ports) $$
@@ -99,6 +109,7 @@ convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
 convert _ name node =
     empty
 
+convertSignature :: XML.Element -> Doc
 convertSignature node
     | isTag "R-PORT-PROTOTYPE" node =
         txt name <+> txt "::" <+> txt "RequiredDataElem" <+> txt rTRef
@@ -111,6 +122,7 @@ convertSignature node
         rTRef = mkQual mkUp "REQUIRED-INTERFACE-TREF" node
         pTRef = mkQual mkUp "PROVIDED-INTERFACE-TREF" node
 
+convertPort :: XML.Element -> Doc
 convertPort node
     | isTag "R-PORT-PROTOTYPE" node =
         nest 4 $ txt name <+> txt "<-" <+> txt "requiredDataElement"
@@ -123,6 +135,7 @@ convertPort node
         rComSpec = child "REQUIRED-COM-SPECS" node
         pComSpec = child "PROVIDED-COM-SPECS" node
 
+convertComp :: XML.Element -> Doc
 convertComp node
     | isTag "SW-COMPONENT-PROTOTYPE" node =
         nest 4 $ txt name <+> txt "<-" <+> txt ref
@@ -132,11 +145,13 @@ convertComp node
         name = mkLo (shortName node)
         ref = mkQual mkLo "TYPE-TREF" node
 
+mkQual :: (Text -> Text) -> Text -> XML.Element -> Text
 mkQual f tag node = Text.intercalate "." names'
   where
     names = tail $ Text.splitOn "/" $ leafVal tag node
     names' = map mkUp (init names) ++ [f (last names)]
 
+convertConn :: XML.Element -> Doc
 convertConn node
     | isTag "ASSEMBLY-SW-CONNECTOR" node =
         convertAssemblyConn node
@@ -145,6 +160,7 @@ convertConn node
     | otherwise =
         empty
 
+convertAssemblyConn :: XML.Element -> Doc
 convertAssemblyConn node =
     nest 4 $ txt "connect" <+>
     txt (lastPathVal "CONTEXT-COMPONENT-REF" pnode) <> txt "." <>
@@ -155,6 +171,7 @@ convertAssemblyConn node =
     pnode = child "PROVIDER-IREF" node
     rnode = child "REQUESTER-IREF" node
 
+convertDelegationConn :: XML.Element -> Doc
 convertDelegationConn node =
     case (optChild "R-PORT-IN-COMPOSITION-INSTANCE-REF" inner,
           optChild "P-PORT-IN-COMPOSITION-INSTANCE-REF" inner) of
@@ -170,10 +187,13 @@ convertDelegationConn node =
         inner = child "INNER-PORT-IREF" node
         outp = lastPathVal "OUTER-PORT-REF" node
 
+mkLo :: Text -> Text
 mkLo s = if Data.Char.isLower (Text.head s) then s else Text.cons 'x' s
 
+mkUp :: Text -> Text
 mkUp s = if Data.Char.isUpper (Text.head s) then s else Text.cons 'X' s
 
+splitPath :: Text -> [Text]
 splitPath = Text.splitOn "/"
 
 lastPathVal tag = mkLo . last . splitPath . leafVal tag
@@ -223,6 +243,7 @@ nl = text "\n"
 
 out = putStr . render
 
+write :: Path -> Name -> Doc -> IO ()
 write revPath name doc
     | isEmpty doc =
         return ()
