@@ -1,0 +1,23 @@
+red(0, hear(_A,_L), 0).
+
+red(par(P,Q), say(A,L), par(P1,Q1)) :- red(P, say(A,L), P1), red(Q, hear(A,L), Q1).
+
+red(par(P,Q), say(A,L), par(P1,Q1)) :- red(P, hear(A,L), P1), red(Q, say(A,L), Q1).
+
+red(par(P,Q), hear(A,L), par(P1,Q1)) :- red(P, hear(A,L), P1), red(Q, hear(A,L), Q1).
+
+
+red(    rinst(r(I,R), C, Xs, rte_enter(X,K)),           say(x(I,X),enter),  rinst(r(I,R), C, cons(X,Xs), K) ).
+
+red(    rinst(r(I,R), C, cons(X,Xs), rte_exit(X,K)),    say(x(I,X),exit),   rinst(r(I,R), C, Xs, K)         ).
+
+red(    excl(A, free),                                  hear(A,enter),      excl(A, taken)                  ).
+
+red(    excl(A, taken),                                 hear(A,enter),      excl(A, free)                   ).
+
+red(    rinst(A, C, Xs, Code),                          hear(B,L),          rinst(A, C, Xs, Code)           ).
+
+
+?- red( par(rinst(r(i,r1),nil,nil,rte_enter(x1,done)),par(rinst(r(i,r2),nil,nil,rte_enter(x1,done)),excl(x(i,x1),free))), 
+        say(A,L), 
+        par(rinst(r(i,r1),nil,cons(x1,nil),done),par(rinst(r(i,r2),nil,nil,rte_enter(x1,done)),excl(x(i,x1),taken)))).

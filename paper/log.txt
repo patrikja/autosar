@@ -1,3 +1,8 @@
+2015-09-07: Telcon PaJa + JoNo
+
+  Identify a suitable datatype (in Haskell)
+
+
 2015-08-02: Starting to "prettify" the semantics by hand
 
   (Because the automatic translator idea has not worked out yet. We
