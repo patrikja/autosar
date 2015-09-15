@@ -6,16 +6,21 @@ instance Functor      (AR c)
 instance Applicative  (AR c)
 instance Monad        (AR c)
 data ClientComSpec         i o = ClientComSpec
-data ClientServerOperation i o = OperationInvokedEvent -- TODO ?
+data ClientServerOperation i o
 data DataElementQueued   a
 data DataElementUnqueued a
-data Event c = DataReceivedEvent (RPort c (DataElementQueued Boolean)) -- TODO ?
-data QueuedReceiverComSpec   a = QueuedReceiverComSpec {length :: Int}
-data QueuedSenderComSpec     a = QueuedSenderComSpec
-data UnqueuedReceiverComSpec a = UnqueuedReceiverComSpec  {init :: Int}
+
+data Event           c = DataReceivedEvent (DataElementQueued Boolean) -- TODO ?
+data ServerEvent a b c = OperationInvokedEvent (ClientServerOperation a b)
+
+data QueuedReceiverComSpec   a = QueuedReceiverComSpec   {length    :: Int}
+data QueuedSenderComSpec     a = QueuedSenderComSpec     {initQSCS  :: a}
+data UnqueuedReceiverComSpec a = UnqueuedReceiverComSpec {init      :: a}
+data ServerComSpec a b         = ServerComSpec           {lengthSCS :: Int}
+
 data PPort c a
-data ServerComSpec a b = ServerComSpec
-data ServerEvent a b c
+data RPort c a
+
 
 type Boolean = Bool
 
@@ -24,10 +29,8 @@ instance Functor      (RTE c)
 instance Applicative  (RTE c)
 instance Monad        (RTE c)
 
-data RPort c a
-
-portOfPairsFrompairOfPorts :: (RPort c a1, RPort c a2) -> RPort c (a1, a2)
-portOfPairsFrompairOfPorts = error "portOfPairsFrompairOfPorts: stub"
+-- portOfPairsFrompairOfPorts :: (RPort c a1, RPort c a2) -> RPort c (a1, a2)
+-- portOfPairsFrompairOfPorts = error "portOfPairsFrompairOfPorts: stub"
 
 -- type family RPort c a
 -- type instance RPort c (a,b) = (RPort c a, RPort c b)
@@ -37,25 +40,35 @@ portOfPairsFrompairOfPorts = error "portOfPairsFrompairOfPorts: stub"
 
 ----------------
 
--- Original type: does not match with use "a@(x, y) <- required1 ..."
--- required1    :: (UnqueuedReceiverComSpec a, QueuedReceiverComSpec b) ->
---                AR c (RPort c (DataElementUnqueued a, DataElementQueued b))
 required1    :: (UnqueuedReceiverComSpec a, QueuedReceiverComSpec b) ->
-               AR c (RPort c (DataElementUnqueued a), RPort c (DataElementQueued b))
+               AR c (RPort c (DataElementUnqueued a, DataElementQueued b))
 required1 = error "required: stub"
 
--- Original type: does not match with use "b@(m, n) <- require2 ..."
--- required2    :: (ClientComSpec a1 b1, ClientComSpec a2 b2) ->
---                 AR c (RPort c (ClientServerOperation a1 b1, ClientServerOperation a2 b2))
+elementsOfPPort2 :: PPort c (a, b) -> (a, b)
+elementsOfPPort2 = error "elementsOfPPort2: stub"
+
+elementsOfPort2 :: RPort c (a, b) -> (a, b)
+elementsOfPort2 = error "elementsOfPort2: stub"
+
+elementsOfPort1 :: RPort c a -> a
+elementsOfPort1 = error "elementsOfPort1: stub"
+
+elementsOfPPort1 :: PPort c a -> a
+elementsOfPPort1 = error "elementsOfPPort1: stub"
+
+
 required2    :: (ClientComSpec a1 b1, ClientComSpec a2 b2) ->
-                AR c (RPort c (ClientServerOperation a1 b1), RPort c (ClientServerOperation a2 b2))
+                AR c (RPort c (ClientServerOperation a1 b1, ClientServerOperation a2 b2))
 required2 = error "required': stub"
 
 ----------------
 
-provided    :: (ServerComSpec a1 b1, ServerComSpec a2 b2) ->
+provided1    :: QueuedSenderComSpec a ->
+                AR c (PPort c (DataElementQueued a))
+provided1 = error "provided: stub"
+provided2    :: (ServerComSpec a1 b1, ServerComSpec a2 b2) ->
                 AR c (PPort c (ClientServerOperation a1 b1, ClientServerOperation a2 b2))
-provided = error "provided: stub"
+provided2 = error "provided2: stub"
 
 provided'    :: (QueuedSenderComSpec a) ->
                 AR c (PPort c (DataElementQueued a))
@@ -65,16 +78,16 @@ provided' = error "provided': stub"
 composition :: (forall c . AR c a) -> AR c' a
 composition = error "composition: stub"
 
-rte_Read    :: RPort c (DataElementUnqueued a) -> RTE c a
+rte_Read    :: DataElementUnqueued a -> RTE c a
 rte_Read = error "rte_Read: stub"
 
-rte_Receive :: RPort c (DataElementQueued a) -> RTE c a
+rte_Receive :: DataElementQueued a -> RTE c a
 rte_Receive = error "rte_Receive: stub"
 
-rte_Send    :: PPort c (DataElementQueued a) -> a -> RTE c ()
+rte_Send    :: DataElementQueued a -> a -> RTE c ()
 rte_Send = error "rte_Send: stub"
 
-rte_Call    :: RPort c (ClientServerOperation a b) -> a -> RTE c b
+rte_Call    :: ClientServerOperation a b -> a -> RTE c b
 rte_Call = error "rte_Call: stub"
 
 runnable        :: [Event           c] ->       RTE c b  -> AR c ()

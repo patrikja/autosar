@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, PartialTypeSignatures, ScopedTypeVariables #-}
 import SpeculationStub
 import Prelude hiding (init, length)
 
@@ -8,32 +8,41 @@ type B  = ( ClientServerOperation (Int,String) Int,
             ClientServerOperation (String,String,Boolean) Double )
 type C  = ( DataElementQueued Double )
 
+
 comp1 :: AR c (RPort () A, RPort () B)
 comp1 = atomic2 $ do
-    a@(x, y) <- required1 (UnqueuedReceiverComSpec{init=0}, QueuedReceiverComSpec{length=32})
-    b@(m, n) <- required2 (ClientComSpec{}, ClientComSpec{})
+    a <- required1 (UnqueuedReceiverComSpec{init=0}, QueuedReceiverComSpec{length=32})
+    let (x, y) = elementsOfPort2 a
+    b <- required2 (ClientComSpec{}, ClientComSpec{})
+    let (m, n) = elementsOfPort2 b
     runnable [DataReceivedEvent y] $ do
-        v <- rte_Read    x   -- x :: RPort c (DataElementUnqueued a)
+        v <- rte_Read    x   -- x :: DataElementUnqueued a
         w <- rte_Receive y
         r <- rte_Call    m (v,"")
         s <- rte_Call    n ("a","b",w)
         return ()
-    return (portOfPairsFrompairOfPorts a, portOfPairsFrompairOfPorts b)
+    return (a, b)
 
-{-
+
 comp2 :: AR c (RPort () A, PPort () B, PPort () C)
 comp2 = atomic3 $ do
-    a@(x, y) <- required1 (UnqueuedReceiverComSpec{init=7}, QueuedReceiverComSpec{length=8})
-    b@(m, n) <- provided (ServerComSpec{length=10}, ServerComSpec{length=2})
-    c@(z) <- provided (QueuedSenderComSpec{init=3.14})
-    serverRunnable2 [OperationInvokedEvent m] $ \(i,s) -> do
-        v <- rte_Read a x
-        _ <- rte_Send b z (v/i)
-        return (2*v/i)
+    a <- required1 (UnqueuedReceiverComSpec{init=7}, QueuedReceiverComSpec{length=8})
+    let (x, y) = elementsOfPort2 a
+    b <- provided2 (ServerComSpec{lengthSCS=10}, ServerComSpec{lengthSCS=2})
+    let (m, n) = elementsOfPPort2 b
+    c <- provided1 (QueuedSenderComSpec{initQSCS=3.14})
+    let -- dummy = c :: PPort c1 C
+        z :: C
+        z = elementsOfPPort1 c
+    serverRunnable2 [OperationInvokedEvent m] $ \(i::Int,s) -> do
+        v <- rte_Read x
+        let vDivi = fromIntegral v/fromIntegral i
+        _ <- rte_Send z vDivi
+        return (2*v)
     serverRunnable3 [OperationInvokedEvent n] $ \(s,r,f) -> do
-    -- some computation ...
+      -- some computation ...
+      return (read s * pi)
     return (a, b, c)
-
 
 comp3 :: AR c (RPort () A, PPort () C)
 comp3 = composition $ do
@@ -42,10 +51,8 @@ comp3 = composition $ do
     connect b1 b2
     a <- delegate [a1, a2]
     return (a, c2)
--}
 
 --------------
-
 
 connect     :: RPort () B -> PPort () B -> AR c ()
 connect = error "connect: stub"
