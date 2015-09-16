@@ -38,7 +38,7 @@ runnable = undefined
 serverRunnable = undefined
 
 atomic          :: Interface p => (forall c . Atomic c (p r c)) -> Component (p r ())
-atomic c = atomicToComponent (fmap seal c)
+atomic x = atomicToComponent (fmap seal x)
   where atomicToComponent :: Atomic c a -> Component a
         atomicToComponent = undefined
 
@@ -82,7 +82,7 @@ class Interface p where
 instance Interface (DataElement q a)
 instance Interface (ClientServerOperation a b)
 
-class Interface p => Port p pspec rspec | p -> pspec, p -> rspec, p pspec -> rspec, p rspec -> pspec where
+class Interface p => Port p pspec rspec | p -> pspec, p -> rspec where
     connect :: p Provided () -> p Required () -> Component ()
     delegate :: [p r ()] -> Component (p r ())
     connect = undefined
@@ -96,7 +96,7 @@ instance Port (DataElement Unqueued a) (UnqueuedSenderComSpec a) (UnqueuedReceiv
 instance Port (DataElement Queued a) (QueuedSenderComSpec a) (QueuedReceiverComSpec a)
 instance Port (ClientServerOperation a b) (ServerComSpec a b) ClientComSpec
 
----
+-----------
 
 data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c, e2 :: DataElement Queued String r c }
 
