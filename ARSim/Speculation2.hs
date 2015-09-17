@@ -1,72 +1,65 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FunctionalDependencies, RankNTypes #-}
-{-# LANGUAGE RecordWildCards, ExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+{-# LANGUAGE RankNTypes, ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances, RecordWildCards #-}
 module Speculation2 where 
 
 
-newtype DataElement q a r c             = El Int
-newtype ClientServerOperation a b r c   = Op Int
+data DataElement q a r c            -- Async channel of a data
+data ClientServerOperation a b r c  -- Sync channel of an a->b service
 
-data Provided
-data Required
-data Queued
+data Queued         -- Parameter q above
 data Unqueued
 
-data RTE c a
+data Required       -- Parameter r above
+data Provided
 
-instance Functor (RTE c) where
-    fmap = undefined
-instance Applicative (RTE c) where
-    pure = undefined
-    (<*>) = undefined
-instance Monad (RTE c) where
-    (>>=) = undefined
+data RTE c a        -- Monad of executable code
+data Atomic c a     -- Monad of atomic component building blocks
+data Component a    -- Monad of component combinators
 
-rte_Read    :: DataElement Unqueued a Required c -> RTE c a
-rte_Receive :: DataElement Queued a Required c -> RTE c a
-rte_Write   :: DataElement Unqueued a Provided c -> a -> RTE c ()
-rte_Send    :: DataElement Queued a Provided c -> a -> RTE c ()
-rte_Call    :: ClientServerOperation a b Required c -> a -> RTE c b
-rte_Read    = undefined
-rte_Receive = undefined
-rte_Write   = undefined
-rte_Send    = undefined
-rte_Call    = undefined
+-- Primitive operations
 
-runnable        :: [Event c]            ->       RTE c b  -> Atomic c ()
-serverRunnable  :: [ ServerEvent a b c] -> (a -> RTE c b) -> Atomic c ()
-runnable = undefined
-serverRunnable = undefined
+rte_Read        :: DataElement Unqueued a Required c -> RTE c a
+rte_Write       :: DataElement Unqueued a Provided c -> a -> RTE c ()
+rte_Receive     :: DataElement Queued a Required c -> RTE c a
+rte_Send        :: DataElement Queued a Provided c -> a -> RTE c ()
+rte_Call        :: ClientServerOperation a b Required c -> a -> RTE c b
 
-atomic          :: Interface p => (forall c . Atomic c (p r c)) -> Component (p r ())
-atomic x = atomicToComponent (fmap seal x)
-  where atomicToComponent :: Atomic c a -> Component a
-        atomicToComponent = undefined
+runnable        :: [Event c]           ->       RTE c b  -> Atomic c ()
+serverRunnable  :: [ServerEvent a b c] -> (a -> RTE c b) -> Atomic c ()
 
-composition     :: Component a -> Component a
-composition = undefined
-
-data Event c            = forall q a . DataReceivedEvent (DataElement q a Required c)
+data Event c            = InitEvent
+                        | TimingEvent Double
+                        | forall q a . 
+                          DataReceivedEvent (DataElement q a Required c)
 data ServerEvent a b c  = OperationInvokedEvent (ClientServerOperation a b Provided c)
 
-data Atomic c a
+atomic          :: Interface p => (forall c . Atomic c (p r c)) -> Component (p r ())
+composition     :: Component a -> Component a
 
-instance Functor (Atomic c) where
-    fmap = undefined
-instance Applicative (Atomic c) where
-    pure = undefined
-    (<*>) = undefined
-instance Monad (Atomic c) where
-    (>>=) = undefined
+-- Interfaces and ports
 
-data Component a
+class Interface p where
+    seal    :: p r c -> p r ()
+    seal    = undefined
 
-instance Functor Component where
-    fmap = undefined
-instance Applicative Component where
-    pure = undefined
-    (<*>) = undefined
-instance Monad Component where
-    (>>=) = undefined
+instance Interface (DataElement q a)
+instance Interface (ClientServerOperation a b)
+
+class Interface p => Port p pspec rspec | p -> pspec, p -> rspec where
+    connect  :: p Provided () -> p Required () -> Component ()
+    delegate :: [p r ()] -> Component (p r ())
+    require  :: rspec -> Atomic c (p Required c)
+    provide  :: pspec -> Atomic c (p Provided c)
+
+    connect  = undefined
+    delegate = undefined
+    require  = undefined
+    provide  = undefined
+
+instance Port (DataElement Unqueued a) (UnqueuedSenderComSpec a) (UnqueuedReceiverComSpec a)
+instance Port (DataElement Queued a) (QueuedSenderComSpec a) (QueuedReceiverComSpec a)
+instance Port (ClientServerOperation a b) (ServerComSpec a b) ClientComSpec
 
 data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initial :: a }
 data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { init :: a }
@@ -75,52 +68,47 @@ data QueuedReceiverComSpec a    = QueuedReceiverComSpec { length :: Int }
 data ServerComSpec a b          = ServerComSpec { len :: Int }
 data ClientComSpec              = ClientComSpec
 
-class Interface p where
-    seal    :: p r c -> p r ()
-    seal = undefined
+-- "Implementations"
 
-instance Interface (DataElement q a)
-instance Interface (ClientServerOperation a b)
+instance Functor (RTE c) where          fmap = undefined
+instance Applicative (RTE c) where      pure = undefined; (<*>) = undefined
+instance Monad (RTE c) where            (>>=) = undefined
 
-class Interface p => Port p pspec rspec | p -> pspec, p -> rspec where
-    connect :: p Provided () -> p Required () -> Component ()
-    delegate :: [p r ()] -> Component (p r ())
-    connect = undefined
-    delegate = undefined
-    require :: rspec -> Atomic c (p Required c)
-    provide :: pspec -> Atomic c (p Provided c)
-    require = undefined
-    provide = undefined
+instance Functor (Atomic c) where       fmap = undefined
+instance Applicative (Atomic c) where   pure = undefined; (<*>) = undefined
+instance Monad (Atomic c) where         (>>=) = undefined
 
-instance Port (DataElement Unqueued a) (UnqueuedSenderComSpec a) (UnqueuedReceiverComSpec a)
-instance Port (DataElement Queued a) (QueuedSenderComSpec a) (QueuedReceiverComSpec a)
-instance Port (ClientServerOperation a b) (ServerComSpec a b) ClientComSpec
+instance Functor Component where        fmap = undefined
+instance Applicative Component where    pure = undefined; (<*>) = undefined
+instance Monad Component where          (>>=) = undefined
 
------------
+rte_Read        = undefined
+rte_Receive     = undefined
+rte_Write       = undefined
+rte_Send        = undefined
+rte_Call        = undefined
+
+runnable        = undefined
+serverRunnable  = undefined
+atomic x        = toComp (fmap seal x)
+  where toComp  :: Atomic c a -> Component a
+        toComp  = undefined
+composition     = undefined
+
+
+-- ==================================
+--             User code
+-- ==================================
 
 data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c, e2 :: DataElement Queued String r c }
 
-instance Interface MyPort where
-    seal p = MyPort { e1 = seal (e1 p), e2 = seal (e2 p) }
-
-instance Port MyPort (UnqueuedSenderComSpec Int, QueuedSenderComSpec String) 
-                     (UnqueuedReceiverComSpec Int, QueuedReceiverComSpec String) where
-    connect a b = do connect (e1 a) (e1 b); connect (e2 a) (e2 b)
-    require (spec1,spec2) = do e1 <- require spec1; e2 <- require spec2; return MyPort {..}
-    provide (spec1,spec2) = do e1 <- provide spec1; e2 <- provide spec2; return MyPort {..}
-
-type Serv r c = ClientServerOperation (Int,String) Bool r c
-type Dump r c = DataElement Queued Int r c
+type Serv r c   = ClientServerOperation (Int,String) Bool r c
 
 data IFace1 r c = IFace1 { portA :: MyPort Required c, portB :: Serv Required c }
 
-instance Interface IFace1 where
-    seal x = IFace1 { portA = seal (portA x), portB = seal (portB x) }
+type Dump r c   = DataElement Queued Int r c
 
 data IFace2 r c = IFace2 { port1 :: MyPort Required c, port2 :: Serv Provided c, port3 :: Dump Provided c}
-
-instance Interface IFace2 where
-    seal x = IFace2 { port1 = seal (port1 x), port2 = seal (port2 x), port3 = seal (port3 x) }
 
 
 comp1 :: Component (IFace1 r ())
@@ -146,9 +134,6 @@ comp2 = atomic $ do
 
 data IFace3 r c = IFace3 { inport :: MyPort Required c, outport :: Dump Provided c }
 
-instance Interface IFace3 where
-    seal x = IFace3 { inport = seal (inport x), outport = seal (outport x) }
-
 comp3 :: Component (IFace3 r ())
 comp3 = composition $ do
     c1 <- comp1
@@ -156,3 +141,23 @@ comp3 = composition $ do
     connect (port2 c2) (portB c1)
     inport <- delegate [portA c1, port1 c2]
     return IFace3 { inport = inport, outport = port3 c2 }
+    
+
+-- The necessary boring stuff
+
+instance Interface MyPort where
+    seal p = MyPort { e1 = seal (e1 p), e2 = seal (e2 p) }
+
+instance Port MyPort (UnqueuedSenderComSpec Int, QueuedSenderComSpec String) 
+                     (UnqueuedReceiverComSpec Int, QueuedReceiverComSpec String) where
+    connect a b = do connect (e1 a) (e1 b); connect (e2 a) (e2 b)
+    require (spec1,spec2) = do e1 <- require spec1; e2 <- require spec2; return MyPort {..}
+    provide (spec1,spec2) = do e1 <- provide spec1; e2 <- provide spec2; return MyPort {..}
+
+instance Interface IFace1 where
+    seal x = IFace1 { portA = seal (portA x), portB = seal (portB x) }
+
+instance Interface IFace2 where
+    seal x = IFace2 { port1 = seal (port1 x), port2 = seal (port2 x), port3 = seal (port3 x) }
+instance Interface IFace3 where
+    seal x = IFace3 { inport = seal (inport x), outport = seal (outport x) }
