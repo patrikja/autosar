@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances, RecordWildCards #-}
 module Speculation2 where 
 
-
 data DataElement q a r c            -- Async channel of a data
 data ClientServerOperation a b r c  -- Sync channel of an a->b service
 
@@ -57,9 +56,9 @@ class Interface p => Port p pspec rspec | p -> pspec, p -> rspec where
     require  = undefined
     provide  = undefined
 
-instance Port (DataElement Unqueued a) (UnqueuedSenderComSpec a) (UnqueuedReceiverComSpec a)
-instance Port (DataElement Queued a) (QueuedSenderComSpec a) (QueuedReceiverComSpec a)
-instance Port (ClientServerOperation a b) (ServerComSpec a b) ClientComSpec
+instance Port (DataElement Unqueued a)    (UnqueuedSenderComSpec a) (UnqueuedReceiverComSpec a)
+instance Port (DataElement Queued   a)    (QueuedSenderComSpec   a) (QueuedReceiverComSpec   a)
+instance Port (ClientServerOperation a b) (ServerComSpec a b)        ClientComSpec
 
 data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initial :: a }
 data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { init :: a }
@@ -104,11 +103,14 @@ data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c, e2 :: DataElement
 
 type Serv r c   = ClientServerOperation (Int,String) Bool r c
 
-data IFace1 r c = IFace1 { portA :: MyPort Required c, portB :: Serv Required c }
+data IFace1 r c = IFace1 { portA :: MyPort Required c,
+                           portB :: Serv   Required c }
 
 type Dump r c   = DataElement Queued Int r c
 
-data IFace2 r c = IFace2 { port1 :: MyPort Required c, port2 :: Serv Provided c, port3 :: Dump Provided c}
+data IFace2 r c = IFace2 { port1 :: MyPort Required c,
+                           port2 :: Serv   Provided c,
+                           port3 :: Dump   Provided c}
 
 
 comp1 :: Component (IFace1 r ())
