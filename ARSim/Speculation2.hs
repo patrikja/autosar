@@ -3,8 +3,8 @@
 {-# LANGUAGE FlexibleInstances, RecordWildCards #-}
 module Speculation2 where 
 
-data DataElement q a r c            -- Async channel of a data
-data ClientServerOperation a b r c  -- Sync channel of an a->b service
+data DataElement q a r c            -- Async channel of "a" data
+data ClientServerOperation a b r c  -- Sync channel of an "a->b" service
 
 data Queued         -- Parameter q above
 data Unqueued
@@ -14,7 +14,9 @@ data Provided
 
 data RTE c a        -- Monad of executable code
 data Atomic c a     -- Monad of atomic component building blocks
-data Component a    -- Monad of component combinators
+data Comp a         -- Monad of component combinators
+
+type Component i    = Comp (i ())
 
 -- Primitive operations
 
@@ -29,25 +31,24 @@ serverRunnable  :: [ServerEvent a b c] -> (a -> RTE c b) -> Atomic c ()
 
 data Event c            = InitEvent
                         | TimingEvent Double
-                        | forall q a . 
-                          DataReceivedEvent (DataElement q a Required c)
+                        | forall q a . DataReceivedEvent (DataElement q a Required c)
 data ServerEvent a b c  = OperationInvokedEvent (ClientServerOperation a b Provided c)
 
-atomic          :: Interface p => (forall c . Atomic c (p r c)) -> Component (p r ())
-composition     :: Component a -> Component a
+atomic          :: Interface i => (forall c . Atomic c (i c)) -> Comp (i ())
+composition     :: Comp a -> Comp a
 
 -- Interfaces and ports
 
-class Interface p where
-    seal    :: p r c -> p r ()
+class Interface i where
+    seal    :: i c -> i ()
     seal    = undefined
 
-instance Interface (DataElement q a)
-instance Interface (ClientServerOperation a b)
+instance Interface (DataElement q a r)
+instance Interface (ClientServerOperation a b r)
 
-class Interface p => Port p pspec rspec | p -> pspec, p -> rspec where
-    connect  :: p Provided () -> p Required () -> Component ()
-    delegate :: [p r ()] -> Component (p r ())
+class Port p pspec rspec | p -> pspec, p -> rspec where
+    connect  :: p Provided () -> p Required () -> Comp ()
+    delegate :: [p r ()] -> Comp (p r ())
     require  :: rspec -> Atomic c (p Required c)
     provide  :: pspec -> Atomic c (p Provided c)
 
@@ -77,9 +78,9 @@ instance Functor (Atomic c) where       fmap = undefined
 instance Applicative (Atomic c) where   pure = undefined; (<*>) = undefined
 instance Monad (Atomic c) where         (>>=) = undefined
 
-instance Functor Component where        fmap = undefined
-instance Applicative Component where    pure = undefined; (<*>) = undefined
-instance Monad Component where          (>>=) = undefined
+instance Functor Comp where        fmap = undefined
+instance Applicative Comp where    pure = undefined; (<*>) = undefined
+instance Monad Comp where          (>>=) = undefined
 
 rte_Read        = undefined
 rte_Receive     = undefined
@@ -90,7 +91,7 @@ rte_Call        = undefined
 runnable        = undefined
 serverRunnable  = undefined
 atomic x        = toComp (fmap seal x)
-  where toComp  :: Atomic c a -> Component a
+  where toComp  :: Atomic c a -> Comp a
         toComp  = undefined
 composition     = undefined
 
@@ -103,17 +104,17 @@ data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c, e2 :: DataElement
 
 type Serv r c   = ClientServerOperation (Int,String) Bool r c
 
-data IFace1 r c = IFace1 { portA :: MyPort Required c,
+data IFace1 c   = IFace1 { portA :: MyPort Required c,
                            portB :: Serv   Required c }
 
 type Dump r c   = DataElement Queued Int r c
 
-data IFace2 r c = IFace2 { port1 :: MyPort Required c,
+data IFace2 c   = IFace2 { port1 :: MyPort Required c,
                            port2 :: Serv   Provided c,
                            port3 :: Dump   Provided c}
 
 
-comp1 :: Component (IFace1 r ())
+comp1 :: Component IFace1
 comp1 = atomic $ do
     portA <- require (UnqueuedReceiverComSpec{init=0}, QueuedReceiverComSpec{length=10})
     portB <- require ClientComSpec
@@ -123,7 +124,7 @@ comp1 = atomic $ do
         return ()
     return IFace1 {..}
 
-comp2 :: Component (IFace2 r ())
+comp2 :: Component IFace2
 comp2 = atomic $ do
     port1 <- require (UnqueuedReceiverComSpec{init=0}, QueuedReceiverComSpec{length=10})
     port2 <- provide ServerComSpec{len=10}
@@ -134,9 +135,9 @@ comp2 = atomic $ do
         return (i > 0)
     return IFace2 {..}
 
-data IFace3 r c = IFace3 { inport :: MyPort Required c, outport :: Dump Provided c }
+data IFace3 c   = IFace3 { inport :: MyPort Required c, outport :: Dump Provided c }
 
-comp3 :: Component (IFace3 r ())
+comp3 :: Component IFace3
 comp3 = composition $ do
     c1 <- comp1
     c2 <- comp2
@@ -147,7 +148,7 @@ comp3 = composition $ do
 
 -- The necessary boring stuff
 
-instance Interface MyPort where
+instance Interface (MyPort r) where
     seal p = MyPort { e1 = seal (e1 p), e2 = seal (e2 p) }
 
 instance Port MyPort (UnqueuedSenderComSpec Int, QueuedSenderComSpec String) 
