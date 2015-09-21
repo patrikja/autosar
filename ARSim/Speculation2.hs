@@ -113,6 +113,7 @@ composition     = undefined
 --             User code
 -- ==================================
 
+-- TODO: generate Port and Interface instance declarations from data MyPort, data IFace1 or similar.
 data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c,
                            e2 :: DataElement Queued String r c }
 
@@ -174,7 +175,7 @@ instance Port MyPort where
     connect = connectMyPort
     require = requireMyPort
     provide = provideMyPort
-    -- delegare = ?
+--    delegate = delegateMyPort
 
 connectMyPort :: MyPort Provided () -> MyPort Required () -> Comp ()
 connectMyPort a b = do connect (e1 a) (e1 b); connect (e2 a) (e2 b)
@@ -183,6 +184,17 @@ requireMyPort :: RSpec MyPort -> Atomic c (MyPort Required c)
 provideMyPort :: PSpec MyPort -> Atomic c (MyPort Provided c)
 requireMyPort (spec1,spec2) = do e1 <- require spec1; e2 <- require spec2; return MyPort {..}
 provideMyPort (spec1,spec2) = do e1 <- provide spec1; e2 <- provide spec2; return MyPort {..}
+
+--
+newPortAlias :: Comp (p Required ())
+newPortAlias = error "stub"
+connectAlias  :: p r () -> p r () -> Comp ()
+connectAlias = error "stub"
+
+delegateMyPortR :: [p Required ()] -> Comp (p Required ())
+delegateMyPortR ps = do x <- newPortAlias; mapM (connectAlias x) ps; return x
+
+-- + similar code for delegateMyPortP
 
 instance Interface IFace1 where
     seal i = IFace1 { portA = seal (portA i), portB = seal (portB i) }
@@ -197,27 +209,28 @@ instance Interface IFace3 where
 
 data PairPort f1 f2 r c = PairPort { proj1 :: f1 r c, proj2 :: f2 r c }
 
-instance (Port f1, Port f2) => Port (PairPort f1 f2) where
-  type RSpec (PairPort f1 f2) = (RSpec f1, RSpec f2)
-  type PSpec (PairPort f1 f2) = (PSpec f1, PSpec f2)
-  connect = connectPairPort connect connect
+instance (Port p1, Port p2) => Port (PairPort p1 p2) where
+  type RSpec (PairPort p1 p2) = (RSpec p1, RSpec p2)
+  type PSpec (PairPort p1 p2) = (PSpec p1, PSpec p2)
+  connect = connectPairPort    connect connect
   require = workInsidePairPort require require
   provide = workInsidePairPort provide provide
 
 -- Perhaps a bit too general ...
---   could set r = r1 and c = c1
+--   could set r = notRP r1   (r = Provided, r1 = Required)
+--             m = Component
 connectPairPort :: Monad m =>
-     (f1 r c -> f3 r1 c1 -> m a)
-  -> (f2 r c -> f4 r1 c1 -> m b)
-  -> PairPort f1 f2 r c
-  -> PairPort f3 f4 r1 c1
+     (p1 r c -> p3 r1 c -> m a)
+  -> (p2 r c -> p4 r1 c -> m b)
+  -> PairPort p1 p2 r  c
+  -> PairPort p3 p4 r1 c
   -> m b
 connectPairPort c1 c2 a b = do c1 (proj1 a) (proj1 b)
                                c2 (proj2 a) (proj2 b)
 
 workInsidePairPort ::  Monad m =>
-     (t1      -> m (f1 r c)) ->
-     (    t2  -> m (f2 r c)) ->
-     (t1, t2) -> m (PairPort f1 f2 r c)
+     (t1      -> m (p1 r c)) ->
+     (    t2  -> m (p2 r c)) ->
+     (t1, t2) -> m (PairPort p1 p2 r c)
 workInsidePairPort f1 f2 (spec1, spec2) = liftM2 PairPort (f1 spec1) (f2 spec2)
 -- = do e1 <- f1 spec1; e2 <- f2 spec2; return $ PairPort e1 e2

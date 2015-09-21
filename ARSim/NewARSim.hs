@@ -11,8 +11,8 @@ modification, are permitted provided that the following conditions are met:
    * Redistributions in binary form must reproduce the above copyright
      notice, this list of conditions and the following disclaimer in the
      documentation and/or other materials provided with the distribution.
-   * Neither the name of the Chalmers University of Technology nor the names of its 
-     contributors may be used to endorse or promote products derived from this 
+   * Neither the name of the Chalmers University of Technology nor the names of its
+     contributors may be used to endorse or promote products derived from this
      software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -38,7 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE TypeFamilies #-}
 
 module NewARSim (module NewARSim, Typeable, Data, mkStdGen, StdGen) where
-              
+
 import Control.Monad.Operational
 import Control.Monad.Identity hiding (void)
 import Control.Monad.State hiding (void)
@@ -153,9 +153,9 @@ data SimState               = SimState {
                                     nextA       :: Address
                                 }
 
-data Proc                   = forall c . 
+data Proc                   = forall c .
                               Run       Address Time Act Int (Static c)
-                            | forall c . 
+                            | forall c .
                               RInst     Address (Maybe Client) [Address] (RTE c Value)
                             | Excl      Address Exclusive
                             | Irv       Address Value
@@ -188,7 +188,7 @@ data Static c               = Static {
                                     triggers        :: [Address],
                                     invocation      :: Invocation,
                                     implementation  :: Value -> RTE c Value
-                                }        
+                                }
 
 type ConnRel = Address -> Address -> Bool
 
@@ -250,23 +250,30 @@ instance Data a => Port (DataElement Unqueued a) where
     type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
     type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
-    provide s = do a <- newAddress; newInit a (toValue (initSend s)); return (DE a)
-    require s = do a <- newAddress; newProcess (DElem a False (Ok (toValue (initValue s)))); return (DE a)
-    
+    provide s = do a <- newAddress;
+                   newInit a (toValue (initSend s))
+                   return (DE a)
+    require s = do a <- newAddress;
+                   newProcess (DElem a False (Ok (toValue (initValue s))))
+                   return (DE a)
+
 instance Port (DataElement Queued a) where
     type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
     type RComSpec (DataElement Queued a) = QueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
     provide s = do a <- newAddress; return (DE a)
     require s = do a <- newAddress; newProcess (QElem a (queueLength s) []); return (DE a)
-    
+
 instance Port (ClientServerOperation a b) where
     type PComSpec (ClientServerOperation a b) = ServerComSpec a b
     type RComSpec (ClientServerOperation a b) = ClientComSpec
     connect (OP a) (OP b) = newConnection (a,b)
     provide s = do a <- newAddress; return (OP a)
-    require s = do a <- newAddress; newProcess (Op a []); return (OP a)
-
+    require s = do a <- newAddress;
+                   newProcess (Op a []); -- result buffer allocation
+                   return (OP a)
+      -- There is a bufferLength in s, but it is unclear (in AUTOSAR)
+      -- what is means: argument or result buffer length? Or both?
 
 class Addressed a where
         address                     :: a -> Address
@@ -296,16 +303,17 @@ instance Seal (ClientServerOperation a b r) where
 interRunnableVariable       :: Data a => a -> AR c (InterRunnableVariable a c)
 exclusiveArea               :: AR c (ExclusiveArea c)
 runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
-serverRunnable              :: (Data a, Data b) => 
+serverRunnable              :: (Data a, Data b) =>
                                 Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
 component                   :: (forall c. AR c a) -> AR c a
 
 component c                 = singleton $ NewComponent c
 
 newConnection c             = singleton $ NewConnection c
-newAddress                  = singleton NewAddress
+newAddress                  = singleton $ NewAddress
 newProcess p                = singleton $ NewProcess p
 newInit a v                 = singleton $ NewInit a v
+newInit :: Address -> Value -> Program (ARInstr c) ()
 
 interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toValue val)); return (IV a)
 exclusiveArea               = do a <- newAddress; newProcess (Excl a Free); return (EX a)
@@ -331,7 +339,7 @@ fromDyn                     = value'
 -- TODO: add Reading/Writing classes instead of Addressed?
 probeRead                   :: (Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
 probeRead s x              = singleton $ NewProbe s g
-  where 
+  where
     g (RD b (Ok v))    | a==b    = Just v
     g (RCV b (Ok v))   | a==b    = Just v
     g (IRVR b (Ok v))  | a==b    = Just v
@@ -342,7 +350,7 @@ probeRead s x              = singleton $ NewProbe s g
 
 probeWrite                  :: (Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
 probeWrite s x            = singleton $ NewProbe s g
-  where 
+  where
     g (IRVW b v)     | a==b     = Just v
     g (WR b v)       | a==b     = Just v
     g (SND b v _)    | a==b     = Just v -- Not sure about these.
@@ -353,10 +361,10 @@ probeWrite s x            = singleton $ NewProbe s g
 {-
 probeWrite'                 :: (Data b, Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
 probeWrite' s x f    = singleton $ NewProbe s g
-  where 
+  where
     g (WR b v) | a==b       = Just (toValue $ f $ value' v) -- TODO: Do we know this is always of type a?
-    
-    
+
+
     g _                     = Nothing
     a = address x
 -}
@@ -404,7 +412,7 @@ labelText l = case l of
           DELTA t            -> "DELTA:"++show t
           VETO               -> "VETO"
 
-labelAddress :: Label -> Maybe Address 
+labelAddress :: Label -> Maybe Address
 labelAddress l = case l of
           ENTER a            -> Just a
           EXIT  a            -> Just a
@@ -430,7 +438,7 @@ labelAddress l = case l of
 maySay :: Proc -> Label
 maySay (Run a 0.0 Pending n s)
     | n == 0 || invocation s == Concurrent     = NEW   a
-maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n s)    
+maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
     | n == 0 || invocation s == Concurrent     = NEW   a
 maySay (Run a t act n s)  | t > 0.0            = DELTA t
 maySay (Timer a 0.0 t)                         = TICK  a
@@ -512,7 +520,7 @@ trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
 mayHear :: ConnRel -> Label -> Proc -> Label
 mayHear conn VETO _                                             = VETO
-mayHear conn (ENTER a)       (Excl b Free)     | a==b           = ENTER a -- 
+mayHear conn (ENTER a)       (Excl b Free)     | a==b           = ENTER a --
 mayHear conn (ENTER a)       (Excl b _)        | a==b           = VETO
 mayHear conn (EXIT a)        (Excl b Taken)    | a==b           = EXIT a
 mayHear conn (EXIT a)        (Excl b _)        | a==b           = VETO
@@ -520,7 +528,7 @@ mayHear conn (IRVR a _)      (Irv b v)         | a==b           = IRVR a (Ok v)
 mayHear conn (IRVW a v)      (Irv b _)         | a==b           = IRVW a v
 mayHear conn (RCV a _)       (QElem b n (v:_)) | a==b           = RCV a (Ok v)
 mayHear conn (RCV a _)       (QElem b n [])    | a==b           = RCV a NO_DATA
-mayHear conn (SND a v res)   (QElem b n vs)                     
+mayHear conn (SND a v res)   (QElem b n vs)
        | a `conn` b && length vs < n                            = SND a v res
        | a `conn` b                                             = SND a v LIMIT
 mayHear conn (SND a v res)   (Run _ _ _ _ s)   | trig conn a s  = SND a v res
@@ -529,7 +537,7 @@ mayHear conn (WR a v)        (DElem b _ _)     | a `conn` b     = WR a v
 mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
 mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toValue u))
 mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
-mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)      
+mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
        | trig conn a s  &&  a `notElem` cs                      = CALL a v void
        | trig conn a s                                          = CALL a v LIMIT
 mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
@@ -552,7 +560,7 @@ hear conn (IRVR a _)    (Irv b v)          | a==b               = Irv b v
 hear conn (IRVW a v)    (Irv b _)          | a==b               = Irv b v
 hear conn (RCV a _)     (QElem b n (v:vs)) | a==b               = QElem b n vs
 hear conn (RCV a _)     (QElem b n [])     | a==b               = QElem b n []
-hear conn (SND a v _)   (QElem b n vs) 
+hear conn (SND a v _)   (QElem b n vs)
         | a `conn` b && length vs < n                           = QElem b n (vs++[v])
         | a `conn` b                                            = QElem b n vs
 hear conn (SND a _ _)   (Run b t _ n s)    | trig conn a s      = Run b t Pending n s
@@ -563,7 +571,7 @@ hear conn (UP a _)      (DElem b u v)      | a==b               = DElem b u v
 hear conn (INV a)       (DElem b _ _)      | a `conn` b         = DElem b True NO_DATA
 hear conn (CALL a v _)  (Run b t (Serving cs vs) n s)
         | trig conn a s && a `notElem` cs                       = Run b t (Serving (cs++[a]) (vs++[v])) n s
-        | trig conn a s                                         = Run b t (Serving cs vs) n s 
+        | trig conn a s                                         = Run b t (Serving cs vs) n s
 hear conn (RES a _)     (Op b (v:vs))         | a==b            = Op b vs
 hear conn (RES a _)     (Op b [])             | a==b            = Op b []
 hear conn (RET a v)     (Op b vs)             | a==b            = Op b (vs++[v])
@@ -625,7 +633,7 @@ simulate sched conn procs
   | otherwise               = do trans@Trans{transProcs = procs1} <- maximumProgress sched alts
                                  liftM (trans:) $ simulate sched conn procs1
   where alts                = step conn procs
-        
+
 maximumProgress             :: Scheduler m -> Scheduler m
 maximumProgress sched alts
   | null work               = sched deltas
@@ -668,7 +676,7 @@ runSim (AnySched sch run) sys  = run (simulation sch sys)
 execSim :: SchedChoice -> (forall c . AR c a) -> Trace
 execSim sch sys = snd $ runSim sch sys
 
-limitTrans :: Int -> Trace -> Trace 
+limitTrans :: Int -> Trace -> Trace
 limitTrans t (a,trs) = (a,take t trs)
 
 limitTime :: Time -> Trace -> Trace
@@ -724,13 +732,13 @@ internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValu
 
 
 
--- Code below this point is a bit outdated. 
+-- Code below this point is a bit outdated.
 
 
 type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
 
--- Gets ALL probes of a certain type, categorized by probe-ID. 
--- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces. 
+-- Gets ALL probes of a certain type, categorized by probe-ID.
+-- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces.
 probeAll :: Data a => Trace -> [(ProbeID,Measurement a)]
 probeAll t = [(s,m') |(s,m) <- probeAll' t, let m' = internal' m, not (null m') ]
 
@@ -756,5 +764,3 @@ collectLogs t n (Trans{transLabel = DELTA d}:trs)
                             = collectLogs (t+d) (n+1) trs
 collectLogs t n (Trans{transLogs = logs}:trs)
                             = [ (i,[((n,t),v)]) | (i,v) <- logs ] ++ collectLogs t (n+1) trs
-
-
