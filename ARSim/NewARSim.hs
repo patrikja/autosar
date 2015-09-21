@@ -120,8 +120,8 @@ data Unqueued
 data Required       -- Parameter r above
 data Provided
 
-data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initSend :: a }
-data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { initValue :: a }
+data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initSend :: Maybe a }
+data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { initValue :: Maybe a }
 data QueuedSenderComSpec a      = QueuedSenderComSpec
 data QueuedReceiverComSpec a    = QueuedReceiverComSpec { queueLength :: Int }
 data ServerComSpec a b          = ServerComSpec { bufferLength :: Int }
@@ -250,8 +250,14 @@ instance Data a => Port (DataElement Unqueued a) where
     type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
     type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
-    provide s = do a <- newAddress; newInit a (toValue (initSend s)); return (DE a)
-    require s = do a <- newAddress; newProcess (DElem a False (Ok (toValue (initValue s)))); return (DE a)
+    provide UnqueuedSenderComSpec{initSend=Nothing} = do
+         a <- newAddress; return (DE a)
+    provide UnqueuedSenderComSpec{initSend=Just x} = do
+         a <- newAddress; newInit a (toValue x); return (DE a)
+    require UnqueuedReceiverComSpec{initValue=Nothing} = do
+         a <- newAddress; newProcess (DElem a False NO_DATA); return (DE a)
+    require UnqueuedReceiverComSpec{initValue=Just x} = do
+        a <- newAddress; newProcess (DElem a False (Ok (toValue x))); return (DE a)
     
 instance Port (DataElement Queued a) where
     type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
