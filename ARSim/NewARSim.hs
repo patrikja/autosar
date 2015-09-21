@@ -352,7 +352,7 @@ fromDyn                     = value'
 
 
 -- TODO: add Reading/Writing classes instead of Addressed?
-probeRead                   :: (Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
+probeRead                   :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
 probeRead s x              = singleton $ NewProbe s g
   where
     g (RD b (Ok v))    | a==b    = Just v
@@ -363,7 +363,7 @@ probeRead s x              = singleton $ NewProbe s g
     a = address x
 
 
-probeWrite                  :: (Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
+probeWrite                  :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
 probeWrite s x            = singleton $ NewProbe s g
   where
     g (IRVW b v)     | a==b     = Just v
@@ -374,7 +374,7 @@ probeWrite s x            = singleton $ NewProbe s g
     g _                     = Nothing
     a = address x
 {-
-probeWrite'                 :: (Data b, Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
+probeWrite'                 :: (Data b, Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
 probeWrite' s x f    = singleton $ NewProbe s g
   where
     g (WR b v) | a==b       = Just (toValue $ f $ value' v) -- TODO: Do we know this is always of type a?

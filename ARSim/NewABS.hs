@@ -86,15 +86,15 @@ seq_onoff onoff excl state on = do
 
 sequencer :: Data a =>
   RTE c SeqState -> (Index -> RTE c SeqState) -> (a -> RTE c SeqState)
-  -> AR c (ProvidedOperation a () ())
+  -> AR c (ClientServerOperation a () Provided c)
 sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
-        runnable Concurrent [Init]              (seq_init setup excl state)
-        runnable (MinInterval 0) [Timed 0.001]  (seq_tick step  excl state)
-        onoff <- providedOperation
-        serverRunnable (MinInterval 0) [onoff]  (seq_onoff ctrl excl state)
-        return (seal onoff)
+        runnable Concurrent [InitEvent]               (seq_init setup excl state)
+        runnable (MinInterval 0) [TimingEvent 0.001]  (seq_tick step  excl state)
+        onoff <- provide ServerComSpec{bufferLength=0}
+        serverRunnable (MinInterval 0) [OperationInvokedEvent onoff]  (seq_onoff ctrl excl state)
+        return (onoff)
 
 --------------------------------------------------------------
 -- A relief component is a sequencer for toggling a brake relief valve
@@ -105,13 +105,13 @@ sequencer setup step ctrl = do
 -- well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
-relief_setup :: ProvidedDataElement Bool c -> RTE c SeqState
+relief_setup :: DataElement Unqueued Bool Provided c -> RTE c SeqState
 relief_setup valve = do
         rteWrite valve False
         return Stopped
         
-relief_step ::  ProvidedDataElement  Valve  c -> 
-                RequiredDataElement  Accel  c -> 
+relief_step ::  DataElement Unqueued Valve Provided c -> 
+                DataElement Unqueued Accel Required c -> 
                 Index -> RTE c SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
@@ -125,8 +125,8 @@ relief_step valve accel n = do
         rteWrite valve False
         return (Running 0 5 0)
 
-relief_ctrl ::  ProvidedDataElement  Valve  c   -> 
-                RequiredDataElement  Accel  c   -> 
+relief_ctrl ::  DataElement Unqueued Valve Provided c   -> 
+                DataElement Unqueued Accel Required c   -> 
                 Valve -> RTE c SeqState
 relief_ctrl valve accel True = 
         relief_step valve accel 0
@@ -134,15 +134,15 @@ relief_ctrl valve accel False = do
         rteWrite valve False
         return Stopped
         
-type Relief = ( RequiredDataElem Accel, 
-                ProvidedOp Bool (), 
-                ProvidedDataElem Valve)
+type Relief = ( DataElement Unqueued Accel Required (),
+                ClientServerOperation Bool () Provided (),
+                DataElement Unqueued Valve Provided ())
 relief_seq :: AR c Relief
 relief_seq = component $ do
-        valve <- providedDataElement
-        accel <- requiredDataElement
+        valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
+        accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
         ctrl <- sequencer (relief_setup valve) (relief_step valve accel) (relief_ctrl valve accel)
-        return (seal accel, ctrl, seal valve)
+        return (seal accel, seal ctrl, seal valve)
 
 --------------------------------------------------------------
 -- A pressure component is a sequencer for toggling a brake
@@ -153,18 +153,18 @@ relief_seq = component $ do
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
-type PresSeq = ( RequiredDataElem Accel, 
-                 ProvidedOp Index (), 
-                 ProvidedDataElem Valve)
+type PresSeq = ( DataElement Unqueued Accel Required (), 
+                 ClientServerOperation Index () Provided (), 
+                 DataElement Unqueued Valve Provided ())
 
-pressure_setup :: ProvidedDataElement Valve c -> RTE c SeqState
+pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
 pressure_setup valve = do
         rteWrite valve True
         return Stopped
 
 pressure_step :: 
-  ProvidedDataElement  Valve  c  -> 
-  RequiredDataElement  Accel  c  -> 
+  DataElement Unqueued Valve Provided c  -> 
+  DataElement Unqueued Accel Required c  -> 
   Index -> RTE c SeqState
 pressure_step valve accel 0 = do
         rteWrite valve True
@@ -182,8 +182,8 @@ pressure_step valve accel n | odd n = do
         return (Running 0 20 (n+1))
 
 pressure_ctrl :: 
-  ProvidedDataElement  Valve  c  -> 
-  RequiredDataElement  Accel  c  -> 
+  DataElement Unqueued Valve Provided c  -> 
+  DataElement Unqueued Accel Required c  -> 
   Index -> RTE c SeqState
 pressure_ctrl valve accel 2 = do
         rteWrite valve True
@@ -196,10 +196,10 @@ pressure_ctrl valve accel 0 = do
 
 pressure_seq :: AR c PresSeq
 pressure_seq = component $ do
-        valve <- providedDataElement
-        accel <- requiredDataElement
+        valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
+        accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
         ctrl <- sequencer (pressure_setup valve) (pressure_step valve accel) (pressure_ctrl valve accel)
-        return (seal accel, ctrl, seal valve)
+        return (seal accel, seal ctrl, seal valve)
 
 --------------------------------------------------------------
 -- A controller component reads a stream of slip values for a
@@ -216,9 +216,9 @@ control ::
    Data r1, 
    Data q1) =>
   InterRunnableVariable   Slip  c  -> 
-  RequiredOperation pres  q1    c  -> 
-  RequiredOperation Bool  r1    c  -> 
-  RequiredQueueElement    Slip  c  -> 
+  ClientServerOperation pres q1 Required c  -> 
+  ClientServerOperation Bool r1 Required c  -> 
+  DataElement Queued Slip Required c  -> 
   RTE c (StdRet ())
 control memo onoff_pressure onoff_relief slipstream = do
         Ok slip   <- rteReceive slipstream
@@ -238,14 +238,16 @@ control memo onoff_pressure onoff_relief slipstream = do
         rteIrvWrite memo slip
 
 type Slip = Double
-type ABSstate = (RequiredQueueElem Slip, RequiredOp Int (), RequiredOp Bool ())
+type ABSstate = (DataElement Queued Slip Required (), 
+                 ClientServerOperation Int () Required (), 
+                 ClientServerOperation Bool () Required ())
 controller :: AR c ABSstate
 controller = component $ do
         memo <- interRunnableVariable 1.0
-        onoff_pressure <- requiredOperation
-        onoff_relief <- requiredOperation
-        slipstream <- requiredQueueElement 10
-        runnable (MinInterval 0) [ReceiveQ slipstream] 
+        onoff_pressure <- require ClientComSpec
+        onoff_relief <- require ClientComSpec
+        slipstream <- require QueuedReceiverComSpec{queueLength=10}
+        runnable (MinInterval 0) [DataReceivedEvent slipstream] 
                 (control memo onoff_pressure onoff_relief slipstream)
         return (seal slipstream, seal onoff_pressure, seal onoff_relief)
 
@@ -253,14 +255,14 @@ type Accel = Double
 type Velo  = Double
 type Valve = Bool
 
-wheel_ctrl :: (Index, ProvidedQueueElement Slip ()) -> AR c WheelCtrl
+wheel_ctrl :: (Index, DataElement Queued Slip Provided ()) -> AR c WheelCtrl
 wheel_ctrl (i,slipstream) = component $ do
         (slip, onoff_pressure, onoff_relief) <- controller
         (accel_p, ctrl_p, valve_p) <- pressure_seq
         (accel_r, ctrl_r, valve_r) <- relief_seq
         connect slipstream slip
-        connect onoff_pressure ctrl_p
-        connect onoff_relief ctrl_r
+        connect ctrl_p onoff_pressure 
+        connect ctrl_r onoff_relief
         when (i==2) $ do
             probeWrite "relief 2"    valve_r
             probeWrite "pressure 2"  valve_p
@@ -280,8 +282,8 @@ wheel_ctrl (i,slipstream) = component $ do
 
 fromOk (Ok v) = v
 
-loop :: [RequiredDataElement   Velo  c] -> 
-        [ProvidedQueueElement  Velo  c] ->
+loop :: [DataElement Unqueued Velo Required c] -> 
+        [DataElement Queued Velo Provided c] ->
         RTE c [StdRet ()]
 loop velostreams slipstreams = do
         velos <- mapM (liftM fromOk . rteRead) velostreams
@@ -292,11 +294,11 @@ slip :: Double -> Double -> Double
 slip 0.0  _v = 1.0   -- no slip
 slip v0   v  = v/v0
 
-main_loop :: AR c ([RequiredDataElem Velo], [ProvidedQueueElem Slip])
+main_loop :: AR c ([DataElement Unqueued Velo Required ()], [DataElement Queued Slip Provided ()])
 main_loop = component $ do
-        velostreams <- replicateM 4 requiredDataElement
-        slipstreams <- replicateM 4 providedQueueElement
-        runnable (MinInterval 0) [Timed 0.01] (loop velostreams slipstreams)
+        velostreams <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
+        slipstreams <- replicateM 4 (provide QueuedSenderComSpec)
+        runnable (MinInterval 0) [TimingEvent 0.01] (loop velostreams slipstreams)
         return (map seal velostreams, map seal slipstreams)
         
 --------------------------------------------------------------
@@ -343,10 +345,10 @@ veloStep a v = (a, v + a*0.01)
 type Wheel = Wheel' ()
 
 
-type Wheel' c = (RequiredDataElement Valve  c,
-                 RequiredDataElement Valve  c,
-                 ProvidedDataElement Velo   c,
-                 ProvidedDataElement Accel  c)
+type Wheel' c = (DataElement Unqueued Valve Required c,
+                 DataElement Unqueued Valve Required c,
+                 DataElement Unqueued Velo  Provided c,
+                 DataElement Unqueued Accel Provided c)
 
 wheel_sim :: Time -> (Index, Wheel' c, Velo) -> RTE c Velo
 wheel_sim t (i, (r_act, p_act, v_sens, a_sens), velo) = do
@@ -367,10 +369,10 @@ simul wheels irv = do
 
 mk_wheel :: Int -> AR c (Wheel' c)
 mk_wheel i = do
-        r_act  <- requiredDataElementInit False
-        p_act  <- requiredDataElementInit True
-        v_sens <- providedDataElementInit init_v
-        a_sens <- providedDataElementInit init_a
+        r_act  <- require UnqueuedReceiverComSpec{initValue=Just False}
+        p_act  <- require UnqueuedReceiverComSpec{initValue=Just True}
+        v_sens <- provide UnqueuedSenderComSpec{initSend=Just init_v}
+        a_sens <- provide UnqueuedSenderComSpec{initSend=Just init_a}
         when (i<=2) $ do
             probeWrite ("wheel "++show i++" speed")         v_sens
             probeWrite ("wheel "++show i++" acceleration")  a_sens
@@ -380,7 +382,7 @@ car :: AR c [Wheel]
 car = do
         wheels <- mapM mk_wheel [1..4]
         irv <- interRunnableVariable (init_a, replicate 4 init_v)
-        runnable (MinInterval 0) [Timed 0.01] (simul wheels irv)
+        runnable (MinInterval 0) [TimingEvent 0.01] (simul wheels irv)
         return (map seal4 wheels)
 
 init_v :: Velo
@@ -400,11 +402,11 @@ test = do
         wheels <- car
         sequence_ (zipWith3 conn wheels velos_in wheelctrls)
 
-type VelocityIn = RequiredDataElem Velo
-type WheelCtrl = (  RequiredDataElem Accel,
-                    RequiredDataElem Accel,
-                    ProvidedDataElem Valve,
-                    ProvidedDataElem Valve)
+type VelocityIn = DataElement Unqueued Velo Required ()
+type WheelCtrl = (  DataElement Unqueued Accel Required (),
+                    DataElement Unqueued Accel Required (),
+                    DataElement Unqueued Valve Provided (),
+                    DataElement Unqueued Valve Provided ())
 
 conn :: Wheel -> VelocityIn -> WheelCtrl -> AR c ()
 conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
