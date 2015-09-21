@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module NewARSim (module NewARSim, Typeable, Data, mkStdGen, StdGen) where
               
@@ -57,29 +58,29 @@ data RTEop c a where
     Exit                    :: ExclusiveArea c -> RTEop c (StdRet ())
     IrvWrite                :: Data a => InterRunnableVariable a c -> a -> RTEop c (StdRet ())
     IrvRead                 :: Data a => InterRunnableVariable a c -> RTEop c (StdRet a)
-    Send                    :: Data a => ProvidedQueueElement a c -> a -> RTEop c (StdRet ())
-    Receive                 :: Data a => RequiredQueueElement a c -> RTEop c (StdRet a)
-    Write                   :: Data a => ProvidedDataElement a c -> a -> RTEop c (StdRet ())
-    Read                    :: Data a => RequiredDataElement a c -> RTEop c (StdRet a)
-    IsUpdated               :: RequiredDataElement a c -> RTEop c (StdRet Bool)
-    Invalidate              :: ProvidedDataElement a c -> RTEop c (StdRet ())
-    Call                    :: Data a => RequiredOperation a b c -> a -> RTEop c (StdRet ())
-    Result                  :: Data b => RequiredOperation a b c -> RTEop c (StdRet b)
+    Send                    :: Data a => DataElement Queued a Provided c -> a -> RTEop c (StdRet ())
+    Receive                 :: Data a => DataElement Queued a Required c -> RTEop c (StdRet a)
+    Write                   :: Data a => DataElement Unqueued a Provided c -> a -> RTEop c (StdRet ())
+    Read                    :: Data a => DataElement Unqueued a Required c -> RTEop c (StdRet a)
+    IsUpdated               :: DataElement Unqueued a Required c -> RTEop c (StdRet Bool)
+    Invalidate              :: DataElement Unqueued a Provided c -> RTEop c (StdRet ())
+    Call                    :: Data a => ClientServerOperation a b Required c -> a -> RTEop c (StdRet ())
+    Result                  :: Data b => ClientServerOperation a b Required c -> RTEop c (StdRet b)
     Printlog                :: Data a => ProbeID -> a -> RTEop c ()
 
 rteEnter                   :: ExclusiveArea c -> RTE c (StdRet ())
 rteExit                    :: ExclusiveArea c -> RTE c (StdRet ())
 rteIrvWrite                :: Data a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
 rteIrvRead                 :: Data a => InterRunnableVariable a c -> RTE c (StdRet a)
-rteSend                    :: Data a => ProvidedQueueElement a c -> a -> RTE c (StdRet ())
-rteReceive                 :: Data a => RequiredQueueElement a c -> RTE c (StdRet a)
-rteWrite                   :: Data a => ProvidedDataElement a c -> a -> RTE c (StdRet ())
-rteRead                    :: Data a => RequiredDataElement a c -> RTE c (StdRet a)
-rteIsUpdated               :: RequiredDataElement a c -> RTE c (StdRet Bool)
-rteInvalidate              :: ProvidedDataElement a c -> RTE c (StdRet ())
-rteCall                    :: (Data a, Data b) => RequiredOperation a b c -> a -> RTE c (StdRet b)
-rteCallAsync               :: Data a => RequiredOperation a b c -> a -> RTE c (StdRet ())
-rteResult                  :: Data b => RequiredOperation a b c -> RTE c (StdRet b)
+rteSend                    :: Data a => DataElement Queued a Provided c -> a -> RTE c (StdRet ())
+rteReceive                 :: Data a => DataElement Queued a Required c -> RTE c (StdRet a)
+rteWrite                   :: Data a => DataElement Unqueued a Provided c -> a -> RTE c (StdRet ())
+rteRead                    :: Data a => DataElement Unqueued a Required c -> RTE c (StdRet a)
+rteIsUpdated               :: DataElement Unqueued a Required c -> RTE c (StdRet Bool)
+rteInvalidate              :: DataElement Unqueued a Provided c -> RTE c (StdRet ())
+rteCall                    :: (Data a, Data b) => ClientServerOperation a b Required c -> a -> RTE c (StdRet b)
+rteCallAsync               :: Data a => ClientServerOperation a b Required c -> a -> RTE c (StdRet ())
+rteResult                  :: Data b => ClientServerOperation a b Required c -> RTE c (StdRet b)
 
 printlog                    :: Data a => ProbeID -> a -> RTE c ()
 
@@ -110,28 +111,32 @@ data StdRet a               = Ok a
                             | IN_EXCLUSIVE_AREA
                             deriving Show
 
-newtype RequiredDataElement a c     = RE Address
-newtype ProvidedDataElement a c     = PE Address
-newtype RequiredQueueElement a c    = RQ Address
-newtype ProvidedQueueElement a c    = PQ Address
-newtype RequiredOperation a b c     = RO Address
-newtype ProvidedOperation a b c     = PO Address
+newtype DataElement q a r c             = DE Address      -- Async channel of "a" data
+newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
+
+data Queued         -- Parameter q above
+data Unqueued
+
+data Required       -- Parameter r above
+data Provided
+
+data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initSend :: a }
+data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { initValue :: a }
+data QueuedSenderComSpec a      = QueuedSenderComSpec
+data QueuedReceiverComSpec a    = QueuedReceiverComSpec { queueLength :: Int }
+data ServerComSpec a b          = ServerComSpec { bufferLength :: Int }
+data ClientComSpec              = ClientComSpec
+
 newtype InterRunnableVariable a c   = IV Address
 newtype ExclusiveArea c             = EX Address
 
-type RequiredDataElem a         = RequiredDataElement a ()
-type ProvidedDataElem a         = ProvidedDataElement a ()
-type RequiredQueueElem a        = RequiredQueueElement a ()
-type ProvidedQueueElem a        = ProvidedQueueElement a ()
-type RequiredOp a b             = RequiredOperation a b ()
-type ProvidedOp a b             = ProvidedOperation a b ()
-
 type Time                   = Double
 
-data Trigger c              = forall a. ReceiveE (RequiredDataElement a c)
-                            | forall a. ReceiveQ (RequiredQueueElement a c)
+data Event c                = forall q a. DataReceivedEvent (DataElement q a Required c)
                             | Timed Time
                             | Init
+
+data ServerEvent a b c      = OperationInvokedEvent (ClientServerOperation a b Provided c)
 
 data Invocation             = Concurrent
                             | MinInterval Time
@@ -202,8 +207,8 @@ data ARInstr c a where
     NewProcess              :: Proc -> ARInstr c ()
     NewProbe                :: String -> (Label -> Maybe Value) -> ARInstr c ()
     NewInit                 :: Address -> Value -> ARInstr c ()
-    Component               :: (forall c. AR c a) -> ARInstr c a
-    Connect                 :: Connectable a b => a -> b -> ARInstr c ()
+    NewComponent            :: (forall c. AR c a) -> ARInstr c a
+    NewConnection           :: Conn -> ARInstr c ()
 
 type AR c a                 = Program (ARInstr c) a
 
@@ -221,10 +226,10 @@ runAR sys st                = run sys st
                             = run (sys ()) (st { simProbes = (s,f) : simProbes st })
     run' (NewInit a v :>>= sys) st
                             = run (sys ()) (st { initvals = Map.insert a v (initvals st) })
-    run' (Component subsys :>>= sys) st
+    run' (NewComponent subsys :>>= sys) st
                             = let (a,st') = runAR subsys st in run (sys a) st'
-    run' (Connect a b :>>= sys) st
-                            = run (sys ()) (st { conns = connection a b : conns st })
+    run' (NewConnection conn :>>= sys) st
+                            = run (sys ()) (st { conns = conn : conns st })
     run' (Return a) st      = (a,st)
 
 initialize                  :: (forall c . AR c a) -> (a,SimState)
@@ -233,101 +238,75 @@ initialize sys              = (a, st { procs = map (apInit (conns st) (initvals 
 
 -- Restricting connections ----------------------------------------------------
 
-class Connectable a b | a -> b, b -> a where
-    connection              :: a -> b -> Conn
+class Port p where
+    type PComSpec p :: *
+    type RComSpec p :: *
+    connect  :: p Provided () -> p Required () -> AR c ()
+--    delegate :: [p r ()] -> AR c (p r ())
+    provide  :: PComSpec p -> AR c (p Provided c)
+    require  :: RComSpec p -> AR c (p Required c)
 
-instance Connectable (ProvidedDataElem a) (RequiredDataElem a) where
-    connection (PE a) (RE b)    = (a,b)
-        
-instance Connectable (ProvidedQueueElem a) (RequiredQueueElem a) where
-    connection (PQ a) (RQ b)    = (a,b)
-        
-instance Connectable (RequiredOp a b) (ProvidedOp a b) where
-    connection (RO a) (PO b)    = (a,b)
+instance Data a => Port (DataElement Unqueued a) where
+    type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
+    type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
+    connect (DE a) (DE b) = newConnection (a,b)
+    provide s = do a <- newAddress; newInit a (toValue (initSend s)); return (DE a)
+    require s = do a <- newAddress; newProcess (DElem a False (Ok (toValue (initValue s)))); return (DE a)
+    
+instance Port (DataElement Queued a) where
+    type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
+    type RComSpec (DataElement Queued a) = QueuedReceiverComSpec a
+    connect (DE a) (DE b) = newConnection (a,b)
+    provide s = do a <- newAddress; return (DE a)
+    require s = do a <- newAddress; newProcess (QElem a (queueLength s) []); return (DE a)
+    
+instance Port (ClientServerOperation a b) where
+    type PComSpec (ClientServerOperation a b) = ServerComSpec a b
+    type RComSpec (ClientServerOperation a b) = ClientComSpec
+    connect (OP a) (OP b) = newConnection (a,b)
+    provide s = do a <- newAddress; return (OP a)
+    require s = do a <- newAddress; newProcess (Op a []); return (OP a)
 
 
-class Addressed f where
-        address                     :: f a c -> Address
+class Addressed a where
+        address                     :: a -> Address
 
-instance Addressed InterRunnableVariable where
+instance Addressed (InterRunnableVariable a c) where
         address (IV n)              = n
 
-instance Addressed (ProvidedDataElement) where
-        address (PE n)              = n
+instance Addressed (DataElement q a r c) where
+        address (DE n)              = n
 
-instance Addressed (RequiredDataElement) where
-        address (RE n)              = n
-        
-instance Addressed (ProvidedQueueElement) where
-        address (PQ n)              = n
-
-instance Addressed (RequiredQueueElement) where
-        address (RQ n)              = n
-        
-instance Addressed (ProvidedOperation a) where
-        address (PO n)              = n
-
-instance Addressed (RequiredOperation a) where
-        address (RO n)              = n
-
+instance Addressed (ClientServerOperation a b r c) where
+        address (OP n)              = n
 
 
 class Seal m where
         seal                :: m c -> m ()
 
-instance Seal (RequiredDataElement a) where
-        seal (RE a)         = RE a
+instance Seal (DataElement q a r) where
+        seal (DE a)         = DE a
 
-instance Seal (ProvidedDataElement a) where
-        seal (PE a)         = PE a
-
-instance Seal (RequiredQueueElement a) where
-        seal (RQ a)         = RQ a
-
-instance Seal (ProvidedQueueElement a) where
-        seal (PQ a)         = PQ a
-
-instance Seal (RequiredOperation a b) where
-        seal (RO a)         = RO a
-
-instance Seal (ProvidedOperation a b) where
-        seal (PO a)         = PO a
-
+instance Seal (ClientServerOperation a b r) where
+        seal (OP a)         = OP a
 
 
 -- Derived AR operations ------------------------------------------------------
 
-requiredDataElement         :: AR c (RequiredDataElement a c)
-requiredDataElementInit     :: Data a => a -> AR c (RequiredDataElement a c)
-providedDataElement         :: AR c (ProvidedDataElement a c)
-providedDataElementInit     :: Data a => a -> AR c (ProvidedDataElement a c)
-requiredQueueElement        :: Int -> AR c (RequiredQueueElement a c)
-providedQueueElement        :: AR c (ProvidedQueueElement a c)
-requiredOperation           :: AR c (RequiredOperation a b c)
-providedOperation           :: AR c (ProvidedOperation a b c)
 interRunnableVariable       :: Data a => a -> AR c (InterRunnableVariable a c)
 exclusiveArea               :: AR c (ExclusiveArea c)
-runnable                    :: Invocation -> [Trigger c] -> RTE c a -> AR c ()
+runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
 serverRunnable              :: (Data a, Data b) => 
-                                Invocation -> [ProvidedOperation a b c] -> (a -> RTE c b) -> AR c ()
+                                Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
 component                   :: (forall c. AR c a) -> AR c a
-connect                     :: Connectable a b => a -> b -> AR c ()
 
-component c                 = singleton $ Component c
-connect a b                 = singleton $ Connect a b
+component c                 = singleton $ NewComponent c
 
+newConnection c             = singleton $ NewConnection c
 newAddress                  = singleton NewAddress
 newProcess p                = singleton $ NewProcess p
 newInit a v                 = singleton $ NewInit a v
 
-requiredDataElement         = do a <- newAddress; newProcess (DElem a False NO_DATA); return (RE a)
-requiredDataElementInit val = do a <- newAddress; newProcess (DElem a False (Ok (toValue val))); return (RE a)
-providedDataElement         = do a <- newAddress; return (PE a)
-providedDataElementInit val = do a <- newAddress; newInit a (toValue val); return (PE a)
-requiredQueueElement size   = do a <- newAddress; newProcess (QElem a size []); return (RQ a)
-providedQueueElement        = do a <- newAddress; return (PQ a)
-requiredOperation           = do a <- newAddress; newProcess (Op a []); return (RO a)
-providedOperation           = do a <- newAddress; return (PO a)
 interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toValue val)); return (IV a)
 exclusiveArea               = do a <- newAddress; newProcess (Excl a Free); return (EX a)
 
@@ -335,44 +314,22 @@ runnable inv trig code      = do a <- newAddress
                                  mapM (newProcess . Timer a 0.0) periods
                                  newProcess (Run a 0.0 act 0 (Static watch inv code'))
   where periods             = [ t | Timed t <- trig ]
-        watch               = [ a | ReceiveE (RE a) <- trig ] ++ [ a | ReceiveQ (RQ a) <- trig ]
+        watch               = [ a | DataReceivedEvent (DE a) <- trig ]
         act                 = if null [ Init | Init <- trig ] then Idle else Pending
         code'               = \dyn -> code >> return dyn
 
 serverRunnable inv ops code = do a <- newAddress
                                  newProcess (Run a 0.0 act 0 (Static watch inv code'))
-  where watch               = [ a | PO a <- ops ]
+  where watch               = [ a | OperationInvokedEvent (OP a) <- ops ]
         act                 = Serving [] []
         code'               = fmap toValue . code . fromDyn
 
 fromDyn                     :: Data a => Value -> a
 fromDyn                     = value'
 
-connectAll a b              = mapM (uncurry connect) (a `zip` b)
-        
-connect2 (a1,a2) (b1,b2)        
-                            = do connect a1 b1; connect a2 b2
-connect3 (a1,a2,a3) (b1,b2,b3)  
-                            = do connect a1 b1; connect2 (a2,a3) (b2,b3)
-connect4 (a1,a2,a3,a4) (b1,b2,b3,b4)  
-                            = do connect a1 b1; connect3 (a2,a3,a4) (b2,b3,b4)
-connect5 (a1,a2,a3,a4,a5) (b1,b2,b3,b4,b5)
-                            = do connect a1 b1; connect4 (a2,a3,a4,a5) (b2,b3,b4,b5)
-connect6 (a1,a2,a3,a4,a5,a6) (b1,b2,b3,b4,b5,b6)  
-                            = do connect a1 b1; connect5 (a2,a3,a4,a5,a6) (b2,b3,b4,b5,b6)
-
-
-sealAll xs                  = map seal xs
-
-seal2 (a1,a2)               = (seal a1, seal a2)
-seal3 (a1,a2,a3)            = (seal a1, seal a2, seal a3)
-seal4 (a1,a2,a3,a4)         = (seal a1, seal a2, seal a3, seal a4)
-seal5 (a1,a2,a3,a4,a5)      = (seal a1, seal a2, seal a3, seal a4, seal a5)
-seal6 (a1,a2,a3,a4,a5,a6)   = (seal a1, seal a2, seal a3, seal a4, seal a5, seal a6)
-
 
 -- TODO: add Reading/Writing classes instead of Addressed?
-probeRead                   :: (Data a, Addressed e) => String -> e a c -> AR c' ()
+probeRead                   :: (Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
 probeRead s x              = singleton $ NewProbe s g
   where 
     g (RD b (Ok v))    | a==b    = Just v
@@ -383,7 +340,7 @@ probeRead s x              = singleton $ NewProbe s g
     a = address x
 
 
-probeWrite                  :: (Data a, Addressed e) => String -> e a c -> AR c' ()
+probeWrite                  :: (Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
 probeWrite s x            = singleton $ NewProbe s g
   where 
     g (IRVW b v)     | a==b     = Just v
@@ -394,7 +351,7 @@ probeWrite s x            = singleton $ NewProbe s g
     g _                     = Nothing
     a = address x
 {-
-probeWrite'                 :: (Data b, Data a, Addressed e) => String -> e a c -> AR c' ()
+probeWrite'                 :: (Data b, Data a, Addressed (e a c)) => String -> e a c -> AR c' ()
 probeWrite' s x f    = singleton $ NewProbe s g
   where 
     g (WR b v) | a==b       = Just (toValue $ f $ value' v) -- TODO: Do we know this is always of type a?
@@ -485,14 +442,14 @@ maySay (RInst a c ex code)                     = maySay' (view code)
                                                      _           -> VETO
         maySay' (IrvRead  (IV s)   :>>= cont)  = IRVR  s NO_DATA
         maySay' (IrvWrite (IV s) v :>>= cont)  = IRVW  s (toValue v)
-        maySay' (Receive (RQ e)    :>>= cont)  = RCV   e NO_DATA
-        maySay' (Send    (PQ e) v  :>>= cont)  = SND   e (toValue v) void
-        maySay' (Read    (RE e)    :>>= cont)  = RD    e NO_DATA
-        maySay' (Write   (PE e) v  :>>= cont)  = WR    e (toValue v)
-        maySay' (IsUpdated  (RE e) :>>= cont)  = UP    e NO_DATA
-        maySay' (Invalidate (PE e) :>>= cont)  = INV   e
-        maySay' (Call   (RO o) v   :>>= cont)  = CALL  o (toValue v) NO_DATA
-        maySay' (Result (RO o)     :>>= cont)  = RES   o NO_DATA
+        maySay' (Receive (DE e)    :>>= cont)  = RCV   e NO_DATA
+        maySay' (Send    (DE e) v  :>>= cont)  = SND   e (toValue v) void
+        maySay' (Read    (DE e)    :>>= cont)  = RD    e NO_DATA
+        maySay' (Write   (DE e) v  :>>= cont)  = WR    e (toValue v)
+        maySay' (IsUpdated  (DE e) :>>= cont)  = UP    e NO_DATA
+        maySay' (Invalidate (DE e) :>>= cont)  = INV   e
+        maySay' (Call   (OP o) v   :>>= cont)  = CALL  o (toValue v) NO_DATA
+        maySay' (Result (OP o)     :>>= cont)  = RES   o NO_DATA
         maySay' (Return v)                     = case c of
                                                      Just b  -> RET  b v
                                                      Nothing -> TERM a
@@ -576,8 +533,7 @@ mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
        | trig conn a s  &&  a `notElem` cs                      = CALL a v void
        | trig conn a s                                          = CALL a v LIMIT
 mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
---mayHear conn (RES a _)       (Op b [])         | a==b           = RES a NO_DATA
-mayHear conn (RES a _)       (Op b [])         | a==b           = VETO
+mayHear conn (RES a _)       (Op b [])         | a==b           = VETO  -- RES a NO_DATA
 mayHear conn (RET a v)       (Op b vs)         | a==b           = RET a v
 mayHear conn (TERM a)        (Run b _ _ _ _)   | a==b           = TERM a
 mayHear conn (TICK a)        (Run b _ _ _ _)   | a==b           = TICK a
@@ -800,4 +756,5 @@ collectLogs t n (Trans{transLabel = DELTA d}:trs)
                             = collectLogs (t+d) (n+1) trs
 collectLogs t n (Trans{transLogs = logs}:trs)
                             = [ (i,[((n,t),v)]) | (i,v) <- logs ] ++ collectLogs t (n+1) trs
+
 
