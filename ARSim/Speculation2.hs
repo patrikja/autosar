@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes, ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances, RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 module Speculation2 where 
 
 data DataElement q a r c            -- Async channel of "a" data
@@ -46,20 +47,30 @@ class Interface i where
 instance Interface (DataElement q a r)
 instance Interface (ClientServerOperation a b r)
 
-class Port p pspec rspec | p -> pspec, p -> rspec where
+class Port p where
+    type RComSpec p :: *
+    type PComSpec p :: *
     connect  :: p Provided () -> p Required () -> Comp ()
     delegate :: [p r ()] -> Comp (p r ())
-    require  :: rspec -> Atomic c (p Required c)
-    provide  :: pspec -> Atomic c (p Provided c)
+    require  :: RComSpec p -> Atomic c (p Required c)
+    provide  :: PComSpec p -> Atomic c (p Provided c)
 
     connect  = undefined
     delegate = undefined
     require  = undefined
     provide  = undefined
 
-instance Port (DataElement Unqueued a)    (UnqueuedSenderComSpec a) (UnqueuedReceiverComSpec a)
-instance Port (DataElement Queued   a)    (QueuedSenderComSpec   a) (QueuedReceiverComSpec   a)
-instance Port (ClientServerOperation a b) (ServerComSpec a b)        ClientComSpec
+instance Port (DataElement Unqueued a) where
+    type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
+    type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
+
+instance Port (DataElement Queued a) where
+    type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
+    type RComSpec (DataElement Queued a) = QueuedReceiverComSpec a
+
+instance Port (ClientServerOperation a b) where
+    type PComSpec (ClientServerOperation a b) = ServerComSpec a b
+    type RComSpec (ClientServerOperation a b) = ClientComSpec
 
 data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initial :: a }
 data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { init :: a }
@@ -100,7 +111,8 @@ composition     = undefined
 --             User code
 -- ==================================
 
-data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c, e2 :: DataElement Queued String r c }
+data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c, 
+                           e2 :: DataElement Queued String r c }
 
 type Serv r c   = ClientServerOperation (Int,String) Bool r c
 
@@ -111,7 +123,7 @@ type Dump r c   = DataElement Queued Int r c
 
 data IFace2 c   = IFace2 { port1 :: MyPort Required c,
                            port2 :: Serv   Provided c,
-                           port3 :: Dump   Provided c}
+                           port3 :: Dump   Provided c }
 
 
 comp1 :: Component IFace1
@@ -135,7 +147,8 @@ comp2 = atomic $ do
         return (i > 0)
     return IFace2 {..}
 
-data IFace3 c   = IFace3 { inport :: MyPort Required c, outport :: Dump Provided c }
+data IFace3 c   = IFace3 { inport  :: MyPort Required c, 
+                           outport :: Dump Provided c }
 
 comp3 :: Component IFace3
 comp3 = composition $ do
@@ -151,8 +164,9 @@ comp3 = composition $ do
 instance Interface (MyPort r) where
     seal p = MyPort { e1 = seal (e1 p), e2 = seal (e2 p) }
 
-instance Port MyPort (UnqueuedSenderComSpec Int, QueuedSenderComSpec String) 
-                     (UnqueuedReceiverComSpec Int, QueuedReceiverComSpec String) where
+instance Port MyPort where
+    type PComSpec MyPort = (UnqueuedSenderComSpec Int, QueuedSenderComSpec String)
+    type RComSpec MyPort = (UnqueuedReceiverComSpec Int, QueuedReceiverComSpec String)
     connect a b = do connect (e1 a) (e1 b); connect (e2 a) (e2 b)
     require (spec1,spec2) = do e1 <- require spec1; e2 <- require spec2; return MyPort {..}
     provide (spec1,spec2) = do e1 <- provide spec1; e2 <- provide spec2; return MyPort {..}
