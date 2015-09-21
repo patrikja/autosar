@@ -133,8 +133,8 @@ newtype ExclusiveArea c             = EX Address
 type Time                   = Double
 
 data Event c                = forall q a. DataReceivedEvent (DataElement q a Required c)
-                            | Timed Time
-                            | Init
+                            | TimingEvent Time
+                            | InitEvent
 
 data ServerEvent a b c      = OperationInvokedEvent (ClientServerOperation a b Provided c)
 
@@ -191,6 +191,9 @@ data Static c               = Static {
                                 }
 
 type ConnRel = Address -> Address -> Bool
+
+rev :: ConnRel -> ConnRel
+rev conn a b                = b `conn` a
 
 state0                      = SimState { procs = [], conns = [], simProbes = [], initvals = Map.empty, nextA = 0 }
 
@@ -297,15 +300,18 @@ instance Addressed (ClientServerOperation a b r c) where
         address (OP n)              = n
 
 
-class Seal m where
+class Interface m where
         seal                :: m c -> m ()
 
-instance Seal (DataElement q a r) where
+instance Interface (DataElement q a r) where
         seal (DE a)         = DE a
 
-instance Seal (ClientServerOperation a b r) where
+instance Interface (ClientServerOperation a b r) where
         seal (OP a)         = OP a
 
+seal2 (a,b)          = (seal a, seal b)
+seal3 (a,b,c)        = (seal a, seal b, seal c)
+seal4 (a,b,c,d)      = (seal a, seal b, seal c, seal d)
 
 -- Derived AR operations ------------------------------------------------------
 
@@ -327,12 +333,12 @@ newInit :: Address -> Value -> Program (ARInstr c) ()
 interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toValue val)); return (IV a)
 exclusiveArea               = do a <- newAddress; newProcess (Excl a Free); return (EX a)
 
-runnable inv trig code      = do a <- newAddress
+runnable inv events code    = do a <- newAddress
                                  mapM (newProcess . Timer a 0.0) periods
                                  newProcess (Run a 0.0 act 0 (Static watch inv code'))
-  where periods             = [ t | Timed t <- trig ]
-        watch               = [ a | DataReceivedEvent (DE a) <- trig ]
-        act                 = if null [ Init | Init <- trig ] then Idle else Pending
+  where periods             = [ t | TimingEvent t <- events ]
+        watch               = [ a | DataReceivedEvent (DE a) <- events ]
+        act                 = if null [ () | InitEvent <- events ] then Idle else Pending
         code'               = \dyn -> code >> return dyn
 
 serverRunnable inv ops code = do a <- newAddress
@@ -526,7 +532,6 @@ minstart s      = case invocation s of
 trig :: ConnRel -> Address -> Static c -> Bool
 trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
-
 mayHear :: ConnRel -> Label -> Proc -> Label
 mayHear conn VETO _                                             = VETO
 mayHear conn (ENTER a)       (Excl b Free)     | a==b           = ENTER a --
@@ -547,8 +552,8 @@ mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
 mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toValue u))
 mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
 mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
-       | trig conn a s  &&  a `notElem` cs                      = CALL a v void
-       | trig conn a s                                          = CALL a v LIMIT
+       | trig (rev conn) a s  &&  a `notElem` cs                = CALL a v void
+       | trig (rev conn) a s                                    = CALL a v LIMIT
 mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
 mayHear conn (RES a _)       (Op b [])         | a==b           = VETO  -- RES a NO_DATA
 mayHear conn (RET a v)       (Op b vs)         | a==b           = RET a v
@@ -579,8 +584,8 @@ hear conn (WR a _)      (Run b t _ n s)    | trig conn a s      = Run b t Pendin
 hear conn (UP a _)      (DElem b u v)      | a==b               = DElem b u v
 hear conn (INV a)       (DElem b _ _)      | a `conn` b         = DElem b True NO_DATA
 hear conn (CALL a v _)  (Run b t (Serving cs vs) n s)
-        | trig conn a s && a `notElem` cs                       = Run b t (Serving (cs++[a]) (vs++[v])) n s
-        | trig conn a s                                         = Run b t (Serving cs vs) n s
+        | trig (rev conn) a s && a `notElem` cs                 = Run b t (Serving (cs++[a]) (vs++[v])) n s
+        | trig (rev conn) a s                                   = Run b t (Serving cs vs) n s
 hear conn (RES a _)     (Op b (v:vs))         | a==b            = Op b vs
 hear conn (RES a _)     (Op b [])             | a==b            = Op b []
 hear conn (RET a v)     (Op b vs)             | a==b            = Op b (vs++[v])
