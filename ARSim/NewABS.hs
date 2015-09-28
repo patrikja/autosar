@@ -11,8 +11,8 @@ modification, are permitted provided that the following conditions are met:
    * Redistributions in binary form must reproduce the above copyright
      notice, this list of conditions and the following disclaimer in the
      documentation and/or other materials provided with the distribution.
-   * Neither the name of the Chalmers University of Technology nor the names of its 
-     contributors may be used to endorse or promote products derived from this 
+   * Neither the name of the Chalmers University of Technology nor the names of its
+     contributors may be used to endorse or promote products derived from this
      software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -36,15 +36,15 @@ import Graphics.EasyPlot
 import System.Random
 
 --------------------------------------------------------------
--- A generic skeleton for creating sequencer components; i.e., 
+-- A generic skeleton for creating sequencer components; i.e.,
 -- components that produce sequences of observable effects at
--- programmable points in time. The skeleton is parametric in 
+-- programmable points in time. The skeleton is parametric in
 -- the actual step function (which takes takes a step index as
 -- a parameter, performs any observable effects, and returns a
--- new sequencer state). A sequencer state is either Stopped or 
+-- new sequencer state). A sequencer state is either Stopped or
 -- (Running ticks limit index), where limit is the step size in
--- milliseconds, ticks is the time in milliseconds since the 
--- last step, and index is the new step index. A sequencer 
+-- milliseconds, ticks is the time in milliseconds since the
+-- last step, and index is the new step index. A sequencer
 -- can be started and stopped by means of an exported boolean
 -- service operation.
 --------------------------------------------------------------
@@ -68,8 +68,8 @@ seq_tick step excl state = do
         Ok s <- rteIrvRead state
         s' <- case s of
                 Stopped                    -> return s
-                Running ticks limit i 
-                        | ticks < limit-1  -> return (Running (ticks+1) limit i)
+                Running ticks limit i      -- Intended invariant: ticks < limit
+                        | ticks+1 < limit  -> return (Running (ticks+1) limit i)
                         | otherwise        -> step i
         rteIrvWrite state s'
         rteExit excl
@@ -90,7 +90,7 @@ sequencer :: Data a =>
 sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
-        runnable Concurrent [InitEvent]               (seq_init setup excl state)
+        runnable Concurrent      [InitEvent]          (seq_init setup excl state)
         runnable (MinInterval 0) [TimingEvent 0.001]  (seq_tick step  excl state)
         onoff <- provide ServerComSpec{bufferLength=0}
         serverRunnable (MinInterval 0) [OperationInvokedEvent onoff]  (seq_onoff ctrl excl state)
@@ -104,14 +104,16 @@ sequencer setup step ctrl = do
 -- stays negative. It provides a boolean on/off control operation as
 -- well as a boolean data element producing valve settings.
 --------------------------------------------------------------
+defaultSeqState :: SeqState
+defaultSeqState = Running 0 5 0 -- Count to five time steps (ms), then index 0
 
 relief_setup :: DataElement Unqueued Bool Provided c -> RTE c SeqState
 relief_setup valve = do
         rteWrite valve False
         return Stopped
-        
-relief_step ::  DataElement Unqueued Valve Provided c -> 
-                DataElement Unqueued Accel Required c -> 
+
+relief_step ::  DataElement Unqueued Valve Provided c ->
+                DataElement Unqueued Accel Required c ->
                 Index -> RTE c SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
@@ -120,20 +122,20 @@ relief_step valve accel 0 = do
                 rteWrite valve True
                 return (Running 0 (round (-a*10)) 1)
          else
-                return (Running 0 5 0)
+                return defaultSeqState
 relief_step valve accel n = do
         rteWrite valve False
-        return (Running 0 5 0)
+        return defaultSeqState
 
-relief_ctrl ::  DataElement Unqueued Valve Provided c   -> 
-                DataElement Unqueued Accel Required c   -> 
+relief_ctrl ::  DataElement Unqueued Valve Provided c   ->
+                DataElement Unqueued Accel Required c   ->
                 Valve -> RTE c SeqState
-relief_ctrl valve accel True = 
+relief_ctrl valve accel True =
         relief_step valve accel 0
 relief_ctrl valve accel False = do
         rteWrite valve False
         return Stopped
-        
+
 type Relief = ( DataElement Unqueued Accel Required (),
                 ClientServerOperation Bool () Provided (),
                 DataElement Unqueued Valve Provided ())
@@ -141,20 +143,22 @@ relief_seq :: AR c Relief
 relief_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
-        ctrl <- sequencer (relief_setup valve) (relief_step valve accel) (relief_ctrl valve accel)
-        return (seal accel, seal ctrl, seal valve)
+        ctrl <- sequencer (relief_setup valve)
+                          (relief_step  valve accel)
+                          (relief_ctrl  valve accel)
+        return $ seal3 (accel, ctrl, valve)
 
 --------------------------------------------------------------
 -- A pressure component is a sequencer for toggling a brake
 -- pressure valve in an ABS system. It requires a data element
--- for reading wheel acceleration values (of type Double) and 
+-- for reading wheel acceleration values (of type Double) and
 -- pulses the valve 10 times in lengths proportional to positive
 -- acceleration. It provides a boolean on/off control operation
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
-type PresSeq = ( DataElement Unqueued Accel Required (), 
-                 ClientServerOperation Index () Provided (), 
+type PresSeq = ( DataElement Unqueued Accel Required (),
+                 ClientServerOperation Index () Provided (),
                  DataElement Unqueued Valve Provided ())
 
 pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
@@ -162,9 +166,9 @@ pressure_setup valve = do
         rteWrite valve True
         return Stopped
 
-pressure_step :: 
-  DataElement Unqueued Valve Provided c  -> 
-  DataElement Unqueued Accel Required c  -> 
+pressure_step ::
+  DataElement Unqueued Valve Provided c  ->
+  DataElement Unqueued Accel Required c  ->
   Index -> RTE c SeqState
 pressure_step valve accel 0 = do
         rteWrite valve True
@@ -181,9 +185,9 @@ pressure_step valve accel n | odd n = do
         rteWrite valve False
         return (Running 0 20 (n+1))
 
-pressure_ctrl :: 
-  DataElement Unqueued Valve Provided c  -> 
-  DataElement Unqueued Accel Required c  -> 
+pressure_ctrl ::
+  DataElement Unqueued Valve Provided c  ->
+  DataElement Unqueued Accel Required c  ->
   Index -> RTE c SeqState
 pressure_ctrl valve accel 2 = do
         rteWrite valve True
@@ -198,8 +202,10 @@ pressure_seq :: AR c PresSeq
 pressure_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
-        ctrl <- sequencer (pressure_setup valve) (pressure_step valve accel) (pressure_ctrl valve accel)
-        return (seal accel, seal ctrl, seal valve)
+        ctrl <- sequencer (pressure_setup valve)
+                          (pressure_step  valve accel)
+                          (pressure_ctrl  valve accel)
+        return $ seal3 (accel, ctrl, valve)
 
 --------------------------------------------------------------
 -- A controller component reads a stream of slip values for a
@@ -211,16 +217,14 @@ pressure_seq = atomic $ do
 -- and a pressure sequence is started.
 --------------------------------------------------------------
 
-control ::
-  (Data pres, Num pres,
-   Data r1, 
-   Data q1) =>
-  InterRunnableVariable   Slip  c  -> 
-  ClientServerOperation pres q1 Required c  -> 
-  ClientServerOperation Bool r1 Required c  -> 
-  DataElement Queued Slip Required c  -> 
-  RTE c (StdRet ())
-control memo onoff_pressure onoff_relief slipstream = do
+type Slip = Double
+type ABSstate' c = (DataElement Queued Slip       Required c,
+                    ClientServerOperation Int  () Required c,
+                    ClientServerOperation Bool () Required c)
+type ABSstate = ABSstate' ()
+
+control :: InterRunnableVariable Slip c -> ABSstate' c -> RTE c (StdRet ())
+control memo (slipstream, onoff_pressure, onoff_relief) = do
         Ok slip   <- rteReceive slipstream
         Ok slip'  <- rteIrvRead memo
         case (slip < 0.8, slip' < 0.8) of
@@ -237,19 +241,15 @@ control memo onoff_pressure onoff_relief slipstream = do
                 _ ->    return ()
         rteIrvWrite memo slip
 
-type Slip = Double
-type ABSstate = (DataElement Queued Slip Required (), 
-                 ClientServerOperation Int () Required (), 
-                 ClientServerOperation Bool () Required ())
 controller :: AR c ABSstate
 controller = atomic $ do
         memo <- interRunnableVariable 1.0
+        slipstream     <- require QueuedReceiverComSpec{queueLength=10}
         onoff_pressure <- require ClientComSpec
-        onoff_relief <- require ClientComSpec
-        slipstream <- require QueuedReceiverComSpec{queueLength=10}
-        runnable (MinInterval 0) [DataReceivedEvent slipstream] 
-                (control memo onoff_pressure onoff_relief slipstream)
-        return (seal slipstream, seal onoff_pressure, seal onoff_relief)
+        onoff_relief   <- require ClientComSpec
+        runnable (MinInterval 0) [DataReceivedEvent slipstream]
+                 (control memo (slipstream, onoff_pressure, onoff_relief))
+        return $ seal3 (slipstream, onoff_pressure, onoff_relief)
 
 type Accel = Double
 type Velo  = Double
@@ -260,9 +260,9 @@ wheel_ctrl (i,slipstream) = composition $ do
         (slip, onoff_pressure, onoff_relief) <- controller
         (accel_p, ctrl_p, valve_p) <- pressure_seq
         (accel_r, ctrl_r, valve_r) <- relief_seq
-        connect slipstream slip
-        connect ctrl_p onoff_pressure 
-        connect ctrl_r onoff_relief
+        connect  slipstream  slip
+        connect  ctrl_p      onoff_pressure
+        connect  ctrl_r      onoff_relief
         when (i==2) $ do
             probeWrite "relief 2"    valve_r
             probeWrite "pressure 2"  valve_p
@@ -272,38 +272,40 @@ wheel_ctrl (i,slipstream) = composition $ do
 
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
--- periodically reads the current speeds of all wheels, 
+-- periodically reads the current speeds of all wheels,
 -- approximates the vehicle speed as the maximum of the wheel
 -- speeds (should be refined for the case when all wheels are
--- locked, must resort do dead reckoning based on latest 
--- deacceleration in these cases), and sends every wheel 
+-- locked, must resort do dead reckoning based on latest
+-- de-acceleration in these cases), and sends every wheel
 -- controller its updated slip ratio.
 --------------------------------------------------------------
 
 fromOk (Ok v) = v
 
-loop :: [DataElement Unqueued Velo Required c] -> 
-        [DataElement Queued Velo Provided c] ->
+loop :: [DataElement Unqueued Velo Required c] ->
+        [DataElement Queued   Velo Provided c] ->
         RTE c [StdRet ()]
 loop velostreams slipstreams = do
         velos <- mapM (liftM fromOk . rteRead) velostreams
         let v0 = maximum velos
-        mapM (\(v,p) -> rteSend p (slip v0 v)) (velos `zip` slipstreams)
+        forM (velos `zip` slipstreams) $ \(v,p) ->
+             rteSend p (slip v0 v)
 
 slip :: Double -> Double -> Double
 slip 0.0  _v = 1.0   -- no slip
 slip v0   v  = v/v0
 
-main_loop :: AR c ([DataElement Unqueued Velo Required ()], [DataElement Queued Slip Provided ()])
+main_loop :: AR c ([DataElement Unqueued Velo Required ()],
+                   [DataElement Queued   Slip Provided ()])
 main_loop = atomic $ do
         velostreams <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
         slipstreams <- replicateM 4 (provide QueuedSenderComSpec)
         runnable (MinInterval 0) [TimingEvent 0.01] (loop velostreams slipstreams)
         return (map seal velostreams, map seal slipstreams)
-        
+
 --------------------------------------------------------------
 -- A full ABS system consists of a main loop component as well
--- as one controller, one relief and one pressure component for 
+-- as one controller, one relief and one pressure component for
 -- each wheel. In addition, each wheel must be equipped with
 -- speed and acceleration sensors, but these parts are considered
 -- external to the current system.
@@ -312,7 +314,7 @@ main_loop = atomic $ do
 abs_system :: AR c ([VelocityIn], [WheelCtrl])
 abs_system = atomic $ do
         (velos_in, slips_out) <- main_loop
-        wheelctrls <- mapM wheel_ctrl ([1..] `zip` slips_out)
+        wheelctrls <- forM ([1..] `zip` slips_out) wheel_ctrl
         return (velos_in, wheelctrls)
 
 
@@ -320,11 +322,13 @@ abs_system = atomic $ do
 --  A simulated physical car
 -------------------------------------------------------------------
 wheel_f :: Index -> Time -> Bool -> Bool -> Velo -> (Accel, Velo)
-wheel_f i time pressure relief velo 
+wheel_f i time pressure relief velo
         | time < 1.0                = veloStep 0          velo
         | i /= 2                    = veloStep (-4.5)     velo
         -- let wheel 2 skid...
-        -- We "postulate" a reasonable approximation of the wheel speed (ignoring the actual valves). Ideally the whole car dynamics whould be in another module (in Simulink).
+        -- We "postulate" a reasonable approximation of the wheel
+        -- speed (ignoring the actual valves). Ideally the whole car
+        -- dynamics whould be in another module (in Simulink).
         | time < 1.6                = veloStep (-10)      velo
         | time < 2                  = veloStep (-4)       velo
         | time < 2.5                = veloStep (-3)       velo
@@ -334,8 +338,10 @@ wheel_f i time pressure relief velo
         | time < 4.3                = veloStep (-8.4)     velo
         | time < 4.7                = veloStep (-4)       velo
         | otherwise                 = veloStep 0          velo
--- The "pressure logic" is something like this, but a propoer treatment need integration over time and knowledge of vehicle speed and other physical parameters.
---        | pressure && not relief    = veloStep (-10)      velo   
+-- The "pressure logic" is something like this, but a proper
+-- treatment need integration over time and knowledge of vehicle speed
+-- and other physical parameters.
+--        | pressure && not relief    = veloStep (-10)      velo
 --        | relief && not pressure    = veloStep (-1)       velo
 --        | otherwise                 = veloStep (-3)       velo
 
@@ -344,7 +350,6 @@ veloStep a v = (a, v + a*0.01)
 
 type Wheel = Wheel' ()
 
-
 type Wheel' c = (DataElement Unqueued Valve Required c,
                  DataElement Unqueued Valve Required c,
                  DataElement Unqueued Velo  Provided c,
@@ -352,9 +357,9 @@ type Wheel' c = (DataElement Unqueued Valve Required c,
 
 wheel_sim :: Time -> (Index, Wheel' c, Velo) -> RTE c Velo
 wheel_sim t (i, (r_act, p_act, v_sens, a_sens), velo) = do
-        Ok pressure <- rteRead p_act
-        Ok relief <- rteRead r_act
-        let (acc,velo') = wheel_f i t pressure relief velo
+        Ok pressure <- rteRead p_act   -- TODO: perhaps add error handling
+        Ok relief   <- rteRead r_act   --   in case the return code is not "Ok v"
+        let (acc, velo') = wheel_f i t pressure relief velo
         rteWrite v_sens velo'
         rteWrite a_sens acc
         return velo'
@@ -363,7 +368,8 @@ simul :: [Wheel' c] -> InterRunnableVariable (Time, [Velo]) c -> RTE c ()
 simul wheels irv = do
         Ok (time, velos) <- rteIrvRead irv
         let t = time + 0.01
-        velos' <- mapM (wheel_sim t) (zip3 [1..] wheels velos)
+        velos' <- forM (zip3 [1..] wheels velos) $
+                       wheel_sim t
         rteIrvWrite irv (t, velos')
         return ()
 
@@ -380,7 +386,7 @@ mk_wheel i = do
 
 car :: AR c [Wheel]
 car = atomic $ do
-        wheels <- mapM mk_wheel [1..4]
+        wheels <- forM [1..4] mk_wheel
         irv <- interRunnableVariable (init_a, replicate 4 init_v)
         runnable (MinInterval 0) [TimingEvent 0.01] (simul wheels irv)
         return (map seal4 wheels)
@@ -392,7 +398,7 @@ init_a :: Accel
 init_a = 0
 
 -------------------------------------------------------------------------
--- A test setup consists of the ABS implementation and the simulated car 
+-- A test setup consists of the ABS implementation and the simulated car
 -- cyclically connected into a closed system.
 --------------------------------------------------------------------------
 
@@ -402,19 +408,20 @@ test = do
         wheels <- car
         sequence_ (zipWith3 conn wheels velos_in wheelctrls)
 
-type VelocityIn = DataElement Unqueued Velo Required ()
+type VelocityIn =   DataElement Unqueued Velo  Required ()
+
 type WheelCtrl = (  DataElement Unqueued Accel Required (),
                     DataElement Unqueued Accel Required (),
                     DataElement Unqueued Valve Provided (),
                     DataElement Unqueued Valve Provided ())
 
 conn :: Wheel -> VelocityIn -> WheelCtrl -> AR c ()
-conn (r_act,p_act,v_sens,a_sens) velo_in (accel_r,accel_p,valve_r,valve_p) = do
-        connect v_sens velo_in
-        connect a_sens accel_r
-        connect a_sens accel_p
-        connect valve_r r_act
-        connect valve_p p_act
+conn (r_act, p_act, v_sens, a_sens) velo_in (accel_r, accel_p, valve_r, valve_p) = do
+        connect  v_sens   velo_in
+        connect  a_sens   accel_r
+        connect  a_sens   accel_p
+        connect  valve_r  r_act
+        connect  valve_p  p_act
 
 
 makePlot :: Trace -> IO Bool
@@ -430,6 +437,7 @@ makePlot trace = plot (PS "plot.ps") curves
         doubles                         = probeAll trace
         bools                           = map scale (probeAll trace)
 
+discrete :: Fractional t => [((q, t), k)] -> [(t, k)]
 discrete []                     = []
 discrete (((_,t),v):vs)         = (t,v) : disc v vs
   where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
@@ -437,9 +445,9 @@ discrete (((_,t),v):vs)         = (t,v) : disc v vs
         eps                     = 0.0001
 
 scale :: (ProbeID, Measurement Bool) -> (ProbeID, Measurement Double)
-scale ("relief 2",m)    = ("relief 2",map (fmap scaleValve) m)
+scale ("relief 2", m)   = ("relief 2", map (fmap scaleValve) m)
   where scaleValve      = (+2.0) . fromIntegral . fromEnum
-scale ("pressure 2",m)  = ("pressure 2",map (fmap scaleValve) m)
+scale ("pressure 2", m) = ("pressure 2", map (fmap scaleValve) m)
   where scaleValve      = (+4.0) . fromIntegral . fromEnum
 
 main1 :: IO Bool
@@ -449,4 +457,3 @@ main1 = printLogs trace >> makePlot trace
 
 main :: IO Bool
 main = main1
-
