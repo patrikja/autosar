@@ -138,7 +138,7 @@ type Relief = ( DataElement Unqueued Accel Required (),
                 ClientServerOperation Bool () Provided (),
                 DataElement Unqueued Valve Provided ())
 relief_seq :: AR c Relief
-relief_seq = component $ do
+relief_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
         ctrl <- sequencer (relief_setup valve) (relief_step valve accel) (relief_ctrl valve accel)
@@ -195,7 +195,7 @@ pressure_ctrl valve accel 0 = do
         return Stopped
 
 pressure_seq :: AR c PresSeq
-pressure_seq = component $ do
+pressure_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
         ctrl <- sequencer (pressure_setup valve) (pressure_step valve accel) (pressure_ctrl valve accel)
@@ -242,7 +242,7 @@ type ABSstate = (DataElement Queued Slip Required (),
                  ClientServerOperation Int () Required (), 
                  ClientServerOperation Bool () Required ())
 controller :: AR c ABSstate
-controller = component $ do
+controller = atomic $ do
         memo <- interRunnableVariable 1.0
         onoff_pressure <- require ClientComSpec
         onoff_relief <- require ClientComSpec
@@ -256,7 +256,7 @@ type Velo  = Double
 type Valve = Bool
 
 wheel_ctrl :: (Index, DataElement Queued Slip Provided ()) -> AR c WheelCtrl
-wheel_ctrl (i,slipstream) = component $ do
+wheel_ctrl (i,slipstream) = composition $ do
         (slip, onoff_pressure, onoff_relief) <- controller
         (accel_p, ctrl_p, valve_p) <- pressure_seq
         (accel_r, ctrl_r, valve_r) <- relief_seq
@@ -295,7 +295,7 @@ slip 0.0  _v = 1.0   -- no slip
 slip v0   v  = v/v0
 
 main_loop :: AR c ([DataElement Unqueued Velo Required ()], [DataElement Queued Slip Provided ()])
-main_loop = component $ do
+main_loop = atomic $ do
         velostreams <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
         slipstreams <- replicateM 4 (provide QueuedSenderComSpec)
         runnable (MinInterval 0) [TimingEvent 0.01] (loop velostreams slipstreams)
@@ -310,7 +310,7 @@ main_loop = component $ do
 --------------------------------------------------------------
 
 abs_system :: AR c ([VelocityIn], [WheelCtrl])
-abs_system = component $ do
+abs_system = atomic $ do
         (velos_in, slips_out) <- main_loop
         wheelctrls <- mapM wheel_ctrl ([1..] `zip` slips_out)
         return (velos_in, wheelctrls)
@@ -379,7 +379,7 @@ mk_wheel i = do
         return (r_act, p_act, v_sens, a_sens)
 
 car :: AR c [Wheel]
-car = do
+car = atomic $ do
         wheels <- mapM mk_wheel [1..4]
         irv <- interRunnableVariable (init_a, replicate 4 init_v)
         runnable (MinInterval 0) [TimingEvent 0.01] (simul wheels irv)
