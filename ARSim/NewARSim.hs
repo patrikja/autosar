@@ -320,9 +320,11 @@ exclusiveArea               :: AR c (ExclusiveArea c)
 runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
 serverRunnable              :: (Data a, Data b) =>
                                 Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
-component                   :: (forall c. AR c a) -> AR c a
+composition                 :: (forall c. AR c a) -> AR c a
+atomic                      :: (forall c. AR c a) -> AR c a
 
-component c                 = singleton $ NewComponent c
+composition c               = singleton $ NewComponent c
+atomic c                    = singleton $ NewComponent c
 
 newConnection c             = singleton $ NewConnection c
 newAddress                  = singleton $ NewAddress
