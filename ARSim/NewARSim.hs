@@ -210,7 +210,7 @@ data ARInstr c a where
     NewProcess              :: Proc -> ARInstr c ()
     NewProbe                :: String -> (Label -> Maybe Value) -> ARInstr c ()
     NewInit                 :: Address -> Value -> ARInstr c ()
-    NewComponent            :: (forall c. AR c a) -> ARInstr c a
+    NewComponent            :: (forall c. AR c a) -> ARInstr c a  -- Too strong requirement on the argument.
     NewConnection           :: Conn -> ARInstr c ()
 
 type AR c a                 = Program (ARInstr c) a
@@ -268,7 +268,7 @@ instance Data a => Port (DataElement Unqueued a) where
         a <- newAddress
         newProcess (DElem a False (Ok (toValue x)))
         return (DE a)
-    
+
 instance Port (DataElement Queued a) where
     type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
     type RComSpec (DataElement Queued a) = QueuedReceiverComSpec a
@@ -320,7 +320,7 @@ exclusiveArea               :: AR c (ExclusiveArea c)
 runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
 serverRunnable              :: (Data a, Data b) =>
                                 Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
-composition                 :: (forall c. AR c a) -> AR c a
+composition                 :: (forall c. AR c a) -> AR c a  -- This looks like encapsulation, but is not (?)
 atomic                      :: (forall c. AR c a) -> AR c a
 
 composition c               = singleton $ NewComponent c
