@@ -53,47 +53,34 @@ type Limit = Int
 type Index = Int
 data SeqState = Stopped | Running Ticks Limit Index deriving (Typeable,Data)
 
-seq_init :: (Data a) =>
-  RTE c a -> ExclusiveArea c -> InterRunnableVariable a c -> RTE c (StdRet ())
-seq_init setup excl state = do
-        rteEnter excl
-        s <- setup
-        rteIrvWrite state s
-        rteExit excl
-
-seq_tick ::  (Index -> RTE c SeqState) -> ExclusiveArea c -> InterRunnableVariable SeqState c
-         ->  RTE c (StdRet ())
-seq_tick step excl state = do
-        rteEnter excl
-        Ok s <- rteIrvRead state
-        s' <- case s of
-                Stopped                    -> return s
-                Running ticks limit i      -- Intended invariant: ticks < limit
-                        | ticks+1 < limit  -> return (Running (ticks+1) limit i)
-                        | otherwise        -> step i
-        rteIrvWrite state s'
-        rteExit excl
-
-seq_onoff :: (Data a) =>
-     (t -> RTE c a) -> ExclusiveArea c -> InterRunnableVariable a c
-  -> (t -> RTE c ())
-seq_onoff onoff excl state on = do
-        rteEnter excl
-        s <- onoff on
-        rteIrvWrite state s
-        rteExit excl
-        return ()
-
 sequencer :: Data a =>
   RTE c SeqState -> (Index -> RTE c SeqState) -> (a -> RTE c SeqState)
   -> AR c (ClientServerOperation a () Provided c)
 sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
-        runnable Concurrent      [InitEvent]          (seq_init setup excl state)
-        runnable (MinInterval 0) [TimingEvent 0.001]  (seq_tick step  excl state)
+        runnable Concurrent [InitEvent] $ do
+            rteEnter excl
+            s <- setup
+            rteIrvWrite state s
+            rteExit excl
+        runnable (MinInterval 0) [TimingEvent 0.001] $ do
+            rteEnter excl
+            Ok s <- rteIrvRead state
+            s' <- case s of
+                    Stopped                    -> return s
+                    Running ticks limit i      -- Intended invariant: ticks < limit
+                            | ticks+1 < limit  -> return (Running (ticks+1) limit i)
+                            | otherwise        -> step i
+            rteIrvWrite state s'
+            rteExit excl
         onoff <- provide ServerComSpec{bufferLength=0}
-        serverRunnable (MinInterval 0) [OperationInvokedEvent onoff]  (seq_onoff ctrl excl state)
+        serverRunnable (MinInterval 0) [OperationInvokedEvent onoff] $ \on -> do
+            rteEnter excl
+            s <- ctrl on
+            rteIrvWrite state s
+            rteExit excl
+            return ()
         return (onoff)
 
 --------------------------------------------------------------
@@ -218,37 +205,32 @@ pressure_seq = atomic $ do
 --------------------------------------------------------------
 
 type Slip = Double
-type ABSstate' c = (DataElement Queued Slip       Required c,
+type WheelPort c = (DataElement Queued Slip       Required c,
                     ClientServerOperation Int  () Required c,
                     ClientServerOperation Bool () Required c)
-type ABSstate = ABSstate' ()
 
-control :: InterRunnableVariable Slip c -> ABSstate' c -> RTE c (StdRet ())
-control memo (slipstream, onoff_pressure, onoff_relief) = do
-        Ok slip   <- rteReceive slipstream
-        Ok slip'  <- rteIrvRead memo
-        case (slip < 0.8, slip' < 0.8) of
-                (True, False) -> do
-                        printlog "" ("Slip " ++ show slip)
-                        rteCall onoff_pressure 0
-                        rteCall onoff_relief True
-                        return ()
-                (False, True) -> do
-                        printlog "" ("Slip " ++ show slip)
-                        rteCall onoff_relief False
-                        rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
-                        return ()
-                _ ->    return ()
-        rteIrvWrite memo slip
-
-controller :: AR c ABSstate
+controller :: AR c (WheelPort ())
 controller = atomic $ do
         memo <- interRunnableVariable 1.0
         slipstream     <- require QueuedReceiverComSpec{queueLength=10}
         onoff_pressure <- require ClientComSpec
         onoff_relief   <- require ClientComSpec
-        runnable (MinInterval 0) [DataReceivedEvent slipstream]
-                 (control memo (slipstream, onoff_pressure, onoff_relief))
+        runnable (MinInterval 0) [DataReceivedEvent slipstream] $ do
+            Ok slip   <- rteReceive slipstream
+            Ok slip'  <- rteIrvRead memo
+            case (slip < 0.8, slip' < 0.8) of
+                    (True, False) -> do
+                            printlog "" ("Slip " ++ show slip)
+                            rteCall onoff_pressure 0
+                            rteCall onoff_relief True
+                            return ()
+                    (False, True) -> do
+                            printlog "" ("Slip " ++ show slip)
+                            rteCall onoff_relief False
+                            rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
+                            return ()
+                    _ ->    return ()
+            rteIrvWrite memo slip
         return $ seal3 (slipstream, onoff_pressure, onoff_relief)
 
 type Accel = Double
@@ -282,15 +264,6 @@ wheel_ctrl (i,slipstream) = composition $ do
 
 fromOk (Ok v) = v
 
-loop :: [DataElement Unqueued Velo Required c] ->
-        [DataElement Queued   Velo Provided c] ->
-        RTE c [StdRet ()]
-loop velostreams slipstreams = do
-        velos <- mapM (liftM fromOk . rteRead) velostreams
-        let v0 = maximum velos
-        forM (velos `zip` slipstreams) $ \(v,p) ->
-             rteSend p (slip v0 v)
-
 slip :: Double -> Double -> Double
 slip 0.0  _v = 1.0   -- no slip
 slip v0   v  = v/v0
@@ -300,7 +273,11 @@ main_loop :: AR c ([DataElement Unqueued Velo Required ()],
 main_loop = atomic $ do
         velostreams <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
         slipstreams <- replicateM 4 (provide QueuedSenderComSpec)
-        runnable (MinInterval 0) [TimingEvent 0.01] (loop velostreams slipstreams)
+        runnable (MinInterval 0) [TimingEvent 0.01] $ do
+            velos <- mapM (liftM fromOk . rteRead) velostreams
+            let v0 = maximum velos
+            forM (velos `zip` slipstreams) $ \(v,p) ->
+                rteSend p (slip v0 v)
         return (map seal velostreams, map seal slipstreams)
 
 --------------------------------------------------------------
