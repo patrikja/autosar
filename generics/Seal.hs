@@ -19,6 +19,12 @@ class Interface m where
   default seal :: (Generic1 m, GInterface (Rep1 m)) => m c -> m ()
   seal = to1 . gseal . from1
 
+-- TODO: an alternative could perhaps be to convince GHC that seal is
+-- the identity with an unusual type. This would require unsafeCoerce
+-- and would involve the risk that some type ends up in Interface even
+-- though it actively uses the parameter c (which should be just a
+-- phantom type).
+
 class GInterface f where
   gseal :: f c -> f ()
 
