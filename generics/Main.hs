@@ -6,6 +6,7 @@
 
 module Main where
 import GenPut
+import Seal
 
 type Address                = Int
 
@@ -90,3 +91,13 @@ val2 = MyPort (DE 1) (DE 2)
 
 test2 :: [Bin]
 test2 = put val2
+
+----------------
+
+deriving instance Interface (DataElement q a r)
+deriving instance Generic1  (DataElement q a r)
+-- TODO: continue towards IFace1 and IFace2
+-- deriving instance Interface (MyPort r)
+-- deriving instance Generic1  (MyPort r)
+t1 :: DataElement q a r ()
+t1 = seal (DE 1)
