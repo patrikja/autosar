@@ -210,12 +210,12 @@ data ARInstr c a where
     NewProcess              :: Proc -> ARInstr c ()
     NewProbe                :: String -> (Label -> Maybe Value) -> ARInstr c ()
     NewInit                 :: Address -> Value -> ARInstr c ()
-    NewComponent            :: (forall c. AR c a) -> ARInstr c a  -- Too strong requirement on the argument.
+    NewComponent            :: AR c a -> ARInstr c a  -- Too strong requirement on the argument.
     NewConnection           :: Conn -> ARInstr c ()
 
 type AR c a                 = Program (ARInstr c) a
 
-runAR                       :: (forall c . AR c a) -> SimState -> (a,SimState)
+runAR                       :: AR c a -> SimState -> (a,SimState)
 runAR sys st                = run sys st
   where
     run                     :: AR c a -> SimState -> (a,SimState)
@@ -320,11 +320,11 @@ exclusiveArea               :: AR c (ExclusiveArea c)
 runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
 serverRunnable              :: (Data a, Data b) =>
                                 Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
-composition                 :: (forall c. AR c a) -> AR c a  -- This looks like encapsulation, but is not (?)
-atomic                      :: (forall c. AR c a) -> AR c a
+composition                 :: AR c a -> AR c a
+atomic                      :: Interface i => (forall c. AR c (i c)) -> AR c' (i ())
 
 composition c               = singleton $ NewComponent c
-atomic c                    = singleton $ NewComponent c
+atomic c                    = fmap seal $ singleton $ NewComponent c
 
 newConnection c             = singleton $ NewConnection c
 newAddress                  = singleton $ NewAddress

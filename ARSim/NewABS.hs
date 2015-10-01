@@ -125,9 +125,12 @@ relief_ctrl valve accel False = do
         rteWrite valve False
         return Stopped
 
-type Relief c = ( DataElement Unqueued Accel Required c,
-                  ClientServerOperation Bool () Provided c,
-                  DataElement Unqueued Valve Provided c)
+newtype Relief c = Relief ( DataElement Unqueued Accel Required c,
+                            ClientServerOperation Bool () Provided c,
+                            DataElement Unqueued Valve Provided c )
+
+instance Interface Relief where
+    seal (Relief (a,c,v)) = Relief (seal a, seal c, seal v)
 
 relief_seq :: AR c (Relief ())
 relief_seq = atomic $ do
@@ -136,7 +139,7 @@ relief_seq = atomic $ do
         ctrl <- sequencer (relief_setup valve)
                           (relief_step  valve accel)
                           (relief_ctrl  valve accel)
-        return $ seal3 (accel, ctrl, valve)
+        return $ Relief (accel, ctrl, valve)
 
 --------------------------------------------------------------
 -- A pressure component is a sequencer for toggling a brake
@@ -184,9 +187,12 @@ pressure_ctrl valve accel 0 = do
         rteWrite valve False
         return Stopped
 
-type PresSeq c = ( DataElement Unqueued Accel Required c,
-                   ClientServerOperation Index () Provided c,
-                   DataElement Unqueued Valve Provided c)
+newtype PresSeq c = PresSeq ( DataElement Unqueued Accel Required c,
+                              ClientServerOperation Index () Provided c,
+                              DataElement Unqueued Valve Provided c)
+
+instance Interface PresSeq where
+    seal (PresSeq (a,c,v)) = PresSeq (seal a, seal c, seal v)
 
 pressure_seq :: AR c (PresSeq ())
 pressure_seq = atomic $ do
@@ -195,7 +201,7 @@ pressure_seq = atomic $ do
         ctrl <- sequencer (pressure_setup valve)
                           (pressure_step  valve accel)
                           (pressure_ctrl  valve accel)
-        return $ seal3 (accel, ctrl, valve)
+        return $ PresSeq (accel, ctrl, valve)
 
 --------------------------------------------------------------
 -- A controller component reads a stream of slip values for a
@@ -241,7 +247,7 @@ controller = atomic $ do
                             return ()
                     _ ->    return ()
             rteIrvWrite memo slip
-        return $ seal Controller{..}
+        return $ Controller{..}
 
 type Accel = Double
 type Velo  = Double
@@ -278,8 +284,8 @@ instance Interface WheelCtrl where
 wheel_ctrl :: (Index, DataElement Queued Slip Provided ()) -> AR c (WheelCtrl ())
 wheel_ctrl (i,slips) = composition $ do
         ctrl <- controller
-        (accel_p, ctrl_p, valve_p) <- pressure_seq
-        (accel_r, ctrl_r, valve_r) <- relief_seq
+        PresSeq (accel_p, ctrl_p, valve_p) <- pressure_seq
+        Relief (accel_r, ctrl_r, valve_r) <- relief_seq
         connect  slips   (slipstream ctrl)
         connect  ctrl_p  (onoff_pressure ctrl)
         connect  ctrl_r  (onoff_relief ctrl)
@@ -325,7 +331,7 @@ main_loop = atomic $ do
             let v0 = maximum velos
             forM (velos `zip` slips_out) $ \(v,p) ->
                 rteSend p (slip v0 v)
-        return (seal MainLoop{..})
+        return MainLoop{..}
 
 --------------------------------------------------------------
 -- A full ABS system consists of a main loop component as well
@@ -385,7 +391,12 @@ data Wheel c = Wheel {
 instance Interface Wheel where
     seal wh = Wheel (seal (actuator wh)) (seal (v_sensor wh)) (seal (a_sensor wh))
 
-car :: AR c [Wheel ()]
+newtype Car c = Car [Wheel c]
+
+instance Interface Car where
+    seal (Car wheels) = Car (map seal wheels)
+
+car :: AR c (Car ())
 car = atomic $ do
         wheels <- forM [1..4] $ \i -> do
             actuator <- require (UnqueuedReceiverComSpec{initValue=Just False}, 
@@ -409,7 +420,7 @@ car = atomic $ do
                 return velo'
             rteIrvWrite irv (time', velos')
             return ()
-        return (map seal wheels)
+        return (Car wheels)
 
 init_v :: Velo
 init_v = 18
@@ -425,7 +436,7 @@ init_a = 0
 test :: AR c ()
 test = do
         (velos_in, wheelports) <- abs_system
-        wheels <- car
+        Car wheels <- car
         sequence_ (zipWith3 conn wheels velos_in wheelports)
 
 type VelocityIn c = DataElement Unqueued Velo Required c
