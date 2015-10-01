@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeOperators, DeriveGeneric, DefaultSignatures, DeriveAnyClass, FlexibleContexts #-}
-module Seal (module Seal, module GHC.Generics) where
+module Seal (module Seal, module GHC.Generics, module Generics.Deriving.Functor) where
 import GHC.Generics
+import Generics.Deriving.Functor
 
 {- -- From GHC.Generics:
 class Generic1 f where
@@ -13,17 +14,17 @@ class Generic1 f where
 
 -}
 
-class Interface m where
+class GFunctor m => Interface m where
   seal :: m c -> m ()
 
-  default seal :: (Generic1 m, GInterface (Rep1 m)) => m c -> m ()
-  seal = to1 . gseal . from1
+  seal = gmap (const ())
 
 -- TODO: an alternative could perhaps be to convince GHC that seal is
 -- the identity with an unusual type. This would require unsafeCoerce
 -- and would involve the risk that some type ends up in Interface even
 -- though it actively uses the parameter c (which should be just a
 -- phantom type).
+
 
 class GInterface f where
   gseal :: f c -> f ()
