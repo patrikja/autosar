@@ -28,6 +28,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RecordWildCards #-}
 module Main where
 
 import NewARSim
@@ -123,10 +125,11 @@ relief_ctrl valve accel False = do
         rteWrite valve False
         return Stopped
 
-type Relief = ( DataElement Unqueued Accel Required (),
-                ClientServerOperation Bool () Provided (),
-                DataElement Unqueued Valve Provided ())
-relief_seq :: AR c Relief
+type Relief c = ( DataElement Unqueued Accel Required c,
+                  ClientServerOperation Bool () Provided c,
+                  DataElement Unqueued Valve Provided c)
+
+relief_seq :: AR c (Relief ())
 relief_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
@@ -143,10 +146,6 @@ relief_seq = atomic $ do
 -- acceleration. It provides a boolean on/off control operation
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
-
-type PresSeq = ( DataElement Unqueued Accel Required (),
-                 ClientServerOperation Index () Provided (),
-                 DataElement Unqueued Valve Provided ())
 
 pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
 pressure_setup valve = do
@@ -185,7 +184,11 @@ pressure_ctrl valve accel 0 = do
         rteWrite valve False
         return Stopped
 
-pressure_seq :: AR c PresSeq
+type PresSeq c = ( DataElement Unqueued Accel Required c,
+                   ClientServerOperation Index () Provided c,
+                   DataElement Unqueued Valve Provided c)
+
+pressure_seq :: AR c (PresSeq ())
 pressure_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
@@ -205,11 +208,18 @@ pressure_seq = atomic $ do
 --------------------------------------------------------------
 
 type Slip = Double
-type WheelPort c = (DataElement Queued Slip       Required c,
-                    ClientServerOperation Int  () Required c,
-                    ClientServerOperation Bool () Required c)
+data Controller c = Controller {
+            slipstream     :: DataElement Queued Slip       Required c,
+            onoff_pressure :: ClientServerOperation Int  () Required c,
+            onoff_relief   :: ClientServerOperation Bool () Required c  }
 
-controller :: AR c (WheelPort ())
+instance Interface Controller where
+    seal x = Controller {
+                    slipstream = seal (slipstream x), 
+                    onoff_pressure = seal (onoff_pressure x),
+                    onoff_relief = seal (onoff_relief x)  }
+
+controller :: AR c (Controller ())
 controller = atomic $ do
         memo <- interRunnableVariable 1.0
         slipstream     <- require QueuedReceiverComSpec{queueLength=10}
@@ -231,24 +241,55 @@ controller = atomic $ do
                             return ()
                     _ ->    return ()
             rteIrvWrite memo slip
-        return $ seal3 (slipstream, onoff_pressure, onoff_relief)
+        return $ seal Controller{..}
 
 type Accel = Double
 type Velo  = Double
 type Valve = Bool
 
-wheel_ctrl :: (Index, DataElement Queued Slip Provided ()) -> AR c WheelCtrl
-wheel_ctrl (i,slipstream) = composition $ do
-        (slip, onoff_pressure, onoff_relief) <- controller
+data AccelPort r c = AccelPort {
+        accel_r  :: DataElement Unqueued Accel r c,
+        accel_p  :: DataElement Unqueued Accel r c  }
+
+instance Interface (AccelPort r) where
+        seal x = AccelPort{ accel_r = seal (accel_r x), accel_p = seal (accel_p x) }
+
+data ValvePort r c = ValvePort {
+        valve_r :: DataElement Unqueued Valve r c,
+        valve_p :: DataElement Unqueued Valve r c  }
+
+instance Interface (ValvePort r) where
+        seal x = ValvePort{ valve_r = seal (valve_r x), valve_p = seal (valve_p x) }
+
+instance Port ValvePort where
+        type PComSpec ValvePort = (UnqueuedSenderComSpec Valve, UnqueuedSenderComSpec Valve)
+        type RComSpec ValvePort = (UnqueuedReceiverComSpec Valve, UnqueuedReceiverComSpec Valve)
+        provide (a,b) = do valve_r <- provide a; valve_p <- provide b; return ValvePort{..}
+        require (a,b) = do valve_r <- require a; valve_p <- require b; return ValvePort{..}
+        connect a b = do connect (valve_r a) (valve_r b); connect (valve_p a) (valve_p b)
+
+data WheelCtrl c = WheelCtrl {
+        sens :: AccelPort Required c,
+        act  :: ValvePort Provided c  }
+
+instance Interface WheelCtrl where
+        seal x = WheelCtrl { sens = seal (sens x), act = seal (act x) }
+
+wheel_ctrl :: (Index, DataElement Queued Slip Provided ()) -> AR c (WheelCtrl ())
+wheel_ctrl (i,slips) = composition $ do
+        ctrl <- controller
         (accel_p, ctrl_p, valve_p) <- pressure_seq
         (accel_r, ctrl_r, valve_r) <- relief_seq
-        connect  slipstream  slip
-        connect  ctrl_p      onoff_pressure
-        connect  ctrl_r      onoff_relief
+        connect  slips   (slipstream ctrl)
+        connect  ctrl_p  (onoff_pressure ctrl)
+        connect  ctrl_r  (onoff_relief ctrl)
         when (i==2) $ do
             probeWrite "relief 2"    valve_r
             probeWrite "pressure 2"  valve_p
-        return (accel_r, accel_p, valve_r, valve_p)
+--        accel <- delegate [accel_p, accel_r]
+        let sens = AccelPort{ .. }
+            act  = ValvePort{ .. }
+        return WheelCtrl{..}
 
 
 
@@ -268,17 +309,23 @@ slip :: Double -> Double -> Double
 slip 0.0  _v = 1.0   -- no slip
 slip v0   v  = v/v0
 
-main_loop :: AR c ([DataElement Unqueued Velo Required ()],
-                   [DataElement Queued   Slip Provided ()])
+data MainLoop c = MainLoop {
+        velos_in  :: [DataElement Unqueued Velo Required c],
+        slips_out :: [DataElement Queued   Slip Provided c] }
+
+instance Interface MainLoop where
+    seal ml = MainLoop {velos_in = map seal (velos_in ml), slips_out = map seal (slips_out ml)}
+
+main_loop :: AR c (MainLoop ())
 main_loop = atomic $ do
-        velostreams <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
-        slipstreams <- replicateM 4 (provide QueuedSenderComSpec)
+        velos_in <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
+        slips_out <- replicateM 4 (provide QueuedSenderComSpec)
         runnable (MinInterval 0) [TimingEvent 0.01] $ do
-            velos <- mapM (liftM fromOk . rteRead) velostreams
+            velos <- mapM (liftM fromOk . rteRead) velos_in
             let v0 = maximum velos
-            forM (velos `zip` slipstreams) $ \(v,p) ->
+            forM (velos `zip` slips_out) $ \(v,p) ->
                 rteSend p (slip v0 v)
-        return (map seal velostreams, map seal slipstreams)
+        return (seal MainLoop{..})
 
 --------------------------------------------------------------
 -- A full ABS system consists of a main loop component as well
@@ -288,11 +335,13 @@ main_loop = atomic $ do
 -- external to the current system.
 --------------------------------------------------------------
 
-abs_system :: AR c ([VelocityIn], [WheelCtrl])
-abs_system = atomic $ do
-        (velos_in, slips_out) <- main_loop
-        wheelctrls <- forM ([1..] `zip` slips_out) wheel_ctrl
-        return (velos_in, wheelctrls)
+type AbsSystem c = ([VelocityIn c], [WheelCtrl c])
+
+abs_system :: AR c (AbsSystem ())
+abs_system = composition $ do
+        MainLoop velos_in slips_out <- main_loop
+        wheelports <- forM ([1..] `zip` slips_out) wheel_ctrl
+        return (velos_in, wheelports)
 
 
 -------------------------------------------------------------------
@@ -322,51 +371,45 @@ wheel_f i time pressure relief velo
 --        | relief && not pressure    = veloStep (-1)       velo
 --        | otherwise                 = veloStep (-3)       velo
 
+timeStep :: Time
+timeStep = 0.01
+
 veloStep :: Accel -> Velo -> (Accel, Velo)
-veloStep a v = (a, v + a*0.01)
+veloStep a v = (a, v + a*timeStep)
 
-type Wheel = Wheel' ()
+data Wheel c = Wheel {
+            actuator  :: ValvePort Required c,
+            v_sensor  :: DataElement Unqueued Velo  Provided c,
+            a_sensor  :: DataElement Unqueued Accel Provided c  }
 
-type Wheel' c = (DataElement Unqueued Valve Required c,
-                 DataElement Unqueued Valve Required c,
-                 DataElement Unqueued Velo  Provided c,
-                 DataElement Unqueued Accel Provided c)
+instance Interface Wheel where
+    seal wh = Wheel (seal (actuator wh)) (seal (v_sensor wh)) (seal (a_sensor wh))
 
-wheel_sim :: Time -> (Index, Wheel' c, Velo) -> RTE c Velo
-wheel_sim t (i, (r_act, p_act, v_sens, a_sens), velo) = do
-        Ok pressure <- rteRead p_act   -- TODO: perhaps add error handling
-        Ok relief   <- rteRead r_act   --   in case the return code is not "Ok v"
-        let (acc, velo') = wheel_f i t pressure relief velo
-        rteWrite v_sens velo'
-        rteWrite a_sens acc
-        return velo'
-
-simul :: [Wheel' c] -> InterRunnableVariable (Time, [Velo]) c -> RTE c ()
-simul wheels irv = do
-        Ok (time, velos) <- rteIrvRead irv
-        let t = time + 0.01
-        velos' <- forM (zip3 [1..] wheels velos) $
-                       wheel_sim t
-        rteIrvWrite irv (t, velos')
-        return ()
-
-mk_wheel :: Int -> AR c (Wheel' c)
-mk_wheel i = do
-        r_act  <- require UnqueuedReceiverComSpec{initValue=Just False}
-        p_act  <- require UnqueuedReceiverComSpec{initValue=Just True}
-        v_sens <- provide UnqueuedSenderComSpec{initSend=Just init_v}
-        a_sens <- provide UnqueuedSenderComSpec{initSend=Just init_a}
-        when (i<=2) $ do
-            probeWrite ("wheel "++show i++" speed")         v_sens
-            probeWrite ("wheel "++show i++" acceleration")  a_sens
-        return (r_act, p_act, v_sens, a_sens)
-
-car :: AR c [Wheel]
+car :: AR c [Wheel ()]
 car = atomic $ do
-        wheels <- forM [1..4] mk_wheel
+        wheels <- forM [1..4] $ \i -> do
+            actuator <- require (UnqueuedReceiverComSpec{initValue=Just False}, 
+                                 UnqueuedReceiverComSpec{initValue=Just True})
+            v_sensor <- provide UnqueuedSenderComSpec{initSend=Just init_v}
+            a_sensor <- provide UnqueuedSenderComSpec{initSend=Just init_a}
+            when (i<=2) $ do
+                probeWrite ("wheel "++show i++" speed")         v_sensor
+                probeWrite ("wheel "++show i++" acceleration")  a_sensor
+            return Wheel{..}
         irv <- interRunnableVariable (init_a, replicate 4 init_v)
-        runnable (MinInterval 0) [TimingEvent 0.01] (simul wheels irv)
-        return (map seal4 wheels)
+        runnable (MinInterval 0) [TimingEvent timeStep] $ do
+            Ok (time, velos) <- rteIrvRead irv
+            let time' = time + timeStep
+            velos' <- forM (zip3 [1..] wheels velos) $ \(i, Wheel{..}, velo) -> do
+                Ok pressure <- rteRead (valve_p actuator)   -- TODO: perhaps add error handling
+                Ok relief   <- rteRead (valve_r actuator)   --   in case the return code is not "Ok v"
+                let (acc, velo') = wheel_f i time' pressure relief velo
+                rteWrite v_sensor velo'
+                rteWrite a_sensor acc
+                return velo'
+            rteIrvWrite irv (time', velos')
+            return ()
+        return (map seal wheels)
 
 init_v :: Velo
 init_v = 18
@@ -381,24 +424,19 @@ init_a = 0
 
 test :: AR c ()
 test = do
-        (velos_in, wheelctrls) <- abs_system
+        (velos_in, wheelports) <- abs_system
         wheels <- car
-        sequence_ (zipWith3 conn wheels velos_in wheelctrls)
+        sequence_ (zipWith3 conn wheels velos_in wheelports)
 
-type VelocityIn =   DataElement Unqueued Velo  Required ()
+type VelocityIn c = DataElement Unqueued Velo Required c
 
-type WheelCtrl = (  DataElement Unqueued Accel Required (),
-                    DataElement Unqueued Accel Required (),
-                    DataElement Unqueued Valve Provided (),
-                    DataElement Unqueued Valve Provided ())
-
-conn :: Wheel -> VelocityIn -> WheelCtrl -> AR c ()
-conn (r_act, p_act, v_sens, a_sens) velo_in (accel_r, accel_p, valve_r, valve_p) = do
-        connect  v_sens   velo_in
-        connect  a_sens   accel_r
-        connect  a_sens   accel_p
-        connect  valve_r  r_act
-        connect  valve_p  p_act
+conn :: Wheel () -> VelocityIn () -> WheelCtrl () -> AR c ()
+conn wheel velo_in w_port = do
+        connect  (v_sensor wheel)   velo_in
+--        connect  (a_sensor wheel)   (accel $ sens w_port)
+        connect  (a_sensor wheel)   (accel_r $ sens w_port)
+        connect  (a_sensor wheel)   (accel_p $ sens w_port)
+        connect  (act w_port)       (actuator wheel)
 
 
 makePlot :: Trace -> IO Bool
