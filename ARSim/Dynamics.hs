@@ -11,8 +11,8 @@ modification, are permitted provided that the following conditions are met:
    * Redistributions in binary form must reproduce the above copyright
      notice, this list of conditions and the following disclaimer in the
      documentation and/or other materials provided with the distribution.
-   * Neither the name of the Chalmers University of Technology nor the names of its 
-     contributors may be used to endorse or promote products derived from this 
+   * Neither the name of the Chalmers University of Technology nor the names of its
+     contributors may be used to endorse or promote products derived from this
      software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -28,19 +28,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
 {-#LANGUAGE GADTs, DeriveDataTypeable, StandaloneDeriving #-}
-module Dynamics(Value, toValue, value, value', Data, Typeable) where
+module Dynamics(Value, toValue, value, value', Data.Data.Data, Data.Data.Typeable) where
 
-import Data.Dynamic
-import Data.Data
-import Data.Generics hiding (gshow,gshows)
+import qualified Data.Data
+import qualified Data.Generics
 import Data.Maybe
 
-toValue :: Data a => a -> Value
+toValue :: Data.Data.Data a => a -> Value
 toValue = Value
 
 data Value where
-  Value :: Data a => a -> Value
-  deriving (Typeable)
+  Value :: Data.Data.Data a => a -> Value
+  deriving (Data.Data.Typeable)
 
 -- deriving instance Data Value
 
@@ -62,10 +61,10 @@ cValue
 instance Show Value where
   show (Value a) = gshow a
 
-value :: Data a => Value -> Maybe a
-value (Value a) = cast a
+value :: Data.Data.Data a => Value -> Maybe a
+value (Value a) = Data.Data.cast a
 
-value' :: Data a => Value -> a
+value' :: Data.Data.Data a => Value -> a
 value' = fromJust . value
 
 
@@ -76,22 +75,22 @@ value' = fromJust . value
 --Test
 run = mapM_ print [ Value (5.0 :: Double)
                   , Value "Hello"
-                  , Value (Just (True,[False])) 
+                  , Value (Just (True,[False]))
                   , Value (Value (Value True))]
 
 -- | Generic show: an alternative to \"deriving Show\"
-gshow :: Data a => a -> String
+gshow :: Data.Data.Data a => a -> String
 gshow x = gshows False x ""
 
 -- | Generic shows
-gshows :: Data a => Bool -> a -> ShowS
+gshows :: Data.Data.Data a => Bool -> a -> ShowS
 
 -- This is a prefix-show using surrounding "(" and ")",
 -- where we recurse into subterms with gmapQ.
 -- Updated to have fewer parenthesis
-gshows p = ( \t -> let subs = gmapQ ((showChar ' ' .) . gshows True) t in
+gshows p = ( \t -> let subs = Data.Data.gmapQ ((showChar ' ' .) . gshows True) t in
               showParen (p && not (null subs)) $
-              (showString . showConstr . toConstr $ t) . (foldr (.) id subs)
-         ) `extQ` (shows :: String -> ShowS)
+              (showString . Data.Data.showConstr . Data.Data.toConstr $ t) . (foldr (.) id subs)
+         ) `Data.Generics.extQ` (shows :: String -> ShowS)
 
 
