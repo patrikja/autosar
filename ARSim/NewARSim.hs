@@ -232,8 +232,10 @@ runAR sys st                = run sys st
     run' (NewComponent subsys :>>= sys) st
                             = let (a,st') = runAR subsys st in run (sys a) st'
     run' (NewConnection conn :>>= sys) st
-                            = run (sys ()) (st { conns = conn : conns st })
+                            = run (sys ()) (st { conns = addTransitive conn (conns st) })
     run' (Return a) st      = (a,st)
+
+addTransitive (a,b) conns   = (a,b) : [ (a,c) | (x,c) <- conns, b==x ] ++ [ (c,b) | (c,x) <- conns, a==x ] ++ conns
 
 initialize                  :: (forall c . AR c a) -> (a,SimState)
 initialize sys              = (a, st { procs = map (apInit (conns st) (initvals st)) (procs st) })
@@ -245,25 +247,43 @@ class Port p where
     type PComSpec p :: *
     type RComSpec p :: *
     connect  :: p Provided () -> p Required () -> AR c ()
---    delegate :: [p r ()] -> AR c (p r ())
+    delegateP :: [p Provided ()] -> AR c (p Provided ())
+    delegateR :: [p Required ()] -> AR c (p Required ())
     provide  :: PComSpec p -> AR c (p Provided c)
     require  :: RComSpec p -> AR c (p Required c)
+
+class Delegate p r where
+    delegate :: Port p => [p r ()] -> AR c (p r ())
+
+instance Delegate p Provided where
+    delegate = delegateP
+
+instance Delegate p Required where
+    delegate = delegateR
 
 instance Data a => Port (DataElement Unqueued a) where
     type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
     type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
+    delegateP ps = do
+        a <- newAddress
+        mapM newConnection [ (p,a) | DE p <- ps ]
+        return (DE a)
+    delegateR ps = do
+        a <- newAddress
+        mapM newConnection [ (a,p) | DE p <- ps ]
+        return (DE a)
     provide UnqueuedSenderComSpec{initSend=Nothing} = do
-         a <- newAddress
-         return (DE a)
+        a <- newAddress
+        return (DE a)
     provide UnqueuedSenderComSpec{initSend=Just x} = do
-         a <- newAddress
-         newInit a (toValue x)
-         return (DE a)
+        a <- newAddress
+        newInit a (toValue x)
+        return (DE a)
     require UnqueuedReceiverComSpec{initValue=Nothing} = do
-         a <- newAddress
-         newProcess (DElem a False NO_DATA)
-         return (DE a)
+        a <- newAddress
+        newProcess (DElem a False NO_DATA)
+        return (DE a)
     require UnqueuedReceiverComSpec{initValue=Just x} = do
         a <- newAddress
         newProcess (DElem a False (Ok (toValue x)))
@@ -273,6 +293,14 @@ instance Port (DataElement Queued a) where
     type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
     type RComSpec (DataElement Queued a) = QueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
+    delegateP ps = do
+        a <- newAddress
+        mapM newConnection [ (p,a) | DE p <- ps ]
+        return (DE a)
+    delegateR ps = do
+        a <- newAddress
+        mapM newConnection [ (a,p) | DE p <- ps ]
+        return (DE a)
     provide s = do a <- newAddress; return (DE a)
     require s = do a <- newAddress; newProcess (QElem a (queueLength s) []); return (DE a)
 
@@ -280,6 +308,14 @@ instance Port (ClientServerOperation a b) where
     type PComSpec (ClientServerOperation a b) = ServerComSpec a b
     type RComSpec (ClientServerOperation a b) = ClientComSpec
     connect (OP a) (OP b) = newConnection (a,b)
+    delegateP ps = do
+        a <- newAddress
+        mapM newConnection [ (p,a) | OP p <- ps ]
+        return (OP a)
+    delegateR ps = do
+        a <- newAddress
+        mapM newConnection [ (a,p) | OP p <- ps ]
+        return (OP a)
     provide s = do a <- newAddress; return (OP a)
     require s = do a <- newAddress;
                    newProcess (Op a []); -- result buffer allocation
@@ -309,9 +345,9 @@ instance Interface (DataElement q a r) where
 instance Interface (ClientServerOperation a b r) where
         seal (OP a)         = OP a
 
-seal2 (a,b)          = (seal a, seal b)
-seal3 (a,b,c)        = (seal a, seal b, seal c)
-seal4 (a,b,c,d)      = (seal a, seal b, seal c, seal d)
+
+connectEach prov req = forM (prov `zip` req) $ \(p,r) -> connect p r
+
 
 -- Derived AR operations ------------------------------------------------------
 

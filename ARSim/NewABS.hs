@@ -253,48 +253,57 @@ type Accel = Double
 type Velo  = Double
 type Valve = Bool
 
-data AccelPort r c = AccelPort {
-        accel_r  :: DataElement Unqueued Accel r c,
-        accel_p  :: DataElement Unqueued Accel r c  }
-
-instance Interface (AccelPort r) where
-        seal x = AccelPort{ accel_r = seal (accel_r x), accel_p = seal (accel_p x) }
-
 data ValvePort r c = ValvePort {
-        valve_r :: DataElement Unqueued Valve r c,
-        valve_p :: DataElement Unqueued Valve r c  }
+        relief   :: DataElement Unqueued Valve r c,
+        pressure :: DataElement Unqueued Valve r c  }
 
 instance Interface (ValvePort r) where
-        seal x = ValvePort{ valve_r = seal (valve_r x), valve_p = seal (valve_p x) }
+        seal x = ValvePort{ relief = seal (relief x), pressure = seal (pressure x) }
 
 instance Port ValvePort where
         type PComSpec ValvePort = (UnqueuedSenderComSpec Valve, UnqueuedSenderComSpec Valve)
         type RComSpec ValvePort = (UnqueuedReceiverComSpec Valve, UnqueuedReceiverComSpec Valve)
-        provide (a,b) = do valve_r <- provide a; valve_p <- provide b; return ValvePort{..}
-        require (a,b) = do valve_r <- require a; valve_p <- require b; return ValvePort{..}
-        connect a b = do connect (valve_r a) (valve_r b); connect (valve_p a) (valve_p b)
+        provide (a,b) = do 
+            relief <- provide a
+            pressure <- provide b
+            return ValvePort{..}
+        require (a,b) = do
+            relief <- require a
+            pressure <- require b
+            return ValvePort{..}
+        connect a b = do
+            connect (relief a) (relief b)
+            connect (pressure a) (pressure b)
+        delegateP ps = do
+            relief <- delegateP [ v | ValvePort{ relief = v } <- ps ]
+            pressure <- delegateP [ v | ValvePort{ pressure = v } <- ps ]
+            return ValvePort{..}
+        delegateR ps = do
+            relief <- delegateR [ v | ValvePort{ relief = v } <- ps ]
+            pressure <- delegateR [ v | ValvePort{ pressure = v } <- ps ]
+            return ValvePort{..}
 
 data WheelCtrl c = WheelCtrl {
-        sens :: AccelPort Required c,
-        act  :: ValvePort Provided c  }
+        accel :: DataElement Unqueued Accel Required c,
+        slip  :: DataElement Queued Slip Required c,
+        valve :: ValvePort Provided c  }
 
 instance Interface WheelCtrl where
-        seal x = WheelCtrl { sens = seal (sens x), act = seal (act x) }
+        seal x = WheelCtrl { accel = seal (accel x), valve = seal (valve x), slip = seal (slip x) }
 
-wheel_ctrl :: (Index, DataElement Queued Slip Provided ()) -> AR c (WheelCtrl ())
-wheel_ctrl (i,slips) = composition $ do
+wheel_ctrl :: Index -> AR c (WheelCtrl ())
+wheel_ctrl i = composition $ do
         ctrl <- controller
-        PresSeq (accel_p, ctrl_p, valve_p) <- pressure_seq
-        Relief (accel_r, ctrl_r, valve_r) <- relief_seq
-        connect  slips   (slipstream ctrl)
+        PresSeq (accel_p, ctrl_p, pressure) <- pressure_seq
+        Relief (accel_r, ctrl_r, relief) <- relief_seq
         connect  ctrl_p  (onoff_pressure ctrl)
         connect  ctrl_r  (onoff_relief ctrl)
         when (i==2) $ do
-            probeWrite "relief 2"    valve_r
-            probeWrite "pressure 2"  valve_p
---        accel <- delegate [accel_p, accel_r]
-        let sens = AccelPort{ .. }
-            act  = ValvePort{ .. }
+            probeWrite "relief 2"    relief
+            probeWrite "pressure 2"  pressure
+        accel <- delegate [accel_p, accel_r]
+        let valve  = ValvePort{ .. }
+            slip = slipstream ctrl
         return WheelCtrl{..}
 
 
@@ -311,9 +320,9 @@ wheel_ctrl (i,slips) = composition $ do
 
 fromOk (Ok v) = v
 
-slip :: Double -> Double -> Double
-slip 0.0  _v = 1.0   -- no slip
-slip v0   v  = v/v0
+slipRatio :: Double -> Double -> Double
+slipRatio 0.0  _v = 1.0   -- no slip
+slipRatio v0   v  = v/v0
 
 data MainLoop c = MainLoop {
         velos_in  :: [DataElement Unqueued Velo Required c],
@@ -330,7 +339,7 @@ main_loop = atomic $ do
             velos <- mapM (liftM fromOk . rteRead) velos_in
             let v0 = maximum velos
             forM (velos `zip` slips_out) $ \(v,p) ->
-                rteSend p (slip v0 v)
+                rteSend p (slipRatio v0 v)
         return MainLoop{..}
 
 --------------------------------------------------------------
@@ -341,13 +350,18 @@ main_loop = atomic $ do
 -- external to the current system.
 --------------------------------------------------------------
 
-type AbsSystem c = ([VelocityIn c], [WheelCtrl c])
+data WheelPorts c = WheelPorts {
+        velo_in   :: DataElement Unqueued Velo Required c,
+        accel_in  :: DataElement Unqueued Accel Required c,
+        valve_out :: ValvePort Provided c  }
 
-abs_system :: AR c (AbsSystem ())
+abs_system :: AR c [WheelPorts ()]
 abs_system = composition $ do
         MainLoop velos_in slips_out <- main_loop
-        wheelports <- forM ([1..] `zip` slips_out) wheel_ctrl
-        return (velos_in, wheelports)
+        w_ctrls <- forM [1..4] wheel_ctrl
+        connectEach slips_out (map slip w_ctrls)
+        let w_ports = zipWith3 WheelPorts velos_in (map accel w_ctrls) (map valve w_ctrls)
+        return (w_ports)
 
 
 -------------------------------------------------------------------
@@ -412,8 +426,8 @@ car = atomic $ do
             Ok (time, velos) <- rteIrvRead irv
             let time' = time + timeStep
             velos' <- forM (zip3 [1..] wheels velos) $ \(i, Wheel{..}, velo) -> do
-                Ok pressure <- rteRead (valve_p actuator)   -- TODO: perhaps add error handling
-                Ok relief   <- rteRead (valve_r actuator)   --   in case the return code is not "Ok v"
+                Ok pressure <- rteRead (pressure actuator) -- TODO: perhaps add error handling
+                Ok relief   <- rteRead (relief actuator)   --   in case the return code is not "Ok v"
                 let (acc, velo') = wheel_f i time' pressure relief velo
                 rteWrite v_sensor velo'
                 rteWrite a_sensor acc
@@ -433,21 +447,13 @@ init_a = 0
 -- cyclically connected into a closed system.
 --------------------------------------------------------------------------
 
-test :: AR c ()
+test :: AR c [()]
 test = do
-        (velos_in, wheelports) <- abs_system
+        w_ports <- abs_system
         Car wheels <- car
-        sequence_ (zipWith3 conn wheels velos_in wheelports)
-
-type VelocityIn c = DataElement Unqueued Velo Required c
-
-conn :: Wheel () -> VelocityIn () -> WheelCtrl () -> AR c ()
-conn wheel velo_in w_port = do
-        connect  (v_sensor wheel)   velo_in
---        connect  (a_sensor wheel)   (accel $ sens w_port)
-        connect  (a_sensor wheel)   (accel_r $ sens w_port)
-        connect  (a_sensor wheel)   (accel_p $ sens w_port)
-        connect  (act w_port)       (actuator wheel)
+        connectEach (map v_sensor wheels)   (map velo_in w_ports)
+        connectEach (map a_sensor wheels)   (map accel_in w_ports)
+        connectEach (map valve_out w_ports) (map actuator wheels)
 
 
 makePlot :: Trace -> IO Bool
