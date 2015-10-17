@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                GenericSeal
-version:             0.2.0.0
+version:             0.2.5.0
 -- synopsis:
 -- description:
 license:             BSD3
@@ -16,7 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Seal, TestSeal, TestGenPut, GenPut
+  exposed-modules:     Seal, TestSeal, TestGenPut, GenPut, Port, TestPort
   -- other-modules:
   other-extensions:    TypeOperators, DeriveGeneric, DefaultSignatures, DeriveAnyClass, FlexibleContexts, TypeSynonymInstances, FlexibleInstances, StandaloneDeriving
   build-depends:       base >=4.8 && <4.9, generic-deriving

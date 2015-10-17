@@ -25,6 +25,7 @@ putBool :: Bool -> [Bin]
 putBool True = [I]
 putBool False = [O]
 
+-- Just to have something: support for "3-bit Ints"
 putInt :: Int -> [Bin]
 putInt (-4) = [I,O,O]
 putInt (-3) = [I,O,I]

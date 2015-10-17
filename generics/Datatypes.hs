@@ -17,11 +17,11 @@ data Comp a         -- Monad of component combinators
 type Sealed = ()
 type Component i    = Comp (i Sealed)
 
-data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initial :: a }
-data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { init :: a }
+data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initSend :: Maybe a }
+data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { initValue :: Maybe a }
 data QueuedSenderComSpec a      = QueuedSenderComSpec
-data QueuedReceiverComSpec a    = QueuedReceiverComSpec { length :: Int }
-data ServerComSpec a b          = ServerComSpec { len :: Int }
+data QueuedReceiverComSpec a    = QueuedReceiverComSpec { queueLength :: Int }
+data ServerComSpec a b          = ServerComSpec { bufferLength :: Int }
 data ClientComSpec              = ClientComSpec
 
 data MyPort r c = MyPort { e1 :: DataElement Unqueued Int r c,
