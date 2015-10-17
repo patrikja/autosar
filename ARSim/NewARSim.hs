@@ -346,7 +346,8 @@ instance Interface (ClientServerOperation a b r) where
         seal (OP a)         = OP a
 
 
-connectEach prov req = forM (prov `zip` req) $ \(p,r) -> connect p r
+connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AR c ()
+connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
 
 
 -- Derived AR operations ------------------------------------------------------
@@ -447,21 +448,21 @@ data Label                  = ENTER Address
 labelText :: Label -> String
 labelText l = case l of
           ENTER a            -> "ENTER:"++show a
-          EXIT  a            -> "EXIT:"++show a
-          IRVR  a ret        -> "IRVR:"++show a
-          IRVW  a val        -> "IRVW:"++show a++":"++show val
-          RCV   a ret        -> "RCV:"++show a
-          SND   a val ret    -> "SND:"++show a++":"++show val
-          RD    a ret        -> "RD:"++show a
-          WR    a val        -> "WR:"++show a++":"++show val
-          UP    a ret        -> "UP:"++show a
-          INV   a            -> "INV:"++show a
-          CALL  a val ret    -> "CALL:"++show a++":"++show val
-          RES   a ret        -> "RES:"++show a
-          RET   a val        -> "RET:"++show a++":"++show val
-          NEW   a            -> "NEW:"++show a
-          TERM  a            -> "TERM:"++show a
-          TICK  a            -> "TICK:"++show a
+          EXIT  a            -> "EXIT:" ++show a
+          IRVR  a     ret    -> "IRVR:" ++show a
+          IRVW  a val        -> "IRVW:" ++show a++":"++show val
+          RCV   a     ret    -> "RCV:"  ++show a
+          SND   a val ret    -> "SND:"  ++show a++":"++show val
+          RD    a     ret    -> "RD:"   ++show a
+          WR    a val        -> "WR:"   ++show a++":"++show val
+          UP    a     ret    -> "UP:"   ++show a
+          INV   a            -> "INV:"  ++show a
+          CALL  a val ret    -> "CALL:" ++show a++":"++show val
+          RES   a     ret    -> "RES:"  ++show a
+          RET   a val        -> "RET:"  ++show a++":"++show val
+          NEW   a            -> "NEW:"  ++show a
+          TERM  a            -> "TERM:" ++show a
+          TICK  a            -> "TICK:" ++show a
           DELTA t            -> "DELTA:"++show t
           VETO               -> "VETO"
 
@@ -469,16 +470,16 @@ labelAddress :: Label -> Maybe Address
 labelAddress l = case l of
           ENTER a            -> Just a
           EXIT  a            -> Just a
-          IRVR  a ret        -> Just a
+          IRVR  a     ret    -> Just a
           IRVW  a val        -> Just a
-          RCV   a ret        -> Just a
+          RCV   a     ret    -> Just a
           SND   a val ret    -> Just a
-          RD    a ret        -> Just a
+          RD    a     ret    -> Just a
           WR    a val        -> Just a
-          UP    a ret        -> Just a
+          UP    a     ret    -> Just a
           INV   a            -> Just a
           CALL  a val ret    -> Just a
-          RES   a ret        -> Just a
+          RES   a     ret    -> Just a
           RET   a val        -> Just a
           NEW   a            -> Just a
           TERM  a            -> Just a
@@ -680,6 +681,7 @@ simulation sched sys        = do trs <- simulate sched conn (procs state1)
   where (res,state1)        = initialize sys
         a `conn` b          = (a,b) `elem` conns state1
 
+simulate                    :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m [Transition]
 simulate sched conn procs
   | null alts               = return []
   | otherwise               = do trans@Trans{transProcs = procs1} <- maximumProgress sched alts
@@ -754,6 +756,7 @@ data Measure a = Measure { measureID    :: ProbeID
                          , measureValue :: a
                          } deriving (Functor, Show)
 
+measureTimeValue :: Measure t -> (Time, t)
 measureTimeValue m = (measureTime m, measureValue m)
 
 -- Gets all measured values with a particular probe-ID and type
@@ -787,7 +790,7 @@ internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValu
 -- Code below this point is a bit outdated.
 
 
-type Measurement a           = [((Int,Time),a)] -- The int is the number of transitions
+type Measurement a           = [((Int,Time),a)] -- The Int is the number of transitions
 
 -- Gets ALL probes of a certain type, categorized by probe-ID.
 -- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces.

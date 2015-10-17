@@ -221,7 +221,7 @@ data Controller c = Controller {
 
 instance Interface Controller where
     seal x = Controller {
-                    slipstream = seal (slipstream x), 
+                    slipstream = seal (slipstream x),
                     onoff_pressure = seal (onoff_pressure x),
                     onoff_relief = seal (onoff_relief x)  }
 
@@ -263,7 +263,7 @@ instance Interface (ValvePort r) where
 instance Port ValvePort where
         type PComSpec ValvePort = (UnqueuedSenderComSpec Valve, UnqueuedSenderComSpec Valve)
         type RComSpec ValvePort = (UnqueuedReceiverComSpec Valve, UnqueuedReceiverComSpec Valve)
-        provide (a,b) = do 
+        provide (a,b) = do
             relief <- provide a
             pressure <- provide b
             return ValvePort{..}
@@ -413,7 +413,7 @@ instance Interface Car where
 car :: AR c (Car ())
 car = atomic $ do
         wheels <- forM [1..4] $ \i -> do
-            actuator <- require (UnqueuedReceiverComSpec{initValue=Just False}, 
+            actuator <- require (UnqueuedReceiverComSpec{initValue=Just False},
                                  UnqueuedReceiverComSpec{initValue=Just True})
             v_sensor <- provide UnqueuedSenderComSpec{initSend=Just init_v}
             a_sensor <- provide UnqueuedSenderComSpec{initSend=Just init_a}
@@ -447,7 +447,7 @@ init_a = 0
 -- cyclically connected into a closed system.
 --------------------------------------------------------------------------
 
-test :: AR c [()]
+test :: AR c ()
 test = do
         w_ports <- abs_system
         Car wheels <- car
