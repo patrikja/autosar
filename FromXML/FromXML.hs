@@ -30,7 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE OverloadedStrings #-}
 module FromXML where
 
-import qualified Data.Map
+import qualified Data.MultiMap as MMap
 import qualified Data.Char
 import qualified Data.List as List
 import Data.Maybe
@@ -53,8 +53,10 @@ convertXML f = do
     doc <- XML.readFile XML.def f
     let dir = System.FilePath.dropExtension f
     System.Directory.createDirectoryIfMissing True dir
+    putStr ("Creating dir " ++ dir)
     System.Posix.Directory.changeWorkingDirectory dir
     optPackages [] $ XML.documentRoot doc
+    System.Posix.Directory.changeWorkingDirectory ".."
 
 type Path = [Text] -- reverse list of path elements
 optPackages :: Path -> XML.Element -> IO ()
@@ -81,8 +83,10 @@ optElements path node =
         Nothing ->
             empty
         Just node' ->
+            txt "{-# LANGUAGE RecordWildCards #-}" $$
             txt "module" <+> txt (pathStr path) <+> txt "where" $$
-            vmap (convertElement path) (allChildren node')
+            vmap (convertElement path) (children "*" node') $$
+            txt "\n"
 
 convertElement :: Path -> XML.Element -> Doc
 convertElement path node =
@@ -95,26 +99,47 @@ type Tag = Text
 type Name = Text
 convert :: Tag -> Name -> XML.Element -> Doc
 convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
-    nl <> txt "data" <+> txt (mkUp name) <+> equals <+> lbrace $$
-    nest 4 (vmap convertSignature ports) $$
-    nest 2 rbrace $$
-    nl <> txt (mkLo name) <+> equals <+> txt "do" $$
-    vmap convertPort ports $$
+    convertInterfaceType name ports $$
+    nl <> txt (mkLo name) <+> equals <+> txt "do" $$ 
+    nest 4 (
     vmap convertComp components $$
-    vmap convertConn connectors
+    vmap convertAssemblyConn assemblies $$
+    convertDelegationConns delegates $$
+    txt "return" <+> txt (mkUp name) <+> txt "{..}" )
   where
-    ports = grandChildren "PORTS" node
-    components = grandChildren "COMPONENTS" node
-    connectors = grandChildren "CONNECTORS" node
+    ports      = grandChildren "*" "PORTS" node
+    components = grandChildren "*" "COMPONENTS" node
+    assemblies = grandChildren "ASSEMBLY-SW-CONNECTOR" "CONNECTORS" node
+    delegates  = grandChildren "DELEGATION-SW-CONNECTOR" "CONNECTORS" node
+convert "APPLICATION-SW-COMPONENT-TYPE" name node =
+    convertInterfaceType name ports $$
+    nl <> txt (mkLo name) <+> equals <+> txt "do" $$ 
+    nest 4 (
+    vmap convertPort ports $$
+    txt "return" <+> txt (mkUp name) <+> txt "{..}" )
+  where
+    ports      = grandChildren "*" "PORTS" node
+convert "SENDER-RECEIVER-INTERFACE" name node =
+    case grandChildren "*" "DATA-ELEMENTS" node of
+        [delem] ->
+            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement Unqueued" <+> 
+            txt (mkQual mkUp "TYPE-TREF" delem) <+> txt "r c"
 convert _ name node =
     empty
+
+convertInterfaceType name ports =
+    nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> lbrace $$
+    nest 4 (vmap convertSignature ports) $$
+    nest 2 rbrace
+
+convertInterfaceTerm name ports = empty
 
 convertSignature :: XML.Element -> Doc
 convertSignature node
     | isTag "R-PORT-PROTOTYPE" node =
-        txt name <+> txt "::" <+> txt "RequiredDataElem" <+> txt rTRef
+        txt name <+> txt "::" <+> txt rTRef <+> txt "Required" <+> txt "c"
     | isTag "P-PORT-PROTOTYPE" node =
-        txt name <+> txt "::" <+> txt "ProvidedDataElem" <+> txt pTRef
+        txt name <+> txt "::" <+> txt pTRef <+> txt "Provided" <+> txt "c"
     | otherwise =
         empty
     where
@@ -125,9 +150,11 @@ convertSignature node
 convertPort :: XML.Element -> Doc
 convertPort node
     | isTag "R-PORT-PROTOTYPE" node =
-        nest 4 $ txt name <+> txt "<-" <+> txt "requiredDataElement"
+        txt name <+> txt "<-" <+> txt "require" <+> 
+        (parens $ commasep convertComSpec $ children "*" rComSpec)
     | isTag "P-PORT-PROTOTYPE" node =
-        nest 4 $ txt name <+> txt "<-" <+> txt "providedDataElement"
+        txt name <+> txt "<-" <+> txt "provide" <+>
+        (parens $ commasep convertComSpec $ children "*" pComSpec)
     | otherwise =
         empty
     where
@@ -135,10 +162,30 @@ convertPort node
         rComSpec = child "REQUIRED-COM-SPECS" node
         pComSpec = child "PROVIDED-COM-SPECS" node
 
+convertComSpec :: XML.Element -> Doc
+convertComSpec node
+    | isTag "NONQUEUED-RECEIVER-COM-SPEC" node =
+        txt "UnqueuedSenderComSpec{ initSend =" <+> initVal <+> txt "}"
+    | isTag "NONQUEUED-SENDER-COM-SPEC" node =
+        txt "UnqueuedReceiverComSpec{ initValue =" <+> initVal <+> txt "}"
+    | otherwise =
+        error ("ComSpec node: " ++ show node)
+    where
+        initVal = case optChild "INIT-VALUE" node of 
+                    Nothing -> txt "Nothing"
+                    Just node' -> txt "Just" <+> convertExp (onlyChild node')
+
+convertExp :: XML.Element -> Doc
+convertExp node
+    | isTag "CONSTANT-REFERENCE" node =
+        txt $ mkQual mkLo "CONSTANT-REF" node
+    | otherwise =
+        error ("Exp node: " ++ show node)
+
 convertComp :: XML.Element -> Doc
 convertComp node
     | isTag "SW-COMPONENT-PROTOTYPE" node =
-        nest 4 $ txt name <+> txt "<-" <+> txt ref
+        txt name <+> txt "<-" <+> txt ref
     | otherwise =
         empty
     where
@@ -151,41 +198,39 @@ mkQual f tag node = Text.intercalate "." names'
     names = tail $ Text.splitOn "/" $ leafVal tag node
     names' = map mkUp (init names) ++ [f (last names)]
 
-convertConn :: XML.Element -> Doc
-convertConn node
-    | isTag "ASSEMBLY-SW-CONNECTOR" node =
-        convertAssemblyConn node
-    | isTag "DELEGATION-SW-CONNECTOR" node =
-        convertDelegationConn node
-    | otherwise =
-        empty
-
 convertAssemblyConn :: XML.Element -> Doc
 convertAssemblyConn node =
-    nest 4 $ txt "connect" <+>
-    txt (lastPathVal "CONTEXT-COMPONENT-REF" pnode) <> txt "." <>
-    txt (lastPathVal "TARGET-P-PORT-REF" pnode) <+>
-    txt (lastPathVal "CONTEXT-COMPONENT-REF" rnode) <> txt "." <>
-    txt (lastPathVal "TARGET-R-PORT-REF" rnode)
+    txt "connect" <+>
+    parens (convertSel "TARGET-P-PORT-REF" "CONTEXT-COMPONENT-REF" pnode) <+>
+    parens (convertSel "TARGET-R-PORT-REF" "CONTEXT-COMPONENT-REF" rnode)
   where
     pnode = child "PROVIDER-IREF" node
     rnode = child "REQUESTER-IREF" node
 
-convertDelegationConn :: XML.Element -> Doc
-convertDelegationConn node =
+convertSel tag1 tag2 node =
+    txt (mkQual mkLo tag1 node) <+> txt (lastPathVal tag2 node)
+
+convertDelegationConns :: [XML.Element] -> Doc
+convertDelegationConns nodes = vmap convertDelegation (MMap.assocs connmap)
+    where connmap = MMap.fromList (map extractDelegationConn nodes)
+
+convertDelegation :: (Text,[Doc]) -> Doc
+convertDelegation (outer, [single]) = 
+    txt "let" <+> txt outer <+> equals <+> single
+convertDelegation (outer, multiple) =
+    txt outer <+> txt "<- delegate" <+> brackets (commasep id multiple)
+
+extractDelegationConn :: XML.Element -> (Text,Doc)
+extractDelegationConn node =
     case (optChild "R-PORT-IN-COMPOSITION-INSTANCE-REF" inner,
           optChild "P-PORT-IN-COMPOSITION-INSTANCE-REF" inner) of
         (Just rnode, _) ->
-            nest 4 $ txt "connect" <+> txt outp <+>
-            txt (lastPathVal "CONTEXT-COMPONENT-REF" rnode) <> txt "." <>
-            txt (lastPathVal "TARGET-R-PORT-REF" rnode)
+            (outer, convertSel "TARGET-R-PORT-REF" "CONTEXT-COMPONENT-REF" rnode)
         (_, Just pnode) ->
-            nest 4 $ txt "connect" <+>
-            txt (lastPathVal "CONTEXT-COMPONENT-REF" pnode) <> txt "." <>
-            txt (lastPathVal "TARGET-P-PORT-REF" pnode) <+> txt outp
-    where
-        inner = child "INNER-PORT-IREF" node
-        outp = lastPathVal "OUTER-PORT-REF" node
+            (outer, convertSel "TARGET-P-PORT-REF" "CONTEXT-COMPONENT-REF" pnode)
+  where
+    inner = child "INNER-PORT-IREF" node
+    outer = lastPathVal "OUTER-PORT-REF" node
 
 mkLo :: Text -> Text
 mkLo s = if Data.Char.isLower (Text.head s) then s else Text.cons 'x' s
@@ -214,7 +259,8 @@ isTag tag node =
 child tag node =
     case optChild tag node of
         Just node' -> node'
-        _ -> error ("#Bad tag: " ++ Text.unpack tag)
+        _ -> error ("#Bad tag: " ++ Text.unpack tag ++ " (has: " ++ 
+                    render (commasep (txt . tagOf) (children "*" node)) ++ ")")
 
 hasChild tag node =
     case optChild tag node of
@@ -224,20 +270,24 @@ hasChild tag node =
 optChild tag =
     listToMaybe . children tag
 
-children tag =
-    filter (isTag tag) . allChildren
+onlyChild node = head (children "*" node)
 
-grandChildren tag =
-    List.concatMap allChildren . children tag
-
-allChildren node =
+children "*" node =
     [ e | XML.NodeElement e <- XML.elementNodes node ]
+children tag node =
+    filter (isTag tag) $ children "*" node
+
+grandChildren tag1 tag2 =
+    List.concatMap (children tag1) . children tag2
+
 
 txt = text . Text.unpack
 
 table f = vmap (txt . f)
 
 vmap f = vcat . map f
+
+commasep f = hcat . punctuate comma . map f
 
 nl = text "\n"
 
