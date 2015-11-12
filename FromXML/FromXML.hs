@@ -86,13 +86,13 @@ optElements path node =
             txt "{-# LANGUAGE RecordWildCards #-}" $$
             txt "module" <+> txt (pathStr path) <+> txt "where" $$
             vmap (convertElement path) (children "*" node') $$
-            txt "\n"
+            nl  
 
 convertElement :: Path -> XML.Element -> Doc
 convertElement path node =
     convert tag name node
   where
-    name = leafVal "SHORT-NAME" node
+    name = shortName node
     tag = tagOf node
 
 type Tag = Text
@@ -100,7 +100,7 @@ type Name = Text
 convert :: Tag -> Name -> XML.Element -> Doc
 convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
     convertInterfaceType name ports $$
-    nl <> txt (mkLo name) <+> equals <+> txt "do" $$ 
+    nl <> txt (mkLo name) <+> equals <+> txt "composition $ do" $$ 
     nest 4 (
     vmap convertComp components $$
     vmap convertAssemblyConn assemblies $$
@@ -113,19 +113,56 @@ convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
     delegates  = grandChildren "DELEGATION-SW-CONNECTOR" "CONNECTORS" node
 convert "APPLICATION-SW-COMPONENT-TYPE" name node =
     convertInterfaceType name ports $$
-    nl <> txt (mkLo name) <+> equals <+> txt "do" $$ 
+    nl <> txt (mkLo name) <+> equals <+> txt "atomic $ do" $$ 
     nest 4 (
     vmap convertPort ports $$
+    vmap (convertInternalBehavior name) behaviors $$
     txt "return" <+> txt (mkUp name) <+> txt "{..}" )
+--    nl <> vmap (convertStubs (equals <+> txt "undefined") name) behaviors
   where
     ports      = grandChildren "*" "PORTS" node
+    behaviors  = grandChildren "SWC-INTERNAL-BEHAVIOR" "INTERNAL-BEHAVIORS" node
 convert "SENDER-RECEIVER-INTERFACE" name node =
-    case grandChildren "*" "DATA-ELEMENTS" node of
+    case grandChildren "VARIABLE-DATA-PROTOTYPE" "DATA-ELEMENTS" node of
         [delem] ->
-            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement Unqueued" <+> 
-            txt (mkQual mkUp "TYPE-TREF" delem) <+> txt "r c"
+            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement" <+> 
+            convertQueued delem <+> convertTRef delem <+> txt "r c" $$
+            txt (mkLo (shortName delem)) <+> equals <+> txt "id"
+convert "CLIENT-SERVER-INTERFACE" name node =
+    case grandChildren "OPERATION-PROTOTYPE" "OPERATIONS" node of
+        [op] ->
+            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = ClientServerOperation" <+>
+            convertArgs (grandChildren "ARGUMENT-PROTOTYPE" "ARGUMENTS" op) <+> txt "r c" $$
+            txt (mkLo (shortName op)) <+> equals <+> txt "id"
 convert _ name node =
     empty
+
+convertQueued node
+    | isQueued  = txt "Queued"
+    | otherwise = txt "Unqueued"
+  where 
+    isQueued =
+        case optChild "SW-DATA-DEF-PROPS" node of
+            Just props ->
+                case optChild "SW-DATA-DEF-PROPS-VARIANTS" props of
+                    Just props ->
+                        case optChild "SW-DATA-DEF-PROPS-CONDITIONAL" props of
+                            Just props ->
+                                case optChild "SW-IMPL-POLICY" props of
+                                    Just policy ->
+                                        nodeVal policy == "queued"
+                                    _ -> False
+                            _ -> False
+                    _ -> False
+            _ -> False
+
+convertArgs args = parens (commasep convertTRef ins) <+> parens (commasep convertTRef outs)
+  where
+    ins  = filter ((`elem`["IN", "INOUT"]) . leafVal "DIRECTION") args
+    outs = filter ((`elem`["OUT","INOUT"]) . leafVal "DIRECTION") args
+
+convertTRef node =
+    txt (mkQual mkUp "TYPE-TREF" node)
 
 convertInterfaceType name ports =
     nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> lbrace $$
@@ -165,15 +202,22 @@ convertPort node
 convertComSpec :: XML.Element -> Doc
 convertComSpec node
     | isTag "NONQUEUED-RECEIVER-COM-SPEC" node =
-        txt "UnqueuedSenderComSpec{ initSend =" <+> initVal <+> txt "}"
+        txt "UnqueuedReceivererComSpec{ initSend =" <+> initVal <+> txt "}"
     | isTag "NONQUEUED-SENDER-COM-SPEC" node =
-        txt "UnqueuedReceiverComSpec{ initValue =" <+> initVal <+> txt "}"
-    | otherwise =
-        error ("ComSpec node: " ++ show node)
+        txt "UnqueuedSenderComSpec{ initValue =" <+> initVal <+> txt "}"
+    | isTag "QUEUED-RECEIVER-COM-SPEC" node =
+        txt "QueuedReceiverComSpec{ queueLength =" <+> queueLength <+> txt "}"
+    | isTag "QUEUED-SENDER-COM-SPEC" node =
+        txt "QueuedSenderComSpec"
+    | isTag "SERVER-COM-SPEC" node =
+        txt "ServerComSpec{ bufferLength =" <+> queueLength <+> txt "}"
+    | isTag "CLIENT-COM-SPEC" node =
+        txt "ClientComSpec"
     where
         initVal = case optChild "INIT-VALUE" node of 
                     Nothing -> txt "Nothing"
                     Just node' -> txt "Just" <+> convertExp (onlyChild node')
+        queueLength = txt (leafVal "QUEUE-LENGTH" node)
 
 convertExp :: XML.Element -> Doc
 convertExp node
@@ -232,6 +276,63 @@ extractDelegationConn node =
     inner = child "INNER-PORT-IREF" node
     outer = lastPathVal "OUTER-PORT-REF" node
 
+convertInternalBehavior comp node =
+    vmap (convertRunnable comp events vars excl) runnables
+  where
+    runnables = grandChildren "RUNNABLE-ENTITY" "RUNNABLES" node
+    events = grandChildren "*" "EVENTS" node
+    vars = grandChildren "VARIABLE-DATA-PROTOTYPE" "EXPLICIT-INTER-RUNNABLE-VARIABLES" node
+    excl = grandChildren "EXCLUSIVE-AREA" "EXCLUSIVE-AREAS" node
+
+convertRunnable comp events vars excl node =
+    runnable <+> arg <+> brackets (commasep convertEvent myEvents) <+> txt "$ do" $$ nest 4 (txt "undefined")
+  where
+    name        = shortName node
+    concurrent  = leafVal "CAN-BE-INVOKED-CONCURRENTLY" node
+    minStart    = leafVal "MINIMUM-START-INTERVAL" node
+    arg         = if concurrent == "true" then txt "Concurrent" else txt "MinInterval" <+> txt minStart
+    myEvents    = filter (handledEvent name) events
+    opInvoked   = filter (isTag "OPERATION-INVOKED") myEvents
+    runnable    = if null opInvoked then txt "runnable" else txt "serverRunnable"
+
+handledEvent rname event =
+    lastPathVal "START-ON-EVENT-REF" event == rname &&
+    tagOf event `elem` ["OPERATION-INVOKED","DATA-RECEIVED-EVENT","TIMING-EVENT","INIT-EVENT"]
+
+convertEvent node
+    | isTag "OPERATION-INVOKED" node =
+        txt "OperationInvokedEvent" <+> parens operRef
+    | isTag "DATA-RECEIVED-EVENT" node =
+        txt "DataReceivedEvent" <+> parens elemRef
+    | isTag "TIMING-EVENT" node =
+        txt "TimingEvent" <+> txt (leafVal "PERIOD" node)
+    | isTag "INIT-EVENT" node =
+        txt "InitEvent"
+    | otherwise =
+        empty
+  where
+    operRef = convertSel "OPERATION-PROTOTYPE-REF" "P-PORT-PROTOTYPE-REF" (child "OPERATION-IREF" node)
+    elemRef = convertSel "DATA-ELEMENT-PROTOTYPE-REF" "R-PORT-PROTOTYPE-REF" (child "DATA-IREF" node)
+
+{-
+convertStubs comp rhs behavior =
+    vmap (convertStub comp) (grandChildren "RUNNABLE-ENTITY" "RUNNABLES" behavior)
+
+convertStub comp rhs runnable =
+    txt (shortName runnable) <+> punctuate space args <+> rhs
+  where
+    "EXCLUSIVE-AREA-REF" "CAN-ENTER-EXCLUSIVE-AREA"
+    "READ-LOCAL-VARIABLES"
+    "WRITTEN-LOCAL-VARIABLES"
+    "DATA-RECEIVE-POINT-BY-VALUE"
+    "DATA-RECEIVE-POINT-BY-ARGUMENT"
+    "SERVER-CALL-POINT"
+    "DATA-SEND-POINT"
+    "ASYNCHRONOUS-SERVER-CALL-RESULT-POINT"
+-}
+
+
+
 mkLo :: Text -> Text
 mkLo s = if Data.Char.isLower (Text.head s) then s else Text.cons 'x' s
 
@@ -245,8 +346,10 @@ lastPathVal tag = mkLo . last . splitPath . leafVal tag
 
 pathStr path = Text.intercalate "." (reverse path)
 
-leafVal tag node = str
-  where [XML.NodeContent str] = XML.elementNodes $ child tag node
+leafVal tag node = nodeVal $ child tag node
+
+nodeVal node = str
+  where [XML.NodeContent str] = XML.elementNodes node
 
 shortName = leafVal "SHORT-NAME"
 
