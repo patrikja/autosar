@@ -46,10 +46,10 @@ import Text.PrettyPrint
 
 main :: IO ()
 main = do [f] <- System.Environment.getArgs
-          convertXML f
+          convert f
 
-convertXML :: FilePath -> IO ()
-convertXML f = do
+convert :: FilePath -> IO ()
+convert f = do
     doc <- XML.readFile XML.def f
     let dir = System.FilePath.dropExtension f
     System.Directory.createDirectoryIfMissing True dir
@@ -70,35 +70,56 @@ optPackages path node =
 
 convertPackage :: Path -> XML.Element -> IO ()
 convertPackage path node = do
-    out $ nl <> txt (pathStr path') <> nl
-    write path name $ optElements path' node
+    out $ nl <> txt (pathStr path')
+    write path name $ optPackageElements path' node
     optPackages path' node
   where
     path' = name : path
     name = mkUp (shortName node)
 
-optElements :: Path -> XML.Element -> Doc
-optElements path node =
+optPackageElements :: Path -> XML.Element -> Doc
+optPackageElements path node =
     case optChild "ELEMENTS" node of
         Nothing ->
             empty
         Just node' ->
             txt "{-# LANGUAGE RecordWildCards #-}" $$
-            txt "module" <+> txt (pathStr path) <+> txt "where" $$
+            txt "module" <+> txt modname <+> txt "where" <> nl $$
+            convertImports modname node' $$
             vmap (convertElement path) (children "*" node') $$
-            nl  
+            nl
+  where modname = pathStr path
+
+convertImports modname node =
+    txt "import NewARSim" $$
+    vmap ((txt "import qualified" <+>) . txt) (List.nub (getRefs node) List.\\ [modname])
+  where
+    getRefs node
+        | tagOf node `elem` refTags1 = 
+            [Text.intercalate "." (map mkUp (init names))]
+        | tagOf node `elem` refTags2 = 
+            [Text.intercalate "." (map mkUp (init (init names)))]
+        | otherwise =
+            List.concatMap getRefs (children "*" node)
+      where names = tail $ Text.splitOn "/" (nodeVal node)
+
+refTags1 = [ "TYPE-TREF", "REQUIRED-INTERFACE-TREF", "PROVIDED-INTERFACE-TREF", "CONSTANT-REF" ]
+
+refTags2 = [ "TARGET-P-PORT-REF", "TARGET-R-PORT-REF",
+             "OPERATION-PROTOTYPE-REF", "DATA-ELEMENT-PROTOTYPE-REF" ]
 
 convertElement :: Path -> XML.Element -> Doc
 convertElement path node =
-    convert tag name node
+    convertElem tag name node
   where
     name = shortName node
     tag = tagOf node
 
 type Tag = Text
 type Name = Text
-convert :: Tag -> Name -> XML.Element -> Doc
-convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
+
+convertElem :: Tag -> Name -> XML.Element -> Doc
+convertElem "COMPOSITION-SW-COMPONENT-TYPE" name node =
     convertInterfaceType name ports $$
     nl <> txt (mkLo name) <+> equals <+> txt "composition $ do" $$ 
     nest 4 (
@@ -107,11 +128,11 @@ convert "COMPOSITION-SW-COMPONENT-TYPE" name node =
     convertDelegationConns delegates $$
     txt "return" <+> txt (mkUp name) <+> txt "{..}" )
   where
-    ports      = grandChildren "*" "PORTS" node
-    components = grandChildren "*" "COMPONENTS" node
-    assemblies = grandChildren "ASSEMBLY-SW-CONNECTOR" "CONNECTORS" node
-    delegates  = grandChildren "DELEGATION-SW-CONNECTOR" "CONNECTORS" node
-convert "APPLICATION-SW-COMPONENT-TYPE" name node =
+    ports      = grandChildren "PORTS" "*" node
+    components = grandChildren "COMPONENTS" "*" node
+    assemblies = grandChildren "CONNECTORS" "ASSEMBLY-SW-CONNECTOR" node
+    delegates  = grandChildren "CONNECTORS" "DELEGATION-SW-CONNECTOR" node
+convertElem "APPLICATION-SW-COMPONENT-TYPE" name node =
     convertInterfaceType name ports $$
     nl <> txt (mkLo name) <+> equals <+> txt "atomic $ do" $$ 
     nest 4 (
@@ -120,22 +141,39 @@ convert "APPLICATION-SW-COMPONENT-TYPE" name node =
     txt "return" <+> txt (mkUp name) <+> txt "{..}" )
 --    nl <> vmap (convertStubs (equals <+> txt "undefined") name) behaviors
   where
-    ports      = grandChildren "*" "PORTS" node
-    behaviors  = grandChildren "SWC-INTERNAL-BEHAVIOR" "INTERNAL-BEHAVIORS" node
-convert "SENDER-RECEIVER-INTERFACE" name node =
-    case grandChildren "VARIABLE-DATA-PROTOTYPE" "DATA-ELEMENTS" node of
+    ports      = grandChildren "PORTS" "*" node
+    behaviors  = grandChildren "INTERNAL-BEHAVIORS" "SWC-INTERNAL-BEHAVIOR" node
+convertElem "APPLICATION-PRIMITIVE-DATA-TYPE" name node =
+    txt "type" <+> txt (mkUp name) <+> equals <+> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
+convertElem "APPLICATION-RECORD-DATA-TYPE" name node =
+    txt "data" <+> txt (mkUp name) <+> equals <+> txt (mkUp name)  <+> txt "{" $$
+    nest 4 (vcat . punctuate comma $ map (convertRecordElem name) elems) <+> txt "}"
+  where
+    elems = grandChildren "ELEMENTS" "APPLICATION-RECORD-ELEMENT" node
+convertElem "SENDER-RECEIVER-INTERFACE" name node =
+    case grandChildren "DATA-ELEMENTS" "VARIABLE-DATA-PROTOTYPE" node of
         [delem] ->
             nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement" <+> 
             convertQueued delem <+> convertTRef delem <+> txt "r c" $$
-            txt (mkLo (shortName delem)) <+> equals <+> txt "id"
-convert "CLIENT-SERVER-INTERFACE" name node =
-    case grandChildren "OPERATION-PROTOTYPE" "OPERATIONS" node of
+            convertFieldname name (shortName delem) <+> equals <+> txt "id"
+        delems ->
+            -- data ...
+            error "not yet: multiple delems"
+convertElem "CLIENT-SERVER-INTERFACE" name node =
+    case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of
         [op] ->
             nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = ClientServerOperation" <+>
-            convertArgs (grandChildren "ARGUMENT-PROTOTYPE" "ARGUMENTS" op) <+> txt "r c" $$
+            convertArgs (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c" $$
             txt (mkLo (shortName op)) <+> equals <+> txt "id"
-convert _ name node =
+convertElem _ name node =
     empty
+
+convertPrimitiveTypeCategory "VALUE"    = txt "Int"
+convertPrimitiveTypeCategory "BOOLEAN"  = txt "Bool"
+convertPrimitiveTypeCategory "STRING"   = txt "String"
+
+convertRecordElem tname node =
+    convertFieldname tname (shortName node) <+> txt "::" <+> convertTRef node
 
 convertQueued node
     | isQueued  = txt "Queued"
@@ -162,27 +200,30 @@ convertArgs args = parens (commasep convertTRef ins) <+> parens (commasep conver
     outs = filter ((`elem`["OUT","INOUT"]) . leafVal "DIRECTION") args
 
 convertTRef node =
-    txt (mkQual mkUp "TYPE-TREF" node)
+    convertQualName mkUp "TYPE-TREF" node
 
 convertInterfaceType name ports =
     nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> lbrace $$
-    nest 4 (vmap convertSignature ports) $$
+    nest 4 (vmap (convertSignature name) ports) $$
     nest 2 rbrace
 
 convertInterfaceTerm name ports = empty
 
-convertSignature :: XML.Element -> Doc
-convertSignature node
+convertSignature :: Name -> XML.Element -> Doc
+convertSignature tname node
     | isTag "R-PORT-PROTOTYPE" node =
-        txt name <+> txt "::" <+> txt rTRef <+> txt "Required" <+> txt "c"
+        fname <+> txt "::" <+> rTRef <+> txt "Required" <+> txt "c"
     | isTag "P-PORT-PROTOTYPE" node =
-        txt name <+> txt "::" <+> txt pTRef <+> txt "Provided" <+> txt "c"
+        fname <+> txt "::" <+> pTRef <+> txt "Provided" <+> txt "c"
     | otherwise =
         empty
     where
-        name = mkLo (shortName node)
-        rTRef = mkQual mkUp "REQUIRED-INTERFACE-TREF" node
-        pTRef = mkQual mkUp "PROVIDED-INTERFACE-TREF" node
+        fname = convertFieldname tname (shortName node)
+        rTRef = convertQualName mkUp "REQUIRED-INTERFACE-TREF" node
+        pTRef = convertQualName mkUp "PROVIDED-INTERFACE-TREF" node
+
+convertFieldname tname name =
+    txt $ mkLo $ Text.append tname $ Text.append "_" name
 
 convertPort :: XML.Element -> Doc
 convertPort node
@@ -222,25 +263,35 @@ convertComSpec node
 convertExp :: XML.Element -> Doc
 convertExp node
     | isTag "CONSTANT-REFERENCE" node =
-        txt $ mkQual mkLo "CONSTANT-REF" node
+        convertQualName mkLo "CONSTANT-REF" node
     | otherwise =
         error ("Exp node: " ++ show node)
 
 convertComp :: XML.Element -> Doc
 convertComp node
     | isTag "SW-COMPONENT-PROTOTYPE" node =
-        txt name <+> txt "<-" <+> txt ref
+        txt name <+> txt "<-" <+> convertQualName mkLo "TYPE-TREF" node
     | otherwise =
         empty
     where
         name = mkLo (shortName node)
-        ref = mkQual mkLo "TYPE-TREF" node
 
-mkQual :: (Text -> Text) -> Text -> XML.Element -> Text
-mkQual f tag node = Text.intercalate "." names'
+convertQualName :: (Text -> Text) -> Text -> XML.Element -> Doc
+convertQualName f tag node = txt $ Text.intercalate "." items
   where
     names = tail $ Text.splitOn "/" $ leafVal tag node
-    names' = map mkUp (init names) ++ [f (last names)]
+    items = map mkUp modules ++ [f element]
+    modules = init names
+    element = last names
+
+convertQualName2 :: (Text -> Text) -> Text -> XML.Element -> Doc
+convertQualName2 f tag node = txt $ Text.intercalate "." items
+  where
+    names = tail $ Text.splitOn "/" $ leafVal tag node
+    items = map mkUp modules ++ [f element]
+    path = init names
+    modules = init path
+    element = Text.append (last path) (Text.append "_" (last names))
 
 convertAssemblyConn :: XML.Element -> Doc
 convertAssemblyConn node =
@@ -252,7 +303,7 @@ convertAssemblyConn node =
     rnode = child "REQUESTER-IREF" node
 
 convertSel tag1 tag2 node =
-    txt (mkQual mkLo tag1 node) <+> txt (lastPathVal tag2 node)
+    convertQualName2 mkLo tag1 node <+> txt (lastPathVal tag2 node)
 
 convertDelegationConns :: [XML.Element] -> Doc
 convertDelegationConns nodes = vmap convertDelegation (MMap.assocs connmap)
@@ -279,10 +330,10 @@ extractDelegationConn node =
 convertInternalBehavior comp node =
     vmap (convertRunnable comp events vars excl) runnables
   where
-    runnables = grandChildren "RUNNABLE-ENTITY" "RUNNABLES" node
-    events = grandChildren "*" "EVENTS" node
-    vars = grandChildren "VARIABLE-DATA-PROTOTYPE" "EXPLICIT-INTER-RUNNABLE-VARIABLES" node
-    excl = grandChildren "EXCLUSIVE-AREA" "EXCLUSIVE-AREAS" node
+    runnables = grandChildren "RUNNABLES" "RUNNABLE-ENTITY" node
+    events = grandChildren "EVENTS" "*" node
+    vars = grandChildren "EXPLICIT-INTER-RUNNABLE-VARIABLES" "VARIABLE-DATA-PROTOTYPE" node
+    excl = grandChildren "EXCLUSIVE-AREAS" "EXCLUSIVE-AREA" node
 
 convertRunnable comp events vars excl node =
     runnable <+> arg <+> brackets (commasep convertEvent myEvents) <+> txt "$ do" $$ nest 4 (txt "undefined")
@@ -314,14 +365,16 @@ convertEvent node
     operRef = convertSel "OPERATION-PROTOTYPE-REF" "P-PORT-PROTOTYPE-REF" (child "OPERATION-IREF" node)
     elemRef = convertSel "DATA-ELEMENT-PROTOTYPE-REF" "R-PORT-PROTOTYPE-REF" (child "DATA-IREF" node)
 
+
 {-
 convertStubs comp rhs behavior =
-    vmap (convertStub comp) (grandChildren "RUNNABLE-ENTITY" "RUNNABLES" behavior)
+    vmap (convertStub comp) (grandChildren "RUNNABLES" "RUNNABLE-ENTITY" behavior)
 
 convertStub comp rhs runnable =
     txt (shortName runnable) <+> punctuate space args <+> rhs
   where
-    "EXCLUSIVE-AREA-REF" "CAN-ENTER-EXCLUSIVE-AREA"
+    "EXCLUSIVE-AREA-REF"
+    "CAN-ENTER-EXCLUSIVE-AREA"
     "READ-LOCAL-VARIABLES"
     "WRITTEN-LOCAL-VARIABLES"
     "DATA-RECEIVE-POINT-BY-VALUE"
@@ -348,8 +401,9 @@ pathStr path = Text.intercalate "." (reverse path)
 
 leafVal tag node = nodeVal $ child tag node
 
-nodeVal node = str
-  where [XML.NodeContent str] = XML.elementNodes node
+nodeVal node = case XML.elementNodes node of
+                  [XML.NodeContent str] -> str
+                  _ -> error ("#### Bad nodeVal: " ++ show node)
 
 shortName = leafVal "SHORT-NAME"
 
@@ -381,7 +435,7 @@ children tag node =
     filter (isTag tag) $ children "*" node
 
 grandChildren tag1 tag2 =
-    List.concatMap (children tag1) . children tag2
+    List.concatMap (children tag2) . children tag1
 
 
 txt = text . Text.unpack
@@ -407,3 +461,4 @@ write revPath name doc
         path = map Text.unpack (reverse revPath)
         dirPath = System.FilePath.joinPath path
         filePath = dirPath System.FilePath.</> Text.unpack name System.FilePath.<.> "hs"
+
