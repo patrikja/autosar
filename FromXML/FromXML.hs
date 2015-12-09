@@ -56,6 +56,7 @@ convert f = do
     putStr ("Creating dir " ++ dir)
     System.Posix.Directory.changeWorkingDirectory dir
     optPackages [] $ XML.documentRoot doc
+    putStr "\n"
     System.Posix.Directory.changeWorkingDirectory ".."
 
 type Path = [Text] -- reverse list of path elements
