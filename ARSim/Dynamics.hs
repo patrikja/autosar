@@ -27,15 +27,31 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
-{-#LANGUAGE GADTs, DeriveDataTypeable, StandaloneDeriving #-}
-module Dynamics(Value, toValue, value, value', Data.Data.Data, Data.Data.Typeable) where
+{-#LANGUAGE GADTs, DeriveDataTypeable, StandaloneDeriving, UndecidableInstances #-}
+module Dynamics(Value, toValue, fromValue, fromValue', liftValue, Expr) where
 
 import qualified Data.Data
 import qualified Data.Generics
 import Data.Maybe
 
-toValue :: Data.Data.Data a => a -> Value
-toValue = Value
+import qualified Feldspar
+import Feldspar (Type, Syntax, Internal)
+
+class    (Syntax a, Data.Data.Data (Internal a)) => Expr a
+instance (Syntax a, Data.Data.Data (Internal a)) => Expr a
+
+toValue :: Expr a => a -> Value
+toValue = Value . Feldspar.eval
+
+fromValue' :: Expr a => Value -> a
+fromValue' = Feldspar.value . fromJust . Data.Data.cast
+
+fromValue :: Expr a => Value -> Maybe a
+fromValue = fmap Feldspar.value . Data.Data.cast
+
+liftValue :: (Type a, Data.Data.Data a) => a -> Value
+liftValue = Value
+
 
 data Value where
   Value :: Data.Data.Data a => a -> Value

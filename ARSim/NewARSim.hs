@@ -37,7 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module NewARSim (module NewARSim, Typeable, Data, mkStdGen, StdGen) where
+module NewARSim (module NewARSim, mkStdGen, StdGen) where
 
 import Control.Monad.Operational
 import Control.Monad.Identity hiding (void)
@@ -48,6 +48,8 @@ import Data.Maybe
 import Dynamics
 import System.Random
 
+import qualified Feldspar
+
 
 -- The RTE monad -------------------------------------------------------------
 
@@ -56,33 +58,33 @@ type RTE c a                = Program (RTEop c) a
 data RTEop c a where
     Enter                   :: ExclusiveArea c -> RTEop c (StdRet ())
     Exit                    :: ExclusiveArea c -> RTEop c (StdRet ())
-    IrvWrite                :: Data a => InterRunnableVariable a c -> a -> RTEop c (StdRet ())
-    IrvRead                 :: Data a => InterRunnableVariable a c -> RTEop c (StdRet a)
-    Send                    :: Data a => DataElement Queued a Provided c -> a -> RTEop c (StdRet ())
-    Receive                 :: Data a => DataElement Queued a Required c -> RTEop c (StdRet a)
-    Write                   :: Data a => DataElement Unqueued a Provided c -> a -> RTEop c (StdRet ())
-    Read                    :: Data a => DataElement Unqueued a Required c -> RTEop c (StdRet a)
-    IsUpdated               :: DataElement Unqueued a Required c -> RTEop c (StdRet Bool)
+    IrvWrite                :: Expr a => InterRunnableVariable a c -> a -> RTEop c (StdRet ())
+    IrvRead                 :: Expr a => InterRunnableVariable a c -> RTEop c (StdRet a)
+    Send                    :: Expr a => DataElement Queued a Provided c -> a -> RTEop c (StdRet ())
+    Receive                 :: Expr a => DataElement Queued a Required c -> RTEop c (StdRet a)
+    Write                   :: Expr a => DataElement Unqueued a Provided c -> a -> RTEop c (StdRet ())
+    Read                    :: Expr a => DataElement Unqueued a Required c -> RTEop c (StdRet a)
+    IsUpdated               :: DataElement Unqueued a Required c -> RTEop c (StdRet (Feldspar.Data Bool))
     Invalidate              :: DataElement Unqueued a Provided c -> RTEop c (StdRet ())
-    Call                    :: Data a => ClientServerOperation a b Required c -> a -> RTEop c (StdRet ())
-    Result                  :: Data b => ClientServerOperation a b Required c -> RTEop c (StdRet b)
-    Printlog                :: Data a => ProbeID -> a -> RTEop c ()
+    Call                    :: Expr a => ClientServerOperation a b Required c -> a -> RTEop c (StdRet ())
+    Result                  :: Expr b => ClientServerOperation a b Required c -> RTEop c (StdRet b)
+    Printlog                :: Expr a => ProbeID -> a -> RTEop c ()
 
 rteEnter                   :: ExclusiveArea c -> RTE c (StdRet ())
 rteExit                    :: ExclusiveArea c -> RTE c (StdRet ())
-rteIrvWrite                :: Data a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
-rteIrvRead                 :: Data a => InterRunnableVariable a c -> RTE c (StdRet a)
-rteSend                    :: Data a => DataElement Queued a Provided c -> a -> RTE c (StdRet ())
-rteReceive                 :: Data a => DataElement Queued a Required c -> RTE c (StdRet a)
-rteWrite                   :: Data a => DataElement Unqueued a Provided c -> a -> RTE c (StdRet ())
-rteRead                    :: Data a => DataElement Unqueued a Required c -> RTE c (StdRet a)
-rteIsUpdated               :: DataElement Unqueued a Required c -> RTE c (StdRet Bool)
+rteIrvWrite                :: Expr a => InterRunnableVariable a c -> a -> RTE c (StdRet ())
+rteIrvRead                 :: Expr a => InterRunnableVariable a c -> RTE c (StdRet a)
+rteSend                    :: Expr a => DataElement Queued a Provided c -> a -> RTE c (StdRet ())
+rteReceive                 :: Expr a => DataElement Queued a Required c -> RTE c (StdRet a)
+rteWrite                   :: Expr a => DataElement Unqueued a Provided c -> a -> RTE c (StdRet ())
+rteRead                    :: Expr a => DataElement Unqueued a Required c -> RTE c (StdRet a)
+rteIsUpdated               :: DataElement Unqueued a Required c -> RTE c (StdRet (Feldspar.Data Bool))
 rteInvalidate              :: DataElement Unqueued a Provided c -> RTE c (StdRet ())
-rteCall                    :: (Data a, Data b) => ClientServerOperation a b Required c -> a -> RTE c (StdRet b)
-rteCallAsync               :: Data a => ClientServerOperation a b Required c -> a -> RTE c (StdRet ())
-rteResult                  :: Data b => ClientServerOperation a b Required c -> RTE c (StdRet b)
+rteCall                    :: (Expr a, Expr b) => ClientServerOperation a b Required c -> a -> RTE c (StdRet b)
+rteCallAsync               :: Expr a => ClientServerOperation a b Required c -> a -> RTE c (StdRet ())
+rteResult                  :: Expr b => ClientServerOperation a b Required c -> RTE c (StdRet b)
 
-printlog                    :: Data a => ProbeID -> a -> RTE c ()
+printlog                    :: Expr a => ProbeID -> a -> RTE c ()
 
 rteEnter       ex      = singleton $ Enter      ex
 rteExit        ex      = singleton $ Exit       ex
@@ -261,7 +263,7 @@ instance Delegate p Provided where
 instance Delegate p Required where
     delegate = delegateR
 
-instance Data a => Port (DataElement Unqueued a) where
+instance Expr a => Port (DataElement Unqueued a) where
     type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
     type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
@@ -352,10 +354,10 @@ connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
 
 -- Derived AR operations ------------------------------------------------------
 
-interRunnableVariable       :: Data a => a -> AR c (InterRunnableVariable a c)
+interRunnableVariable       :: Expr a => a -> AR c (InterRunnableVariable a c)
 exclusiveArea               :: AR c (ExclusiveArea c)
 runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
-serverRunnable              :: (Data a, Data b) =>
+serverRunnable              :: (Expr a, Expr b) =>
                                 Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
 composition                 :: AR c a -> AR c a
 atomic                      :: Interface i => (forall c. AR c (i c)) -> AR c' (i ())
@@ -386,12 +388,12 @@ serverRunnable inv ops code = do a <- newAddress
         act                 = Serving [] []
         code'               = fmap toValue . code . fromDyn
 
-fromDyn                     :: Data a => Value -> a
-fromDyn                     = value'
+fromDyn                     :: Expr a => Value -> a
+fromDyn                     = fromValue'
 
 
 -- TODO: add Reading/Writing classes instead of Addressed?
-probeRead                   :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
+probeRead                   :: (Expr a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
 probeRead s x              = singleton $ NewProbe s g
   where
     g (RD b (Ok v))    | a==b    = Just v
@@ -402,7 +404,7 @@ probeRead s x              = singleton $ NewProbe s g
     a = address x
 
 
-probeWrite                  :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
+probeWrite                  :: (Expr a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
 probeWrite s x            = singleton $ NewProbe s g
   where
     g (IRVW b v)     | a==b     = Just v
@@ -413,10 +415,10 @@ probeWrite s x            = singleton $ NewProbe s g
     g _                     = Nothing
     a = address x
 {-
-probeWrite'                 :: (Data b, Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
+probeWrite'                 :: (Expr b, Expr a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
 probeWrite' s x f    = singleton $ NewProbe s g
   where
-    g (WR b v) | a==b       = Just (toValue $ f $ value' v) -- TODO: Do we know this is always of type a?
+    g (WR b v) | a==b       = Just (toValue $ f $ fromValue' v) -- TODO: Do we know this is always of type a?
 
 
     g _                     = Nothing
@@ -558,7 +560,7 @@ ok              = Ok (toValue ())
 void :: StdRet ()
 void            = Ok ()
 
-fromStdDyn :: Data a => StdRet Value -> StdRet a
+fromStdDyn :: Expr a => StdRet Value -> StdRet a
 fromStdDyn (Ok v)   = Ok (fromDyn v)
 fromStdDyn NO_DATA  = NO_DATA
 fromStdDyn LIMIT    = LIMIT
@@ -588,7 +590,7 @@ mayHear conn (SND a v res)   (Run _ _ _ _ s)   | trig conn a s  = SND a v res
 mayHear conn (RD a _)        (DElem b u v)     | a==b           = RD a v
 mayHear conn (WR a v)        (DElem b _ _)     | a `conn` b     = WR a v
 mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
-mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toValue u))
+mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (liftValue u))
 mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
 mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
        | trig (rev conn) a s  &&  a `notElem` cs                = CALL a v void
@@ -760,7 +762,7 @@ measureTimeValue :: Measure t -> (Time, t)
 measureTimeValue m = (measureTime m, measureValue m)
 
 -- Gets all measured values with a particular probe-ID and type
-probe :: Data a => ProbeID -> Trace -> [Measure a]
+probe :: Expr a => ProbeID -> Trace -> [Measure a]
 probe pid t = internal $ probes' [pid] t
 
 -- Get string representations of all measured values with a particular probe-ID
@@ -768,7 +770,7 @@ probeString :: ProbeID -> Trace -> [Measure String]
 probeString pid t = map (fmap show) $ probes' [pid] t
 
 -- Get all measured values for a set of probe-IDs and a type
-probes :: Data a => [ProbeID] -> Trace -> [Measure a]
+probes :: Expr a => [ProbeID] -> Trace -> [Measure a]
 probes pids t = internal $ probes' pids t
 
 probes' :: [ProbeID] -> Trace -> [Measure Value]
@@ -782,8 +784,8 @@ probes' pids t = concat $ go 0 0.0 (traceTrans t)
     ps                      = [ p | p <- traceProbes t, probeID p `elem` pids ]
     filtered lab            = [ (runProbe p lab, probeID p) | p <- ps ]
 
-internal :: Data a => [Measure Value] -> [Measure a]
-internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValue m))]
+internal :: Expr a => [Measure Value] -> [Measure a]
+internal ms = [m{measureValue = a}|m <- ms, Just a <- return (fromValue (measureValue m))]
 
 
 
@@ -794,11 +796,11 @@ type Measurement a           = [((Int,Time),a)] -- The Int is the number of tran
 
 -- Gets ALL probes of a certain type, categorized by probe-ID.
 -- This function is strict in the trace, so limitTicks and/or limitTime should be used for infinite traces.
-probeAll :: Data a => Trace -> [(ProbeID,Measurement a)]
+probeAll :: Expr a => Trace -> [(ProbeID,Measurement a)]
 probeAll t = [(s,m') |(s,m) <- probeAll' t, let m' = internal' m, not (null m') ]
 
-internal' :: Data a => Measurement Value -> Measurement a
-internal' ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
+internal' :: Expr a => Measurement Value -> Measurement a
+internal' ms = [(t,a)|(t,v) <- ms, Just a <- return (fromValue v)]
 
 probeAll'               :: Trace -> [(ProbeID,Measurement Value)]
 probeAll' (state,trs)   = Map.toList $ Map.fromListWith (flip (++)) $ collected
