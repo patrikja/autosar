@@ -1,3 +1,13 @@
+2015-12-16:
+
+  TODO: make the semantics "work" for us (possibility to test if certain transitions are possible)
+
+  TODO: pick a theorem prover (which is easy to install for PaJa and JoNo)
+  TODO: make a very much simplified example just to get the syntax and structure right
+  TODO: grow the simplified example until it covers the full semantics
+  TODO: run some tests on (simple) "traces" from the simulator
+
+
 2015-09-07: Telcon PaJa + JoNo
 
   Identify a suitable datatype (in Haskell)
