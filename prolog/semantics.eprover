@@ -1,0 +1,160 @@
+% -*- mode: Prolog -*-
+% Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
+%                          Patrik Jansson and Josef Svenningsson
+% All rights reserved.
+%
+% Redistribution and use in source and binary forms, with or without
+% modification, are permitted provided that the following conditions are met:
+%
+%    * Redistributions of source code must retain the above copyright notice,
+%      this list of conditions and the following disclaimer.
+%    * Redistributions in binary form must reproduce the above copyright
+%      notice, this list of conditions and the following disclaimer in the
+%      documentation and/or other materials provided with the distribution.
+%    * Neither the name of the Chalmers University of Technology nor the names of its
+%      contributors may be used to endorse or promote products derived from this
+%      software without specific prior written permission.
+%
+% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+% DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+% FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+% DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+% SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+% CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+% OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+% OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+%%%%% Combining reductions
+
+step( par(P1,Q1), say(A,L),  par(P2,Q2) ) :- step( P1, say(A,L),  P2 ), step( Q1, hear(A,L), Q2 ).
+step( par(P1,Q1), say(A,L),  par(P2,Q2) ) :- step( P1, hear(A,L), P2 ), step( Q1, say(A,L),  Q2 ).
+step( par(P1,Q1), hear(A,L), par(P2,Q2) ) :- step( P1, hear(A,L), P2 ), step( Q1, hear(A,L), Q2 ).
+step( par(P1,Q1), delta(T),  par(P2,Q2) ) :- step( P1, delta(T),  P2 ), step( Q1, delta(T),  Q2 ).
+
+%%%%% Exclusive areas
+
+% Strict stack-based locking enforced: reduction gets stuck otherwise
+%   (TODO: comment about flagging error on attempted "bad" rte_Exit?)
+
+step( rinst(r(R,I), C, Xs, rte_Enter(X,K)),              say(x(X,I),enter),             rinst(r(R,I), C, cons(X,Xs), ap(K,ok)) ).
+step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),exit),              rinst(r(R,I), C, Xs, ap(K,ok))         ).
+
+step( excl(x(X,I), free),                                hear(x(X,I),enter),            excl(x(X,I), taken)                    ).
+step( excl(x(X,I), taken),                               hear(x(X,I),exit),             excl(x(X,I), free)                     ).
+
+%%%%% Inter-runnable variables
+
+step( rinst(r(R,I), C, Xs, rte_IrvRead(S,K)),            say(s(S,I),irvr(V)),           rinst(r(R,I), C, Xs, ap(K,V))          ).
+step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,K)),           say(s(S,I),irvw(_V)),          rinst(r(R,I), C, Xs, ap(K,ok))         ).
+
+step( irv(s(S,I), V),                                    hear(s(S,I),irvr(V)),          irv(s(S,I), V)                         ).
+step( irv(s(S,I), _),                                    hear(s(S,I),irvw(V)),          irv(s(S,I), V)                         ).
+
+%%%%% Sending/receiving
+
+step( rinst(r(R,I), C, Xs, rte_Receive(e(E,P),K)),       say(ep(E,P,I),rcv(V)),          rinst(r(R,I), C, Xs, ap(K,V))         ).
+step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,Res)),      rinst(r(R,I), C, Xs, ap(K,Res))       ).
+
+step( qelem(ep(E,P,I), N, cons(V,Vs)),                   hear(ep(E,P,I),rcv(V)),         qelem(ep(E,P,I), N, Vs)               ).
+step( qelem(ep(E,P,I), N, eps),                          hear(ep(E,P,I),rcv(no_data)),   qelem(ep(E,P,I), N, eps)              ).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,ok)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :- 
+    connect(A,ep(E,P,I)), less(length(Vs),N).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,limit)),           qelem(ep(E,P,I), N, Vs)               ) :- 
+    connect(A,ep(E,P,I)), equal(length(Vs),N).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),           qelem(ep(E,P,I), N, seq(Vs,V))        ) :- 
+    connect(A,ep(E,P,I)), less(length(Vs),N).
+
+% dataReceived(e(E,P)) is a static property of this runnable
+%   from pending it will move on to spawn an rinst which will execute some "data handler" code
+
+step( runnable(r(R,I), K, T, _, N),                      hear(A,snd(_,ok)),              runnable(r(R,I), K, T, pending, N)    ) :-
+    connect(A,ep(E,P,I)), events(r(R,I),dataReceived(e(E,P))).
+step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),           runnable(r(R,I), K, T, Act, N)        ) :-   % ???
+    connect(A,ep(E,P,I)), events(r(R,I),dataReceived(e(E,P))).
+
+%%%%% Reading/writing (unbuffered versions of rcv and snd)
+
+step( rinst(r(R,I), C, XS, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, XS, ap(K,V))         ).
+step( rinst(r(R,I), C, XS, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, XS, ap(K,ok))        ).
+
+step( delem(ep(E,P,I), _, V),                            hear(ep(E,P,I),rd(V)),          delem(ep(E,P,I), false, V)            ).
+step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),                  delem(ep(E,P,I), true, V)             ) :-
+    connect(A,ep(E,P,I)).
+
+step( runnable(r(R,I), K, T, _, N),                      hear(A,wr(_)),                  runnable(r(R,I), K, T, pending, N)    ) :-
+    connect(A,ep(E,P,I)), events(r(R,I),dataReceived(e(E,P))).
+
+step( rinst(r(R,I), C, XS, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, XS, ap(K,U))         ).
+step( rinst(r(R,I), C, XS, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, XS, ap(K,ok))        ).
+
+step( delem(ep(E,P,I), U, V),                            hear(ep(E,P,I),up(U)),          delem(ep(E,P,I), U, V)                ).
+step( delem(ep(E,P,I), _U, _),                           hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-
+    connect(A,ep(E,P,I)).
+
+%%%%% Calling a server
+
+step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, rte_Result(o(O,P),K))                      ) :- 
+    serverCallPoint(r(R,I), sync(o(O,P))).
+step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, ap(K,Res))                                 ) :- 
+    serverCallPoint(r(R,I), async(o(O,P))).
+step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, XS, ap(K,Res))                                 ).
+    
+step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
+    connect(A,op(O,P,I)), events(r(R,I),operationInvoked(o(O,P))), ~member(A,Cs).
+step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),          runnable(r(R,I), K, T, serving(Cs,Vs), N)                       ) :-
+    connect(A,op(O,P,I)), events(r(R,I),operationInvoked(o(O,P))), member(A, Cs).
+
+%%%%% Obtaining a server result
+
+step( rinst(r(R,I), C, XS, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, XS, ap(K,V))                                   ).
+step( rinst(A, op(O,P,I), eps, return(V)),          say(op(O,P,I),ret(V)),          rinst(A, nil, eps, return(void))                                ).
+
+step( opres(op(O,P,I), cons(V,Vs)),                 hear(op(O,P,I),res(V)),         opres(op(O,P,I), Vs)                                            ).
+step( opres(op(O,P,I), Vs),                         hear(op(O,P,I),ret(V)),         opres(op(O,P,I), seq(Vs,V))                                     ).
+step( opres(op(O,P,I), eps),                        hear(op(O,P,I),res(no_data)),   opres(op(O,P,I), eps)                                           ) :-
+    async_result(op(O,P,I)).
+
+%%%%% Spawning and terminating
+
+step( rinst(A, nil, eps, return(_)),                          say(A,term),    null                                                                  ).
+step( runnable(A, K, T, Act, N),                              hear(A,term),   runnable(A, K, T, Act, minus(N,1))                                    ).
+step( runnable(A, K, 0, pending, 0),                          say(A,new),     par(runnable(A,K,T,idle,1),         rinst(A,nil,eps,ap(K,void)))      ) :-
+    minimumStartInterval(A,T).
+step( runnable(A, K, 0, pending, N),                          say(A,new),     par(runnable(A,K,T,idle,plus(N,1)), rinst(A,nil,eps,ap(K,void)))      ) :-
+    canBeInvokedConcurrently(A), minimumStartInterval(A,T).
+    
+step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), 0),   say(A,new),     par(runnable(A,K,T,serving(Cs,Vs),1),         rinst(A,C,eps,ap(K,V))) ) :-
+    minimumStartInterval(A,T).
+step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     par(runnable(A,K,T,serving(Cs,Vs),plus(N,1)), rinst(A,C,eps,ap(K,V))) ) :-
+    canBeInvokedConcurrently(A), minimumStartInterval(A,T).
+
+%%%%% Passing time
+
+step( timer(A, 0),                 say(A,tick),    timer(A, T)                        ) :-    events(A,timing(T)).
+step( runnable(A, K, T, _, N),     hear(A,tick),   runnable(A, K, T, pending, N)      ).
+
+% The "time left" state V is always decreasing in delta(T) steps, and never negative.
+step( timer(A, V),                 delta(T),       timer(A, minus(V,T))               ) :-   lesseq(T,V).
+step( runnable(A, K, V, Act, N),   delta(T),       runnable(A, K, minus(V,T), Act, N) ) :-   lesseq(T,V).
+step( runnable(A, K, 0, Act, N),   delta(_),       runnable(A, K, 0, Act, N)          ).
+step( rinst(A, C, XS, Code),       delta(_),       rinst(A, C, XS, Code)              ).
+step( excl(A, V),                  delta(_),       excl(A, V)                         ).
+step( irv(A, V),                   delta(_),       irv(A, V)                          ).
+step( qelem(A, N, Vs),             delta(_),       qelem(A, N, Vs)                    ).
+step( delem(A, U, V),              delta(_),       delem(A, U, V)                     ).
+step( opres(A, Vs),                delta(_),       opres(A, Vs)                       ).
+
+
+%%%%% Ignoring broadcasts
+
+step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)                ).
+step( timer(B, T),                 hear(_,_),      timer(B, T)                       ).
+step( runnable(B, K, T, Act, N),   hear(A,_),      runnable(B, K, T, Act, N)         ) :-   ~equal(A,B).
+step( excl(B, V),                  hear(A,_),      excl(B, V)                        ) :-   ~equal(A,B).
+step( irv(B, V),                   hear(A,_),      irv(B, V)                         ) :-   ~equal(A,B).
+step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                   ) :-   ~equal(A,B), ~connect(A,B).
+step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                    ) :-   ~equal(A,B), ~connect(A,B).
+step( opres(B, Vs),                hear(A,_),      opres(B, Vs)                      ) :-   ~equal(A,B), ~connect(A,B).
+
