@@ -70,9 +70,11 @@ step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),  
 %   from pending it will move on to spawn an rinst which will execute some "data handler" code
 
 step( runnable(r(R,I), K, T, _, N),                      hear(A,snd(_,ok)),              runnable(r(R,I), K, T, pending, N)    ) :-
-    connect(A,ep(E,P,I)), events(r(R,I),dataReceived(e(E,P))).
+    connect(A,ep(E,P,I)), 
+    events(r(R,I),dataReceived(e(E,P))).
 step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),           runnable(r(R,I), K, T, Act, N)        ) :-   % ???
-    connect(A,ep(E,P,I)), events(r(R,I),dataReceived(e(E,P))).
+    connect(A,ep(E,P,I)), 
+    events(r(R,I),dataReceived(e(E,P))).
 
 %%%%% Reading/writing (unbuffered versions of rcv and snd)
 
@@ -84,7 +86,8 @@ step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),         
     connect(A,ep(E,P,I)).
 
 step( runnable(r(R,I), K, T, _, N),                      hear(A,wr(_)),                  runnable(r(R,I), K, T, pending, N)    ) :-
-    connect(A,ep(E,P,I)), events(r(R,I),dataReceived(e(E,P))).
+    connect(A,ep(E,P,I)), 
+    events(r(R,I),dataReceived(e(E,P))).
 
 step( rinst(r(R,I), C, XS, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, XS, ap(K,U))         ).
 step( rinst(r(R,I), C, XS, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, XS, ap(K,ok))        ).
@@ -96,15 +99,19 @@ step( delem(ep(E,P,I), _U, _),                           hear(A,inv),           
 %%%%% Calling a server
 
 step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, rte_Result(o(O,P),K))                      ) :- 
-    serverCallPoint(r(R,I), sync(o(O,P))).
+    serverCallPoint(r(R,I),sync(o(O,P))).
 step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, ap(K,Res))                                 ) :- 
-    serverCallPoint(r(R,I), async(o(O,P))).
+    serverCallPoint(r(R,I),async(o(O,P))).
 step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, XS, ap(K,Res))                                 ).
     
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
-    connect(A,op(O,P,I)), events(r(R,I),operationInvoked(o(O,P))), ~member(A,Cs).
+    connect(A,op(O,P,I)), 
+    events(r(R,I),operationInvoked(o(O,P))), 
+    ~member(A,Cs).
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),          runnable(r(R,I), K, T, serving(Cs,Vs), N)                       ) :-
-    connect(A,op(O,P,I)), events(r(R,I),operationInvoked(o(O,P))), member(A, Cs).
+    connect(A,op(O,P,I)), 
+    events(r(R,I),operationInvoked(o(O,P))), 
+    member(A,Cs).
 
 %%%%% Obtaining a server result
 
@@ -120,15 +127,21 @@ step( opres(op(O,P,I), eps),                        hear(op(O,P,I),res(no_data))
 
 step( rinst(A, nil, eps, return(_)),                          say(A,term),    null                                                                  ).
 step( runnable(A, K, T, Act, N),                              hear(A,term),   runnable(A, K, T, Act, minus(N,1))                                    ).
-step( runnable(A, K, 0, pending, 0),                          say(A,new),     par(runnable(A,K,T,idle,1),         rinst(A,nil,eps,ap(K,void)))      ) :-
+step( runnable(A, K, 0, pending, 0),                          say(A,new),     par( runnable(A, K, T, idle, 1),
+                                                                                   rinst(A, nil, eps, ap(K,void)) )                                 ) :-
     minimumStartInterval(A,T).
-step( runnable(A, K, 0, pending, N),                          say(A,new),     par(runnable(A,K,T,idle,plus(N,1)), rinst(A,nil,eps,ap(K,void)))      ) :-
-    canBeInvokedConcurrently(A), minimumStartInterval(A,T).
+step( runnable(A, K, 0, pending, N),                          say(A,new),     par( runnable(A, K, T, idle, plus(N,1)),
+                                                                                   rinst(A, nil, eps, ap(K,void)) )                                 ) :-
+    canBeInvokedConcurrently(A), 
+    minimumStartInterval(A,T).
     
-step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), 0),   say(A,new),     par(runnable(A,K,T,serving(Cs,Vs),1),         rinst(A,C,eps,ap(K,V))) ) :-
+step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), 0),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), 1),         
+                                                                                   rinst(A, C, eps, ap(K,V)) )                                      ) :-
     minimumStartInterval(A,T).
-step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     par(runnable(A,K,T,serving(Cs,Vs),plus(N,1)), rinst(A,C,eps,ap(K,V))) ) :-
-    canBeInvokedConcurrently(A), minimumStartInterval(A,T).
+step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), plus(N,1)), 
+                                                                                   rinst(A, C, eps, ap(K,V)) )                                      ) :-
+    canBeInvokedConcurrently(A), 
+    minimumStartInterval(A,T).
 
 %%%%% Passing time
 
