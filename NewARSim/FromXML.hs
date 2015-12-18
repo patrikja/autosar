@@ -86,7 +86,7 @@ optPackageElements path node =
         Just node' ->
             txt "{-# LANGUAGE RecordWildCards #-}" $$
             txt "module" <+> txt modname <+> txt "where" <> nl $$
-            convertImports modname node' $$
+            convertImports modname node' <> nl $$
             vmap (convertElement path) (children "*" node') $$
             nl
   where modname = pathStr path
@@ -120,6 +120,8 @@ type Tag = Text
 type Name = Text
 
 convertElem :: Tag -> Name -> XML.Element -> Doc
+convertElem "CONSTANT-SPECIFICATION" name node =
+    txt (mkLo name) <+> equals <+> convertValueSpec (grandChildren "VALUE-SPEC" "*" node)
 convertElem "COMPOSITION-SW-COMPONENT-TYPE" name node =
     convertInterfaceType name ports $$
     nl <> txt (mkLo name) <+> equals <+> txt "composition $ do" $$ 
@@ -161,13 +163,29 @@ convertElem "SENDER-RECEIVER-INTERFACE" name node =
             -- data ...
             error "not yet: multiple delems"
 convertElem "CLIENT-SERVER-INTERFACE" name node =
-    case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of
+--    case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of
+    case grandChildren "OPERATIONS" "CLIENT-SERVER-OPERATION" node of
         [op] ->
-            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = ClientServerOperation" <+>
-            convertArgs (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c" $$
+            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c =" <+> convertOp op $$
             txt (mkLo (shortName op)) <+> equals <+> txt "id"
+        ops ->
+            nl <> txt "data" <+> txt (mkUp name) <+> txt "r c =" <+> txt (mkUp name) <+> lbrace $$
+            nest 4 (vcat . punctuate comma $ map convertOp ops) $$
+            nest 2 rbrace
 convertElem _ name node =
     empty
+
+convertValueSpec [node]
+    | isTag "NUMERICAL-VALUE-SPECIFICATION" node =
+        txt (leafVal "VALUE" node)
+    | isTag "RECORD-VALUE-SPECIFICATION" node =
+        txt "undefined undefined"
+    | otherwise =
+        txt "undefined"
+
+convertOp op =
+    txt "ClientServerOperation" <+> 
+    convertArgs (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c"
 
 convertPrimitiveTypeCategory "VALUE"    = txt "Int"
 convertPrimitiveTypeCategory "BOOLEAN"  = txt "Bool"
@@ -203,9 +221,11 @@ convertArgs args = parens (commasep convertTRef ins) <+> parens (commasep conver
 convertTRef node =
     convertQualName mkUp "TYPE-TREF" node
 
+convertInterfaceType name [] =
+    nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> txt (mkUp name) <+> txt "()"
 convertInterfaceType name ports =
-    nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> lbrace $$
-    nest 4 (vmap (convertSignature name) ports) $$
+    nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> txt (mkUp name) <+> lbrace $$
+    nest 4 (vcat . punctuate comma $ map (convertSignature name) ports) $$
     nest 2 rbrace
 
 convertInterfaceTerm name ports = empty
@@ -229,22 +249,25 @@ convertFieldname tname name =
 convertPort :: XML.Element -> Doc
 convertPort node
     | isTag "R-PORT-PROTOTYPE" node =
-        txt name <+> txt "<-" <+> txt "require" <+> 
-        (parens $ commasep convertComSpec $ children "*" rComSpec)
+        txt name <+> txt "<-" <+> txt "require" <+> convertComSpecs rComSpecs
     | isTag "P-PORT-PROTOTYPE" node =
-        txt name <+> txt "<-" <+> txt "provide" <+>
-        (parens $ commasep convertComSpec $ children "*" pComSpec)
+        txt name <+> txt "<-" <+> txt "provide" <+> convertComSpecs pComSpecs
     | otherwise =
         empty
     where
         name = mkLo (shortName node)
-        rComSpec = child "REQUIRED-COM-SPECS" node
-        pComSpec = child "PROVIDED-COM-SPECS" node
+        rComSpecs = grandChildren "REQUIRED-COM-SPECS" "*" node
+        pComSpecs = grandChildren "PROVIDED-COM-SPECS" "*" node
+
+convertComSpecs [] =
+    txt "()"
+convertComSpecs specs =
+    parens (commasep convertComSpec specs)
 
 convertComSpec :: XML.Element -> Doc
 convertComSpec node
     | isTag "NONQUEUED-RECEIVER-COM-SPEC" node =
-        txt "UnqueuedReceivererComSpec{ initSend =" <+> initVal <+> txt "}"
+        txt "UnqueuedReceiverComSpec{ initSend =" <+> initVal <+> txt "}"
     | isTag "NONQUEUED-SENDER-COM-SPEC" node =
         txt "UnqueuedSenderComSpec{ initValue =" <+> initVal <+> txt "}"
     | isTag "QUEUED-RECEIVER-COM-SPEC" node =

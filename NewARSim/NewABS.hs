@@ -30,6 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Main where
 
 import NewARSim
@@ -128,9 +129,10 @@ relief_ctrl valve accel False = do
 newtype Relief c = Relief ( DataElement Unqueued Accel Required c,
                             ClientServerOperation Bool () Provided c,
                             DataElement Unqueued Valve Provided c )
+    deriving Interface
 
-instance Interface Relief where
-    seal (Relief (a,c,v)) = Relief (seal a, seal c, seal v)
+--instance Interface Relief where
+--    seal (Relief (a,c,v)) = Relief (seal a, seal c, seal v)
 
 relief_seq :: AR c (Relief ())
 relief_seq = atomic $ do
@@ -190,9 +192,10 @@ pressure_ctrl valve accel 0 = do
 newtype PresSeq c = PresSeq ( DataElement Unqueued Accel Required c,
                               ClientServerOperation Index () Provided c,
                               DataElement Unqueued Valve Provided c)
+    deriving Interface
 
-instance Interface PresSeq where
-    seal (PresSeq (a,c,v)) = PresSeq (seal a, seal c, seal v)
+--instance Interface PresSeq where
+--    seal (PresSeq (a,c,v)) = PresSeq (seal a, seal c, seal v)
 
 pressure_seq :: AR c (PresSeq ())
 pressure_seq = atomic $ do
@@ -218,12 +221,13 @@ data Controller c = Controller {
             slipstream     :: DataElement Queued Slip       Required c,
             onoff_pressure :: ClientServerOperation Int  () Required c,
             onoff_relief   :: ClientServerOperation Bool () Required c  }
+    deriving Interface
 
-instance Interface Controller where
-    seal x = Controller {
-                    slipstream = seal (slipstream x),
-                    onoff_pressure = seal (onoff_pressure x),
-                    onoff_relief = seal (onoff_relief x)  }
+--instance Interface Controller where
+--    seal x = Controller {
+--                    slipstream = seal (slipstream x),
+--                    onoff_pressure = seal (onoff_pressure x),
+--                    onoff_relief = seal (onoff_relief x)  }
 
 controller :: AR c (Controller ())
 controller = atomic $ do
@@ -256,9 +260,10 @@ type Valve = Bool
 data ValvePort r c = ValvePort {
         relief   :: DataElement Unqueued Valve r c,
         pressure :: DataElement Unqueued Valve r c  }
+    deriving Interface
 
-instance Interface (ValvePort r) where
-        seal x = ValvePort{ relief = seal (relief x), pressure = seal (pressure x) }
+--instance Interface (ValvePort r) where
+--        seal x = ValvePort{ relief = seal (relief x), pressure = seal (pressure x) }
 
 instance Port ValvePort where
         type PComSpec ValvePort = (UnqueuedSenderComSpec Valve, UnqueuedSenderComSpec Valve)
@@ -287,9 +292,10 @@ data WheelCtrl c = WheelCtrl {
         accel :: DataElement Unqueued Accel Required c,
         slip  :: DataElement Queued Slip Required c,
         valve :: ValvePort Provided c  }
+    deriving Interface
 
-instance Interface WheelCtrl where
-        seal x = WheelCtrl { accel = seal (accel x), valve = seal (valve x), slip = seal (slip x) }
+--instance Interface WheelCtrl where
+--        seal x = WheelCtrl { accel = seal (accel x), valve = seal (valve x), slip = seal (slip x) }
 
 wheel_ctrl :: Index -> AR c (WheelCtrl ())
 wheel_ctrl i = composition $ do
@@ -401,9 +407,10 @@ data Wheel c = Wheel {
             actuator  :: ValvePort Required c,
             v_sensor  :: DataElement Unqueued Velo  Provided c,
             a_sensor  :: DataElement Unqueued Accel Provided c  }
+    deriving Interface
 
-instance Interface Wheel where
-    seal wh = Wheel (seal (actuator wh)) (seal (v_sensor wh)) (seal (a_sensor wh))
+--instance Interface Wheel where
+--    seal wh = Wheel (seal (actuator wh)) (seal (v_sensor wh)) (seal (a_sensor wh))
 
 newtype Car c = Car [Wheel c]
 

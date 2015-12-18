@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module NewARSim (module NewARSim, mkStdGen, StdGen) where
 
@@ -47,6 +48,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Dynamics
 import System.Random
+import qualified Unsafe.Coerce
 
 import qualified Feldspar
 
@@ -105,6 +107,7 @@ rteResult      rop     = singleton $ Result     rop
 printlog id val             = singleton $ Printlog id val
 
 data StdRet a               = Ok a
+                            | Error Int
                             | NO_DATA
                             | NEVER_RECEIVED
                             | LIMIT
@@ -114,7 +117,11 @@ data StdRet a               = Ok a
                             deriving Show
 
 newtype DataElement q a r c             = DE Address      -- Async channel of "a" data
+    deriving Interface
+    
 newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
+    deriving Interface
+    
 
 data Queued         -- Parameter q above
 data Unqueued
@@ -340,12 +347,13 @@ instance Addressed (ClientServerOperation a b r c) where
 
 class Interface m where
         seal                :: m c -> m ()
+        seal                = Unsafe.Coerce.unsafeCoerce
 
-instance Interface (DataElement q a r) where
-        seal (DE a)         = DE a
+--instance Interface (DataElement q a r) where
+--        seal (DE a)         = DE a
 
-instance Interface (ClientServerOperation a b r) where
-        seal (OP a)         = OP a
+--instance Interface (ClientServerOperation a b r) where
+--        seal (OP a)         = OP a
 
 
 connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AR c ()
