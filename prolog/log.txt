@@ -1,3 +1,6 @@
+2015-12-18: Installing eprover version "E 1.9 Sourenee"
+
+
 2014-11-05:
 
   TODO: write technical report

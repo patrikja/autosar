@@ -15,17 +15,18 @@ trace(X,nil,X).
 %Questions to answer:
 
 % Can we reach a certain state:
-$answer(Ls) :- trace(par(talker(zero),listener(zero)),
-                     Ls,
-                     par(talker(succ(succ(succ(zero)))),listener(zero))).
+$answer(placeholder(Ls)) :-
+  trace(par(talker(zero),listener(zero)),
+        Ls,
+        par(talker(succ(succ(succ(zero)))),listener(zero))).
 
-% This should be impossible (only one may talk in one step). But eprover takes a long time...
+%%% This should be impossible (only one may talk in one step). But eprover takes a long time...
 %~trace(par(talker(zero),talker(zero)),
 %                   cons(say(zero),nil),
 %                   par(talker(succ(zero)),talker(succ(zero)))).
 
 
-%A simple extension
+%%%A simple extension
 %step(delayedtalker(X,Y),hear(X),talker(Y)).
 %step(delayedtalker(X,Y),hear(Z),delayedtalker(X,Y)) :- ~equal(X,Z).
 
