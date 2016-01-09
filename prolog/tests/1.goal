@@ -1,0 +1,2 @@
+# Just pick some line from the semantics and check that it is (trivially) holds
+<- step( irv(A, V),                   delta(_),       irv(A, V)                          ).

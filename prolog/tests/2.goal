@@ -1,0 +1,1 @@
+$answer(dummy(X,Y,L,Z)) <- step (par(X,Y), L, Z).
