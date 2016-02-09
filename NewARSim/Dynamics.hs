@@ -37,8 +37,8 @@ import Data.Maybe
 import qualified Feldspar
 import Feldspar (Type, Syntax, Internal)
 
-class    (Syntax a, Data.Data.Data (Internal a)) => Expr a
-instance (Syntax a, Data.Data.Data (Internal a)) => Expr a
+class    (Syntax a, Data.Data.Data (Internal a)) => Expr a where
+instance (Syntax a, Data.Data.Data (Internal a)) => Expr a where
 
 toValue :: Expr a => a -> Value
 toValue = Value . Feldspar.eval

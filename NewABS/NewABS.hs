@@ -33,10 +33,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE DeriveAnyClass #-}
 module Main where
 
+import qualified Prelude
+import Prelude ((++),map,even,replicate,round,odd,maximum,zip,zip3,zipWith3,fromIntegral,fromEnum)
 import NewARSim
 import Control.Monad
 import Graphics.EasyPlot
 import System.Random
+import Feldspar
+
+a && b = a ? b $ false
+a || b = a ? true $ b
 
 --------------------------------------------------------------
 -- A generic skeleton for creating sequencer components; i.e.,
@@ -51,17 +57,21 @@ import System.Random
 -- can be started and stopped by means of an exported boolean
 -- service operation.
 --------------------------------------------------------------
-type Ticks = Int
-type Limit = Int
-type Index = Int
-data SeqState = Stopped | Running Ticks Limit Index deriving (Typeable,Data)
+type Ticks = Data Int
+type Limit = Data Int
+type SeqIx = Data Int
+--data SeqState = Stopped | Running Ticks Limit SeqIx deriving (Typeable,Data)
+type SeqState = (Data Bool,Ticks,Limit,SeqIx)
 
-sequencer :: Data a =>
-  RTE c SeqState -> (Index -> RTE c SeqState) -> (a -> RTE c SeqState)
+stopped = (false, 0, 0, 0)
+running ticks limit index = (true, ticks, limit, index)
+
+sequencer :: Expr a =>
+  RTE c SeqState -> (SeqIx -> RTE c SeqState) -> (a -> RTE c SeqState)
   -> AR c (ClientServerOperation a () Provided c)
 sequencer setup step ctrl = do
         excl <- exclusiveArea
-        state <- interRunnableVariable Stopped
+        state <- interRunnableVariable stopped
         runnable Concurrent [InitEvent] $ do
             rteEnter excl
             s <- setup
@@ -69,12 +79,18 @@ sequencer setup step ctrl = do
             rteExit excl
         runnable (MinInterval 0) [TimingEvent 0.001] $ do
             rteEnter excl
-            Ok s <- rteIrvRead state
-            s' <- case s of
-                    Stopped                    -> return s
-                    Running ticks limit i      -- Intended invariant: ticks < limit
-                            | ticks+1 < limit  -> return (Running (ticks+1) limit i)
-                            | otherwise        -> step i
+--            Ok s <- rteIrvRead state
+            Ok s@(isRunning,ticks,limit,i) <- rteIrvRead state
+            s' <- cond isRunning
+                    (cond ((ticks+1) < limit)
+                        (return (running (ticks+1) limit i))
+                        (step i))
+                    (return s)
+--            s' <- case s of
+--                    Stopped                    -> return s
+--                    Running ticks limit i      -- Intended invariant: ticks < limit
+--                            | ticks+1 < limit  -> return (running (ticks+1) limit i)
+--                            | otherwise        -> step i
             rteIrvWrite state s'
             rteExit excl
         onoff <- provide ServerComSpec{bufferLength=0}
@@ -95,39 +111,38 @@ sequencer setup step ctrl = do
 -- well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 defaultSeqState :: SeqState
-defaultSeqState = Running 0 5 0 -- Count to five time steps (ms), then index 0
+defaultSeqState = running 0 5 0 -- Count to five time steps (ms), then index 0
 
-relief_setup :: DataElement Unqueued Bool Provided c -> RTE c SeqState
+relief_setup :: DataElement Unqueued (Data Bool) Provided c -> RTE c SeqState
 relief_setup valve = do
-        rteWrite valve False
-        return Stopped
+        rteWrite valve false
+        return stopped
 
 relief_step ::  DataElement Unqueued Valve Provided c ->
                 DataElement Unqueued Accel Required c ->
-                Index -> RTE c SeqState
+                SeqIx -> RTE c SeqState
 relief_step valve accel 0 = do
         Ok a <- rteRead accel
         printlog "" ("Relief " ++ show a)
-        if a < 0 then do
-                rteWrite valve True
-                return (Running 0 (round (-a*10)) 1)
-         else
-                return defaultSeqState
+        cond (a < 0)
+            (do rteWrite valve true
+                return (running 0 (round (-a*10)) 1))
+            (return defaultSeqState)
 relief_step valve accel n = do
-        rteWrite valve False
+        rteWrite valve false
         return defaultSeqState
 
 relief_ctrl ::  DataElement Unqueued Valve Provided c   ->
                 DataElement Unqueued Accel Required c   ->
                 Valve -> RTE c SeqState
-relief_ctrl valve accel True =
-        relief_step valve accel 0
-relief_ctrl valve accel False = do
-        rteWrite valve False
-        return Stopped
+relief_ctrl valve accel v =
+        cond v 
+            (relief_step valve accel 0)
+            (do rteWrite valve false
+                return stopped)
 
 newtype Relief c = Relief ( DataElement Unqueued Accel Required c,
-                            ClientServerOperation Bool () Provided c,
+                            ClientServerOperation (Data Bool) () Provided c,
                             DataElement Unqueued Valve Provided c )
     deriving Interface
 
@@ -154,43 +169,43 @@ relief_seq = atomic $ do
 
 pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
 pressure_setup valve = do
-        rteWrite valve True
-        return Stopped
+        rteWrite valve true
+        return stopped
 
 pressure_step ::
   DataElement Unqueued Valve Provided c  ->
   DataElement Unqueued Accel Required c  ->
-  Index -> RTE c SeqState
+  SeqIx -> RTE c SeqState
 pressure_step valve accel 0 = do
-        rteWrite valve True
-        return (Running 0 100 1)
+        rteWrite valve true
+        return (running 0 100 1)
 pressure_step valve accel 20 = do
-        rteWrite valve True
-        return Stopped
+        rteWrite valve true
+        return stopped
 pressure_step valve accel n | even n = do
-        rteWrite valve True
+        rteWrite valve true
         Ok a <- rteRead accel
         printlog "" ("Pressure " ++ show a)
-        return (Running 0 (round (a*50)) (n+1))
+        return (running 0 (round (a*50)) (n+1))
 pressure_step valve accel n | odd n = do
-        rteWrite valve False
-        return (Running 0 20 (n+1))
+        rteWrite valve false
+        return (running 0 20 (n+1))
 
 pressure_ctrl ::
   DataElement Unqueued Valve Provided c  ->
   DataElement Unqueued Accel Required c  ->
-  Index -> RTE c SeqState
-pressure_ctrl valve accel 2 = do
-        rteWrite valve True
-        return Stopped
-pressure_ctrl valve accel 1 =
-        pressure_step valve accel 0
-pressure_ctrl valve accel 0 = do
-        rteWrite valve False
-        return Stopped
+  SeqIx -> RTE c SeqState
+pressure_ctrl valve accel ix =
+        cond (ix==2) 
+            (do rteWrite valve true
+                return stopped) $
+        cond (ix==1)
+            (pressure_step valve accel 0)
+            (do rteWrite valve false
+                return stopped)
 
 newtype PresSeq c = PresSeq ( DataElement Unqueued Accel Required c,
-                              ClientServerOperation Index () Provided c,
+                              ClientServerOperation SeqIx () Provided c,
                               DataElement Unqueued Valve Provided c)
     deriving Interface
 
@@ -238,24 +253,21 @@ controller = atomic $ do
         runnable (MinInterval 0) [DataReceivedEvent slipstream] $ do
             Ok slip   <- rteReceive slipstream
             Ok slip'  <- rteIrvRead memo
-            case (slip < 0.8, slip' < 0.8) of
-                    (True, False) -> do
-                            printlog "" ("Slip " ++ show slip)
-                            rteCall onoff_pressure 0
-                            rteCall onoff_relief True
-                            return ()
-                    (False, True) -> do
-                            printlog "" ("Slip " ++ show slip)
-                            rteCall onoff_relief False
-                            rteCall onoff_pressure (if slip >= 1.0 then 2 else 1)
-                            return ()
-                    _ ->    return ()
+            cond (slip < 0.8 && slip' >= 0.8)
+                    (do printlog "" ("Slip " ++ show slip)
+                        rteCall onoff_pressure 0
+                        rteCall onoff_relief true) $
+                cond (slip >= 0.8 && slip' < 0.8)
+                    (do printlog "" ("Slip " ++ show slip)
+                        rteCall onoff_relief false
+                        rteCall onoff_pressure (slip >= 1.0 ? 2 $ 1))
+                    (return ())
             rteIrvWrite memo slip
         return $ Controller{..}
 
-type Accel = Double
-type Velo  = Double
-type Valve = Bool
+type Accel = Data Double
+type Velo  = Data Double
+type Valve = Data Bool
 
 data ValvePort r c = ValvePort {
         relief   :: DataElement Unqueued Valve r c,
@@ -297,7 +309,7 @@ data WheelCtrl c = WheelCtrl {
 --instance Interface WheelCtrl where
 --        seal x = WheelCtrl { accel = seal (accel x), valve = seal (valve x), slip = seal (slip x) }
 
-wheel_ctrl :: Index -> AR c (WheelCtrl ())
+wheel_ctrl :: SeqIx -> AR c (WheelCtrl ())
 wheel_ctrl i = composition $ do
         ctrl <- controller
         PresSeq (accel_p, ctrl_p, pressure) <- pressure_seq
@@ -373,10 +385,10 @@ abs_system = composition $ do
 -------------------------------------------------------------------
 --  A simulated physical car
 -------------------------------------------------------------------
-wheel_f :: Index -> Time -> Bool -> Bool -> Velo -> (Accel, Velo)
+wheel_f :: SeqIx -> Time -> Bool -> Bool -> Velo -> (Accel, Velo)
 wheel_f i time pressure relief velo
         | time < 1.0                = veloStep 0          velo
-        | i /= 2                    = veloStep (-4.5)     velo
+        | not (i == 2)              = veloStep (-4.5)     velo
         -- let wheel 2 skid...
         -- We "postulate" a reasonable approximation of the wheel
         -- speed (ignoring the actual valves). Ideally the whole car

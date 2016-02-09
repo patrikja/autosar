@@ -38,7 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module NewARSim (module NewARSim, mkStdGen, StdGen) where
+module NewARSim (module NewARSim, mkStdGen, StdGen, Expr) where
 
 import Control.Monad.Operational
 import Control.Monad.Identity hiding (void)

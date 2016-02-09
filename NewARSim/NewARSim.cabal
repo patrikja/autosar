@@ -36,7 +36,9 @@ library
     mtl,
     containers,
     random,
-    syb
+    syb,
+    open-typerep,
+    raw-feldspar
 
   default-language:    Haskell2010
 
