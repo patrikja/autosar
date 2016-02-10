@@ -28,7 +28,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
-module FromXML where
+module Main where
 
 import qualified Data.MultiMap as MMap
 import qualified Data.Char

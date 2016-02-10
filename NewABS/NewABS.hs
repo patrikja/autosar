@@ -131,9 +131,6 @@ newtype Relief c = Relief ( DataElement Unqueued Accel Required c,
                             DataElement Unqueued Valve Provided c )
     deriving Interface
 
---instance Interface Relief where
---    seal (Relief (a,c,v)) = Relief (seal a, seal c, seal v)
-
 relief_seq :: AR c (Relief ())
 relief_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
@@ -194,9 +191,6 @@ newtype PresSeq c = PresSeq ( DataElement Unqueued Accel Required c,
                               DataElement Unqueued Valve Provided c)
     deriving Interface
 
---instance Interface PresSeq where
---    seal (PresSeq (a,c,v)) = PresSeq (seal a, seal c, seal v)
-
 pressure_seq :: AR c (PresSeq ())
 pressure_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
@@ -222,12 +216,6 @@ data Controller c = Controller {
             onoff_pressure :: ClientServerOperation Int  () Required c,
             onoff_relief   :: ClientServerOperation Bool () Required c  }
     deriving Interface
-
---instance Interface Controller where
---    seal x = Controller {
---                    slipstream = seal (slipstream x),
---                    onoff_pressure = seal (onoff_pressure x),
---                    onoff_relief = seal (onoff_relief x)  }
 
 controller :: AR c (Controller ())
 controller = atomic $ do
@@ -261,9 +249,6 @@ data ValvePort r c = ValvePort {
         relief   :: DataElement Unqueued Valve r c,
         pressure :: DataElement Unqueued Valve r c  }
     deriving Interface
-
---instance Interface (ValvePort r) where
---        seal x = ValvePort{ relief = seal (relief x), pressure = seal (pressure x) }
 
 instance Port ValvePort where
         type PComSpec ValvePort = (UnqueuedSenderComSpec Valve, UnqueuedSenderComSpec Valve)
