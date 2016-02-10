@@ -1,4 +1,4 @@
-GHC = ghc-7.6.3
+# GHC = ghc-7.6.3
 
 test: compile
 #	Prolog/Test ../semantics.pl > parsed_semantics

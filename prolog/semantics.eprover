@@ -59,21 +59,21 @@ step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,Res
 
 step( qelem(ep(E,P,I), N, cons(V,Vs)),                   hear(ep(E,P,I),rcv(V)),         qelem(ep(E,P,I), N, Vs)               ).
 step( qelem(ep(E,P,I), N, eps),                          hear(ep(E,P,I),rcv(no_data)),   qelem(ep(E,P,I), N, eps)              ).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,ok)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :- 
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,ok)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
     connect(A,ep(E,P,I)), less(length(Vs),N).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,limit)),           qelem(ep(E,P,I), N, Vs)               ) :- 
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,limit)),           qelem(ep(E,P,I), N, Vs)               ) :-
     connect(A,ep(E,P,I)), equal(length(Vs),N).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),           qelem(ep(E,P,I), N, seq(Vs,V))        ) :- 
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),           qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
     connect(A,ep(E,P,I)), less(length(Vs),N).
 
 % dataReceived(e(E,P)) is a static property of this runnable
 %   from pending it will move on to spawn an rinst which will execute some "data handler" code
 
 step( runnable(r(R,I), K, T, _, N),                      hear(A,snd(_,ok)),              runnable(r(R,I), K, T, pending, N)    ) :-
-    connect(A,ep(E,P,I)), 
+    connect(A,ep(E,P,I)),
     events(r(R,I),dataReceived(e(E,P))).
 step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),           runnable(r(R,I), K, T, Act, N)        ) :-   % ???
-    connect(A,ep(E,P,I)), 
+    connect(A,ep(E,P,I)),
     events(r(R,I),dataReceived(e(E,P))).
 
 %%%%% Reading/writing (unbuffered versions of rcv and snd)
@@ -86,7 +86,7 @@ step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),         
     connect(A,ep(E,P,I)).
 
 step( runnable(r(R,I), K, T, _, N),                      hear(A,wr(_)),                  runnable(r(R,I), K, T, pending, N)    ) :-
-    connect(A,ep(E,P,I)), 
+    connect(A,ep(E,P,I)),
     events(r(R,I),dataReceived(e(E,P))).
 
 step( rinst(r(R,I), C, XS, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, XS, ap(K,U))         ).
@@ -98,19 +98,19 @@ step( delem(ep(E,P,I), _U, _),                           hear(A,inv),           
 
 %%%%% Calling a server
 
-step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, rte_Result(o(O,P),K))                      ) :- 
+step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, rte_Result(o(O,P),K))                      ) :-
     serverCallPoint(r(R,I),sync(o(O,P))).
-step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, ap(K,Res))                                 ) :- 
+step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, ap(K,Res))                                 ) :-
     serverCallPoint(r(R,I),async(o(O,P))).
 step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, XS, ap(K,Res))                                 ).
-    
+
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
-    connect(A,op(O,P,I)), 
-    events(r(R,I),operationInvoked(o(O,P))), 
+    connect(A,op(O,P,I)),
+    events(r(R,I),operationInvoked(o(O,P))),
     ~member(A,Cs).
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),          runnable(r(R,I), K, T, serving(Cs,Vs), N)                       ) :-
-    connect(A,op(O,P,I)), 
-    events(r(R,I),operationInvoked(o(O,P))), 
+    connect(A,op(O,P,I)),
+    events(r(R,I),operationInvoked(o(O,P))),
     member(A,Cs).
 
 %%%%% Obtaining a server result
@@ -132,15 +132,15 @@ step( runnable(A, K, 0, pending, 0),                          say(A,new),     pa
     minimumStartInterval(A,T).
 step( runnable(A, K, 0, pending, N),                          say(A,new),     par( runnable(A, K, T, idle, plus(N,1)),
                                                                                    rinst(A, nil, eps, ap(K,void)) )                                 ) :-
-    canBeInvokedConcurrently(A), 
+    canBeInvokedConcurrently(A),
     minimumStartInterval(A,T).
-    
-step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), 0),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), 1),         
+
+step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), 0),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), 1),
                                                                                    rinst(A, C, eps, ap(K,V)) )                                      ) :-
     minimumStartInterval(A,T).
-step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), plus(N,1)), 
+step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), plus(N,1)),
                                                                                    rinst(A, C, eps, ap(K,V)) )                                      ) :-
-    canBeInvokedConcurrently(A), 
+    canBeInvokedConcurrently(A),
     minimumStartInterval(A,T).
 
 %%%%% Passing time
@@ -170,4 +170,3 @@ step( irv(B, V),                   hear(A,_),      irv(B, V)                    
 step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                   ) :-   ~equal(A,B), ~connect(A,B).
 step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                    ) :-   ~equal(A,B), ~connect(A,B).
 step( opres(B, Vs),                hear(A,_),      opres(B, Vs)                      ) :-   ~equal(A,B), ~connect(A,B).
-

@@ -1,3 +1,7 @@
+2015-12-16:
+
+
+
 2015-06-12: Sorting out the different "equality" operators
 
   Reading https://www.cpp.edu/~jrfisher/www/prolog_tutorial/4.html
