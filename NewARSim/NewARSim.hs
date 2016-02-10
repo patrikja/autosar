@@ -27,11 +27,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -115,10 +113,10 @@ data StdRet a               = Ok a
                             deriving Show
 
 newtype DataElement q a r c             = DE Address      -- Async channel of "a" data
-    deriving Interface
+type    DataElem q a r                  = DataElement q a r ()
     
 newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
-    deriving Interface
+type    ClientServerOp a b r            = ClientServerOperation a b r ()
     
 
 data Queued         -- Parameter q above
@@ -330,6 +328,11 @@ instance Port (ClientServerOperation a b) where
       -- There is a bufferLength in s, but it is unclear (in AUTOSAR)
       -- what is means: argument or result buffer length? Or both?
 
+
+connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AR c ()
+connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
+
+
 class Addressed a where
         address                     :: a -> Address
 
@@ -343,19 +346,41 @@ instance Addressed (ClientServerOperation a b r c) where
         address (OP n)              = n
 
 
-class Interface m where
-        seal                :: m c -> m ()
+type family Seal a where
+    Seal (DataElement q a r c)              = DataElement q a r ()
+    Seal (ClientServerOperation a b r c)    = ClientServerOperation a b r ()
+    Seal [a]                                = [Seal a]
+    Seal (a,b)                              = (Seal a, Seal b)
+    Seal (a,b,c)                            = (Seal a, Seal b, Seal c)
+    Seal (a,b,c,d)                          = (Seal a, Seal b, Seal c, Seal d)
+    Seal (a,b,c,d,e)                        = (Seal a, Seal b, Seal c, Seal d, Seal e)
+    Seal (f Required c)                     = f Required ()
+    Seal (f Provided c)                     = f Provided ()
+    Seal (m a)                              = m (Seal a)
+    Seal a                                  = a
+
+
+class Interface a where
+        seal                :: a -> Seal a
         seal                = Unsafe.Coerce.unsafeCoerce
 
---instance Interface (DataElement q a r) where
---        seal (DE a)         = DE a
+instance Interface a
 
---instance Interface (ClientServerOperation a b r) where
---        seal (OP a)         = OP a
+type family Unseal a where
+    Unseal (a->b) = Seal a -> Unseal b
+    Unseal a      = a
+    
+class Sealer a where
+    sealBy :: Unseal a -> a
+    sealBy = undefined
+
+instance (Interface a, Sealer b) => Sealer (a -> b) where
+    sealBy f a = sealBy (f (seal a))
+
+instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
+    sealBy = id
 
 
-connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AR c ()
-connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
 
 
 -- Derived AR operations ------------------------------------------------------
@@ -366,10 +391,10 @@ runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
 serverRunnable              :: (Data a, Data b) =>
                                 Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
 composition                 :: AR c a -> AR c a
-atomic                      :: Interface i => (forall c. AR c (i c)) -> AR c' (i ())
+atomic                      :: (forall c. AR c a) -> AR c' a
 
 composition c               = singleton $ NewComponent c
-atomic c                    = fmap seal $ singleton $ NewComponent c
+atomic c                    = singleton $ NewComponent c
 
 newConnection c             = singleton $ NewConnection c
 newAddress                  = singleton $ NewAddress
