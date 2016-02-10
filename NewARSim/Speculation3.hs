@@ -47,36 +47,41 @@ type family Unseal a where
     Unseal a      = a
     
 class Sealer a where
-    fseal :: Unseal a -> a
-    fseal = undefined
+    sealBy :: Unseal a -> a
+    sealBy = undefined
 
 instance (Interface a, Sealer b) => Sealer (a -> b) where
-    fseal f a = fseal (f (seal a))
+    sealBy f a = sealBy (f (seal a))
 
 instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
-    fseal = id
+    sealBy = id
 
 ----------------------
 
--- MyPort       :: DataElem -> [DataElem] -> MyPort
+-- MyPort  ::  DataElem -> [DataElem] -> MyPort
 --
 -- instance Sealer (DataElement c1 -> [DataElement c2] -> MyPort) where
---    wrap :: Sealer (DataElement c1 -> [DataElement c2] -> MyPort) -> (DataElement c1 -> [DataElement c2] -> MyPort)
---          ~ (Seal (DataElement c1) -> Seal [DataElement c2] -> MyPort) -> (DataElement c1 -> [DataElement c2] -> MyPort)
---          ~ (DataElem -> [Seal (DataElement c2)] -> MyPort) -> (DataElement c1 -> [DataElement c2] -> MyPort)
---          ~ (DataElem -> [DataElem] -> MyPort) -> DataElement c1 -> [DataElement c2] -> MyPort
+--     sealBy :: Unseal (DataElement c1 -> [DataElement c2] -> MyPort) -> 
+--                      (DataElement c1 -> [DataElement c2] -> MyPort)
+--             ~ (Seal (DataElement c1) -> Unseal ([DataElement c2] -> Unseal MyPort)) -> 
+--                      (DataElement c1 -> [DataElement c2] -> MyPort)
+--             ~ (Seal (DataElement c1) -> Seal [DataElement c2] -> Unseal MyPort) -> 
+--                      (DataElement c1 -> [DataElement c2] -> MyPort)
+--             ~ (DataElem -> [Seal (DataElement c2)] -> MyPort) -> 
+--                      (DataElement c1 -> [DataElement c2] -> MyPort)
+--             ~ (DataElem -> [DataElem] -> MyPort) -> 
+--                      DataElement c1 -> [DataElement c2] -> MyPort
 
 
 data MyPort = MyPort { e1 :: DataElem,
                        e2 :: [DataElem] }
---    deriving Interface
 
-comp1 :: t -> Comp (MyPort, DataElem, Maybe Char)
+--comp1 :: t -> Comp (MyPort, DataElem, Maybe Char)
 comp1 x = atomic $ do 
             a <- delem
             b <- delem
             x <- delem
-            return $ (fseal MyPort a [b,x], seal x, Nothing)
+            return $ (sealBy MyPort a [b,x], seal x, Nothing)
 
 comp2 x = do
     (MyPort a (b:_), x, _) <- comp1 ()
