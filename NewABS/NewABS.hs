@@ -58,7 +58,7 @@ data SeqState = Stopped | Running Ticks Limit Index deriving (Typeable,Data)
 
 sequencer :: Data a =>
   RTE c SeqState -> (Index -> RTE c SeqState) -> (a -> RTE c SeqState)
-  -> AR c (ClientServerOperation a () Provided c)
+  -> Atomic c (ClientServerOperation a () Provided c)
 sequencer setup step ctrl = do
         excl <- exclusiveArea
         state <- interRunnableVariable Stopped
@@ -130,7 +130,7 @@ type Relief = ( DataElem Unqueued Accel Required,
                 ClientServerOp Bool () Provided,
                 DataElem Unqueued Valve Provided )
 
-relief_seq :: AR c Relief
+relief_seq :: AUTOSAR Relief
 relief_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
@@ -189,7 +189,7 @@ type PresSeq = ( DataElem Unqueued Accel Required,
                  ClientServerOp Index () Provided,
                  DataElem Unqueued Valve Provided )
 
-pressure_seq :: AR c PresSeq
+pressure_seq :: AUTOSAR PresSeq
 pressure_seq = atomic $ do
         valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
         accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
@@ -214,7 +214,7 @@ data Controller = Controller {
             onoff_pressure :: ClientServerOp Int  () Required,
             onoff_relief   :: ClientServerOp Bool () Required  }
 
-controller :: AR c Controller
+controller :: AUTOSAR Controller
 controller = atomic $ do
         memo <- interRunnableVariable 1.0
         slipstream     <- require QueuedReceiverComSpec{queueLength=10}
@@ -275,7 +275,7 @@ data WheelCtrl = WheelCtrl {
         accel :: DataElem Unqueued Accel Required,
         slip  :: DataElem Queued Slip Required }
 
-wheel_ctrl :: Index -> AR c WheelCtrl
+wheel_ctrl :: Index -> AUTOSAR WheelCtrl
 wheel_ctrl i = composition $ do
         ctrl <- controller
         (accel_p, ctrl_p, pressure) <- pressure_seq
@@ -312,7 +312,7 @@ data MainLoop = MainLoop {
         velos_in  :: [DataElem Unqueued Velo Required],
         slips_out :: [DataElem Queued   Slip Provided] }
 
-main_loop :: AR c MainLoop
+main_loop :: AUTOSAR MainLoop
 main_loop = atomic $ do
         velos_in <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
         slips_out <- replicateM 4 (provide QueuedSenderComSpec)
@@ -336,7 +336,7 @@ data WheelPorts = WheelPorts {
         accel_in  :: DataElem Unqueued Accel Required,
         valve_out :: ValveP Provided }
 
-abs_system :: AR c [WheelPorts]
+abs_system :: AUTOSAR [WheelPorts]
 abs_system = composition $ do
         MainLoop velos_in slips_out <- main_loop
         w_ctrls <- forM [1..4] wheel_ctrl
@@ -383,7 +383,7 @@ data Car = Car {
             v_sensors  :: [DataElem Unqueued Velo  Provided],
             a_sensors  :: [DataElem Unqueued Accel Provided] }
 
-simulated_car :: AR c Car
+simulated_car :: AUTOSAR Car
 simulated_car = atomic $ do
         wheels <- forM [1..4] $ \i -> do
             actuator <- require (UnqueuedReceiverComSpec{initValue=Just False},
@@ -421,7 +421,7 @@ init_a = 0
 -- cyclically connected into a closed system.
 --------------------------------------------------------------------------
 
-test :: AR c ()
+test :: AUTOSAR ()
 test = do
         w_ports <- abs_system
         car <- simulated_car

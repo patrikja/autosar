@@ -13,18 +13,18 @@ instance Functor (Atomic c) where fmap = undefined
 instance Applicative (Atomic c) where pure = undefined; (<*>) = undefined
 instance Monad (Atomic c) where (>>=) = undefined
 
-data Comp a
+data AUTOSAR a
 
-instance Functor Comp where fmap = undefined
-instance Applicative Comp where pure = undefined; (<*>) = undefined
-instance Monad Comp where (>>=) = undefined
+instance Functor AUTOSAR where fmap = undefined
+instance Applicative AUTOSAR where pure = undefined; (<*>) = undefined
+instance Monad AUTOSAR where (>>=) = undefined
 
 delem :: Atomic c (DataElement c)
 delem = undefined
-connect :: DataElem -> DataElem -> Comp ()
+connect :: DataElem -> DataElem -> AUTOSAR ()
 connect = undefined
 
-atomic :: (forall c . Atomic c a) -> Comp a
+atomic :: (forall c . Atomic c a) -> AUTOSAR a
 atomic = undefined
 
 --------------------
@@ -76,7 +76,7 @@ instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
 data MyPort = MyPort { e1 :: DataElem,
                        e2 :: [DataElem] }
 
---comp1 :: t -> Comp (MyPort, DataElem, Maybe Char)
+--comp1 :: t -> AUTOSAR (MyPort, DataElem, Maybe Char)
 comp1 x = atomic $ do 
             a <- delem
             b <- delem

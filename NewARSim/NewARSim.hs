@@ -220,6 +220,11 @@ data ARInstr c a where
 
 type AR c a                 = Program (ARInstr c) a
 
+data Closed
+
+type Atomic c a             = AR c a
+type AUTOSAR a              = AR Closed a
+
 runAR                       :: AR c a -> SimState -> (a,SimState)
 runAR sys st                = run sys st
   where
@@ -242,7 +247,7 @@ runAR sys st                = run sys st
 
 addTransitive (a,b) conns   = (a,b) : [ (a,c) | (x,c) <- conns, b==x ] ++ [ (c,b) | (c,x) <- conns, a==x ] ++ conns
 
-initialize                  :: (forall c . AR c a) -> (a,SimState)
+initialize                  :: AUTOSAR a -> (a,SimState)
 initialize sys              = (a, st { procs = map (apInit (conns st) (initvals st)) (procs st) })
   where (a,st)              = runAR sys state0
 
@@ -251,14 +256,14 @@ initialize sys              = (a, st { procs = map (apInit (conns st) (initvals 
 class Port p where
     type PComSpec p :: *
     type RComSpec p :: *
-    connect  :: p Provided () -> p Required () -> AR c ()
-    delegateP :: [p Provided ()] -> AR c (p Provided ())
-    delegateR :: [p Required ()] -> AR c (p Required ())
-    provide  :: PComSpec p -> AR c (p Provided c)
-    require  :: RComSpec p -> AR c (p Required c)
+    connect  :: p Provided () -> p Required () -> AUTOSAR ()
+    delegateP :: [p Provided ()] -> AUTOSAR (p Provided ())
+    delegateR :: [p Required ()] -> AUTOSAR (p Required ())
+    provide  :: PComSpec p -> Atomic c (p Provided c)
+    require  :: RComSpec p -> Atomic c (p Required c)
 
 class Delegate p r where
-    delegate :: Port p => [p r ()] -> AR c (p r ())
+    delegate :: Port p => [p r ()] -> AUTOSAR (p r ())
 
 instance Delegate p Provided where
     delegate = delegateP
@@ -329,7 +334,7 @@ instance Port (ClientServerOperation a b) where
       -- what is means: argument or result buffer length? Or both?
 
 
-connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AR c ()
+connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AUTOSAR ()
 connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
 
 
@@ -385,13 +390,13 @@ instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
 
 -- Derived AR operations ------------------------------------------------------
 
-interRunnableVariable       :: Data a => a -> AR c (InterRunnableVariable a c)
-exclusiveArea               :: AR c (ExclusiveArea c)
-runnable                    :: Invocation -> [Event c] -> RTE c a -> AR c ()
+interRunnableVariable       :: Data a => a -> Atomic c (InterRunnableVariable a c)
+exclusiveArea               :: Atomic c (ExclusiveArea c)
+runnable                    :: Invocation -> [Event c] -> RTE c a -> Atomic c ()
 serverRunnable              :: (Data a, Data b) =>
-                                Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> AR c ()
-composition                 :: AR c a -> AR c a
-atomic                      :: (forall c. AR c a) -> AR c' a
+                                Invocation -> [ServerEvent a b c] -> (a -> RTE c b) -> Atomic c ()
+composition                 :: AUTOSAR a -> AUTOSAR a
+atomic                      :: (forall c. Atomic c a) -> AUTOSAR a
 
 composition c               = singleton $ NewComponent c
 atomic c                    = singleton $ NewComponent c
@@ -708,7 +713,7 @@ traceLogs :: Trace -> Logs
 traceLogs = concat . map transLogs . traceTrans
 
 
-simulation                  :: Monad m => Scheduler m -> (forall c . AR c a) -> m (a,Trace)
+simulation                  :: Monad m => Scheduler m -> AUTOSAR a -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
                                  return (res, (state1,trs))
   where (res,state1)        = initialize sys
@@ -754,13 +759,13 @@ data SchedChoice            where
   AnySched            :: Monad m => Scheduler m -> (forall a. m a -> a) -> SchedChoice
 
 
-runSim                         :: SchedChoice -> (forall c . AR c a) -> (a,Trace)
+runSim                         :: SchedChoice -> AUTOSAR a -> (a,Trace)
 runSim TrivialSched sys        = runIdentity (simulation trivialSched sys)
 runSim RoundRobinSched sys     = evalState (simulation roundRobinSched sys) 0
 runSim (RandomSched g) sys     = evalState (simulation randomSched sys) g
 runSim (AnySched sch run) sys  = run (simulation sch sys)
 
-execSim :: SchedChoice -> (forall c . AR c a) -> Trace
+execSim :: SchedChoice -> AUTOSAR a -> Trace
 execSim sch sys = snd $ runSim sch sys
 
 limitTrans :: Int -> Trace -> Trace
