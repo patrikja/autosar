@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
+Copyright (c) 2014-2016, Johan Nordlander, Jonas Duregård, Michał Pałka,
                          Patrik Jansson and Josef Svenningsson
 All rights reserved.
 
@@ -11,8 +11,8 @@ modification, are permitted provided that the following conditions are met:
    * Redistributions in binary form must reproduce the above copyright
      notice, this list of conditions and the following disclaimer in the
      documentation and/or other materials provided with the distribution.
-   * Neither the name of the Chalmers University of Technology nor the names of its 
-     contributors may be used to endorse or promote products derived from this 
+   * Neither the name of the Chalmers University of Technology nor the names of its
+     contributors may be used to endorse or promote products derived from this
      software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -40,7 +40,7 @@ import System.CPUTime
 
 -- Simple server returning unique tickets to clients.
 ticketDispenser :: AR c (ProvidedOperation () Int ())
-ticketDispenser = component $ do 
+ticketDispenser = component $ do
                      requestTicketP <- providedOperation
                      cur <- interRunnableVariable (0 :: Int)
                      excl <- exclusiveArea
@@ -55,7 +55,7 @@ ticketDispenser = component $ do
                      return (seal requestTicketP)
 
 client :: Int -> AR c (RequiredOperation () Int ())
-client n        = component $ do 
+client n        = component $ do
                      requestTicketR <- requiredOperation
                      let clientLoop = do Ok v <- rteCall requestTicketR ()
                                          printlog "Ticket" v
@@ -68,7 +68,7 @@ system :: AR c ()
 system          = do srv <- ticketDispenser
                      r1 <- client 1
                      r2 <- client 2
-                     r3 <- client 3 
+                     r3 <- client 3
                      connect r1 srv
                      connect r2 srv
                      connect r3 srv
@@ -78,7 +78,7 @@ type RandomSeed     = Int
 type SimulationTime = Int
 
 check :: (RandomSeed -> SimulationTime -> [Measure Int]) -> IO ()
-check example = quickCheck qprop 
+check example = quickCheck qprop
   where qprop g (Small n) = counterexample ("\n"++ report measurement) $ tickets == nub tickets
           where tickets = map measureValue $ ticketsOnly measurement
                 measurement = example g n
@@ -86,7 +86,7 @@ check example = quickCheck qprop
 report ms = unlines $ map showMeasure $ ms
   where showMeasure m = measureID m ++ ": " ++ show (measureValue m)
 
-ticketsOnly = filter ((=="Ticket") . measureID) 
+ticketsOnly = filter ((=="Ticket") . measureID)
 
 run :: (RandomSeed -> SimulationTime -> [Measure Int]) -> IO ()
 run example = do c <- getCPUTime

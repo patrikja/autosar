@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
+Copyright (c) 2014-2016, Johan Nordlander, Jonas Duregård, Michał Pałka,
                          Patrik Jansson and Josef Svenningsson
 All rights reserved.
 
@@ -114,10 +114,10 @@ data StdRet a               = Ok a
 
 newtype DataElement q a r c             = DE Address      -- Async channel of "a" data
 type    DataElem q a r                  = DataElement q a r ()
-    
+
 newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
 type    ClientServerOp a b r            = ClientServerOperation a b r ()
-    
+
 
 data Queued         -- Parameter q above
 data Unqueued
@@ -371,7 +371,7 @@ seal                                = Unsafe.Coerce.unsafeCoerce
 type family Unseal a where
     Unseal (a->b)                   = Seal a -> Unseal b
     Unseal a                        = a
-    
+
 class Sealer a where
     sealBy                          :: Unseal a -> a
     sealBy                          = undefined

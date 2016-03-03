@@ -1,4 +1,4 @@
-% Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
+% Copyright (c) 2014-2016, Johan Nordlander, Jonas Duregård, Michał Pałka,
 %                          Patrik Jansson and Josef Svenningsson
 % All rights reserved.
 %

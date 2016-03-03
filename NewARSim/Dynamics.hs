@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2014-2015, Johan Nordlander, Jonas Duregård, Michał Pałka,
+Copyright (c) 2014-2016, Johan Nordlander, Jonas Duregård, Michał Pałka,
                          Patrik Jansson and Josef Svenningsson
 All rights reserved.
 
@@ -92,5 +92,3 @@ gshows p = ( \t -> let subs = Data.Data.gmapQ ((showChar ' ' .) . gshows True) t
               showParen (p && not (null subs)) $
               (showString . Data.Data.showConstr . Data.Data.toConstr $ t) . (foldr (.) id subs)
          ) `Data.Generics.extQ` (shows :: String -> ShowS)
-
-
