@@ -352,38 +352,35 @@ instance Addressed (ClientServerOperation a b r c) where
 
 
 type family Seal a where
-    Seal (DataElement q a r c)              = DataElement q a r ()
-    Seal (ClientServerOperation a b r c)    = ClientServerOperation a b r ()
-    Seal [a]                                = [Seal a]
-    Seal (a,b)                              = (Seal a, Seal b)
-    Seal (a,b,c)                            = (Seal a, Seal b, Seal c)
-    Seal (a,b,c,d)                          = (Seal a, Seal b, Seal c, Seal d)
-    Seal (a,b,c,d,e)                        = (Seal a, Seal b, Seal c, Seal d, Seal e)
-    Seal (f Required c)                     = f Required ()
-    Seal (f Provided c)                     = f Provided ()
-    Seal (m a)                              = m (Seal a)
-    Seal a                                  = a
+    Seal (k Required c)             = k Required ()
+    Seal (k Provided c)             = k Provided ()
+    Seal (k a b c d e f g h)        = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e) (Seal f) (Seal g) (Seal h)
+    Seal (k a b c d e f g)          = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e) (Seal f) (Seal g)
+    Seal (k a b c d e f)            = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e) (Seal f)
+    Seal (k a b c d e)              = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e)
+    Seal (k a b c d)                = k (Seal a) (Seal b) (Seal c) (Seal d)
+    Seal (k a b c)                  = k (Seal a) (Seal b) (Seal c)
+    Seal (k a b)                    = k (Seal a) (Seal b)
+    Seal (k a)                      = k (Seal a)
+    Seal k                          = k
 
 
-class Interface a where
-        seal                :: a -> Seal a
-        seal                = Unsafe.Coerce.unsafeCoerce
-
-instance Interface a
+seal                                :: a -> Seal a
+seal                                = Unsafe.Coerce.unsafeCoerce
 
 type family Unseal a where
-    Unseal (a->b) = Seal a -> Unseal b
-    Unseal a      = a
+    Unseal (a->b)                   = Seal a -> Unseal b
+    Unseal a                        = a
     
 class Sealer a where
-    sealBy :: Unseal a -> a
-    sealBy = undefined
+    sealBy                          :: Unseal a -> a
+    sealBy                          = undefined
 
-instance (Interface a, Sealer b) => Sealer (a -> b) where
-    sealBy f a = sealBy (f (seal a))
+instance Sealer b => Sealer (a -> b) where
+    sealBy f a                      = sealBy (f (seal a))
 
 instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
-    sealBy = id
+    sealBy                          = id
 
 
 
@@ -405,7 +402,6 @@ newConnection c             = singleton $ NewConnection c
 newAddress                  = singleton $ NewAddress
 newProcess p                = singleton $ NewProcess p
 newInit a v                 = singleton $ NewInit a v
-newInit :: Address -> Value -> Program (ARInstr c) ()
 
 interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toValue val)); return (IV a)
 exclusiveArea               = do a <- newAddress; newProcess (Excl a Free); return (EX a)

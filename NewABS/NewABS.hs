@@ -137,7 +137,7 @@ relief_seq = atomic $ do
         ctrl <- sequencer (relief_setup valve)
                           (relief_step  valve accel)
                           (relief_ctrl  valve accel)
-        return $ sealBy (,,) accel ctrl valve
+        return $ seal (accel, ctrl, valve)
 
 --------------------------------------------------------------
 -- A pressure component is a sequencer for toggling a brake
@@ -196,7 +196,7 @@ pressure_seq = atomic $ do
         ctrl <- sequencer (pressure_setup valve)
                           (pressure_step  valve accel)
                           (pressure_ctrl  valve accel)
-        return $ sealBy (,,) accel ctrl valve
+        return $ seal (accel, ctrl, valve)
 
 --------------------------------------------------------------
 -- A controller component reads a stream of slip values for a
@@ -288,7 +288,7 @@ wheel_ctrl i = composition $ do
         accel <- delegate [accel_p, accel_r]
         let valve = ValvePort{..}
             slip = slipstream ctrl
-        return $ sealBy WheelCtrl valve accel slip
+        return $ WheelCtrl valve accel slip
 
 
 
@@ -408,7 +408,7 @@ simulated_car = atomic $ do
             rteIrvWrite irv (time', velos')
             return ()
         let (actuators, v_sensors, a_sensors) = unzip3 wheels
-        return (sealBy Car actuators v_sensors a_sensors)
+        return $ sealBy Car actuators v_sensors a_sensors
 
 init_v :: Velo
 init_v = 18
