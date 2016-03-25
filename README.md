@@ -7,12 +7,13 @@ A simplified model of programming in autosar
 
 | Directory  | Comment |
 | ---------- | ------- |
-| ARSim/     | Simulator (written in Haskell)
-| prolog/    | Semantics (in Prolog)
-| FromXML/   | Translator from AUTOSAR XML to Haskell (in progress)    |
+| NewARSim/  | Simulator (written in Haskell) |
+| NewABS/    | ABS example using ARSIM |
+| ARXML/     | Translator from AUTOSAR XML to Haskell (in progress)    |
+| prolog/    | Semantics (in Prolog) |
+| tptp/      | FOL syntax for the semantics |
 | paper/     | Research paper draft about the AUTOSAR core calculus    |
 | doc/       | documentation slides etc. |
 | oldARSim/  | Earlier version of the simulator (now in ARSim/)        |
-| tptp/      | unfinished experiment with FOL syntax for the semantics |
 | mercury/   |
 | curry/     |
