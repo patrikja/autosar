@@ -33,7 +33,7 @@ module Main where
 import qualified Data.MultiMap as MMap
 import qualified Data.Char
 import qualified Data.List as List
-import Data.Maybe
+import           Data.Maybe
 import qualified Text.XML as XML
 import qualified Data.Text as Text
 import           Data.Text (Text)
@@ -41,160 +41,184 @@ import qualified System.Directory
 import qualified System.Environment
 import qualified System.Posix.Directory
 import qualified System.FilePath
-import Text.PrettyPrint
+import           Text.PrettyPrint
 
 
 main :: IO ()
 main = do [f] <- System.Environment.getArgs
           convert f
 
-convert :: FilePath -> IO ()
-convert f = do
-    doc <- XML.readFile XML.def f
-    let dir = System.FilePath.dropExtension f
+swarch = convert "swarch.arxml"
+
+convert filepath = do
+    doc <- XML.readFile XML.def filepath
+    let dir = System.FilePath.dropExtension filepath
     System.Directory.createDirectoryIfMissing True dir
-    putStr ("Creating dir " ++ dir)
+    putStrLn ("Creating dir " ++ dir)
     System.Posix.Directory.changeWorkingDirectory dir
-    optPackages [] $ XML.documentRoot doc
-    putStr "\n"
+    let top = XML.documentRoot doc
+    convertPackages top [] top
     System.Posix.Directory.changeWorkingDirectory ".."
 
+type Tag = Text
+type Name = Text
 type Path = [Text] -- reverse list of path elements
-optPackages :: Path -> XML.Element -> IO ()
-optPackages path node =
+
+convertPackages top path node =
     case optChild "AR-PACKAGES" node of
         Nothing ->
             return ()
         Just node' -> do
-            mapM (convertPackage path) $ children "AR-PACKAGE" node'
+            mapM (convertPackage top path) $ children "AR-PACKAGE" node'
             return ()
 
-convertPackage :: Path -> XML.Element -> IO ()
-convertPackage path node = do
-    out $ nl <> txt (pathStr path')
-    write path name $ optPackageElements path' node
-    optPackages path' node
+convertPackage top path node = do
+    info $ txt (pathStr path')
+    writeModule path name $ convertPackageElements top path' node
+    convertPackages top path' node
   where
     path' = name : path
     name = mkUp (shortName node)
 
-optPackageElements :: Path -> XML.Element -> Doc
-optPackageElements path node =
+convertPackageElements top path node =
     case optChild "ELEMENTS" node of
         Nothing ->
             empty
         Just node' ->
             txt "{-# LANGUAGE RecordWildCards #-}" $$
+            txt "{-# LANGUAGE DeriveDataTypeable #-}" $$
             txt "module" <+> txt modname <+> txt "where" <> nl $$
-            convertImports modname node' <> nl $$
-            vmap (convertElement path) (children "*" node') $$
+            convertImports top modname node' <> nl $$
+            vmap (convertElement top path) (children "*" node') $$
             nl
   where modname = pathStr path
 
-convertImports modname node =
+convertImports top modname node =
     txt "import NewARSim" $$
     vmap ((txt "import qualified" <+>) . txt) (List.nub (getRefs node) List.\\ [modname])
   where
     getRefs node
-        | tagOf node `elem` refTags1 = 
+        | tag `elem` refTags0 =
+            getRefs (lookupNode top (nodeVal node))
+        | tag `elem` refTags1 = 
             [Text.intercalate "." (map mkUp (init names))]
-        | tagOf node `elem` refTags2 = 
+        | tag `elem` refTags2 = 
             [Text.intercalate "." (map mkUp (init (init names)))]
+        | tag `elem` refTags3 = 
+            Text.intercalate "." (map mkUp (init names)) : getRefs (lookupNode top (nodeVal node))
         | otherwise =
             List.concatMap getRefs (children "*" node)
       where names = tail $ Text.splitOn "/" (nodeVal node)
+            tag   = tagOf node
 
-refTags1 = [ "TYPE-TREF", "REQUIRED-INTERFACE-TREF", "PROVIDED-INTERFACE-TREF", "CONSTANT-REF" ]
+refTags0 = [ "CONSTANT-REF" ]
+
+refTags1 = [ "TYPE-TREF", "SOFTWARE-COMPOSITION-TREF" ]
 
 refTags2 = [ "TARGET-P-PORT-REF", "TARGET-R-PORT-REF",
              "OPERATION-PROTOTYPE-REF", "DATA-ELEMENT-PROTOTYPE-REF" ]
 
-convertElement :: Path -> XML.Element -> Doc
-convertElement path node =
-    convertElem tag name node
+refTags3 = ["REQUIRED-INTERFACE-TREF", "PROVIDED-INTERFACE-TREF" ]
+
+
+convertElement top path node =
+    case tagOf node of
+--      "CONSTANT-SPECIFICATION"    -- inlined
+        "SYSTEM" ->
+            txt (mkLo (shortName root)) <+> txt "=" <+> convertQualName mkLo (leafVal "SOFTWARE-COMPOSITION-TREF" root)
+          where
+            root = grandChild "ROOT-SOFTWARE-COMPOSITIONS" "ROOT-SW-COMPOSITION-PROTOTYPE" node
+        "COMPOSITION-SW-COMPONENT-TYPE" ->
+            convertInterfaceType top name ports <> nl $$
+            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt (mkUp name) $$
+            txt (mkLo name) <+> equals <+> txt "composition $ do" $$ 
+            nest 4 (
+                -- vmap (convertPort top) ports $$
+                vmap (convertComp top) components $$
+                vmap (convertAssemblyConn top) assemblies $$
+                convertDelegationConns top (mkUp name) delegates $$
+                txt "return" <+> txt (mkUp name) <+> txt "{..}" )
+          where
+            ports      = grandChildren "PORTS" "*" node
+            components = grandChildren "COMPONENTS" "*" node
+            assemblies = grandChildren "CONNECTORS" "ASSEMBLY-SW-CONNECTOR" node
+            delegates  = grandChildren "CONNECTORS" "DELEGATION-SW-CONNECTOR" node
+        "APPLICATION-SW-COMPONENT-TYPE" ->
+            convertInterfaceType top name ports <> nl $$
+            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt (mkUp name) $$
+            txt (mkLo name) <+> equals <+> txt "atomic $ do" $$ 
+            nest 4 (
+                vmap (convertPort top) ports $$
+                vmap (convertInternalBehavior top name) behaviors $$
+                txt "return $" <+> convertInterfaceTerm top name ports )
+--          nl <> vmap (convertStubs (equals <+> txt "undefined") name) behaviors
+          where
+            ports      = grandChildren "PORTS" "*" node
+            behaviors  = grandChildren "INTERNAL-BEHAVIORS" "SWC-INTERNAL-BEHAVIOR" node
+        "APPLICATION-PRIMITIVE-DATA-TYPE" ->
+            txt "type" <+> txt (mkUp name) <+> equals <+> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
+        "APPLICATION-RECORD-DATA-TYPE" ->
+            txt "data" <+> txt (mkUp name) <+> equals <+> txt (mkUp name)  <+> txt "{" $$
+            nest 4 (vcat . punctuate comma $ map (convertRecordElem top name) elems) <+> txt "}" <+>
+            txt "deriving Data"
+          where
+            elems = grandChildren "ELEMENTS" "APPLICATION-RECORD-ELEMENT" node
+        "SENDER-RECEIVER-INTERFACE" ->
+            case grandChildren "DATA-ELEMENTS" "VARIABLE-DATA-PROTOTYPE" node of
+                [delem] ->
+                    nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement" <+> 
+                    convertQueued top delem <+> convertTRef top delem <+> txt "r c" $$
+                    convertFieldname top name (shortName delem) <+> equals <+> txt "id"
+                delems ->
+                    -- data ...
+                    error "not yet: multiple delems"
+        "CLIENT-SERVER-INTERFACE" ->
+--          case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of       -- r3.x
+            case grandChildren "OPERATIONS" "CLIENT-SERVER-OPERATION" node of   -- r4.0
+                [op] ->
+                    nl <> txt "type" <+> txt (mkUp name) <+> txt "r c =" <+> convertOp top op $$
+                    txt (mkLo (shortName op)) <+> equals <+> txt "id"
+                ops ->
+                    nl <> txt "data" <+> txt (mkUp name) <+> txt "r c =" <+> txt (mkUp name) <+> lbrace $$
+                    nest 4 (vcat . punctuate comma $ map (convertOp top) ops) $$
+                    nest 2 rbrace
+        _ ->
+            empty
   where
     name = shortName node
-    tag = tagOf node
 
-type Tag = Text
-type Name = Text
+convertValueSpec top tref node = convertValueSpec1 top tref (grandChild "VALUE-SPEC" "*" node)
 
-convertElem :: Tag -> Name -> XML.Element -> Doc
-convertElem "CONSTANT-SPECIFICATION" name node =
-    txt (mkLo name) <+> equals <+> convertValueSpec (grandChildren "VALUE-SPEC" "*" node)
-convertElem "COMPOSITION-SW-COMPONENT-TYPE" name node =
-    convertInterfaceType name ports $$
-    nl <> txt (mkLo name) <+> equals <+> txt "composition $ do" $$ 
-    nest 4 (
-    vmap convertComp components $$
-    vmap convertAssemblyConn assemblies $$
-    convertDelegationConns delegates $$
-    txt "return" <+> txt (mkUp name) <+> txt "{..}" )
-  where
-    ports      = grandChildren "PORTS" "*" node
-    components = grandChildren "COMPONENTS" "*" node
-    assemblies = grandChildren "CONNECTORS" "ASSEMBLY-SW-CONNECTOR" node
-    delegates  = grandChildren "CONNECTORS" "DELEGATION-SW-CONNECTOR" node
-convertElem "APPLICATION-SW-COMPONENT-TYPE" name node =
-    convertInterfaceType name ports $$
-    nl <> txt (mkLo name) <+> equals <+> txt "atomic $ do" $$ 
-    nest 4 (
-    vmap convertPort ports $$
-    vmap (convertInternalBehavior name) behaviors $$
-    txt "return" <+> txt (mkUp name) <+> txt "{..}" )
---    nl <> vmap (convertStubs (equals <+> txt "undefined") name) behaviors
-  where
-    ports      = grandChildren "PORTS" "*" node
-    behaviors  = grandChildren "INTERNAL-BEHAVIORS" "SWC-INTERNAL-BEHAVIOR" node
-convertElem "APPLICATION-PRIMITIVE-DATA-TYPE" name node =
-    txt "type" <+> txt (mkUp name) <+> equals <+> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
-convertElem "APPLICATION-RECORD-DATA-TYPE" name node =
-    txt "data" <+> txt (mkUp name) <+> equals <+> txt (mkUp name)  <+> txt "{" $$
-    nest 4 (vcat . punctuate comma $ map (convertRecordElem name) elems) <+> txt "}"
-  where
-    elems = grandChildren "ELEMENTS" "APPLICATION-RECORD-ELEMENT" node
-convertElem "SENDER-RECEIVER-INTERFACE" name node =
-    case grandChildren "DATA-ELEMENTS" "VARIABLE-DATA-PROTOTYPE" node of
-        [delem] ->
-            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement" <+> 
-            convertQueued delem <+> convertTRef delem <+> txt "r c" $$
-            convertFieldname name (shortName delem) <+> equals <+> txt "id"
-        delems ->
-            -- data ...
-            error "not yet: multiple delems"
-convertElem "CLIENT-SERVER-INTERFACE" name node =
---    case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of
-    case grandChildren "OPERATIONS" "CLIENT-SERVER-OPERATION" node of
-        [op] ->
-            nl <> txt "type" <+> txt (mkUp name) <+> txt "r c =" <+> convertOp op $$
-            txt (mkLo (shortName op)) <+> equals <+> txt "id"
-        ops ->
-            nl <> txt "data" <+> txt (mkUp name) <+> txt "r c =" <+> txt (mkUp name) <+> lbrace $$
-            nest 4 (vcat . punctuate comma $ map convertOp ops) $$
-            nest 2 rbrace
-convertElem _ name node =
-    empty
+convertValueSpec1 top tref node =
+    case tagOf node of
+        "NUMERICAL-VALUE-SPECIFICATION"
+            | Text.find (=='.') val == Nothing -> parens (txt "toEnum" <+> txt val)
+            | otherwise                        -> txt val
+        "RECORD-VALUE-SPECIFICATION" ->
+            tcon <> braces (commasep (convertField top tname) (grandChildren "FIELDS" "*" node `zip` elems))
+        tag ->
+            txt "undefined"
+    where tcon = convertQualName mkUp tref
+          tname = last (Text.splitOn "/" tref)
+          elems = grandChildren "ELEMENTS" "*" (lookupNode top tref)
+          val   = leafVal "VALUE" node
 
-convertValueSpec [node]
-    | isTag "NUMERICAL-VALUE-SPECIFICATION" node =
-        txt (leafVal "VALUE" node)
-    | isTag "RECORD-VALUE-SPECIFICATION" node =
-        txt "undefined undefined"
-    | otherwise =
-        txt "undefined"
+convertField top tname (node, el) =
+    convertFieldname top tname (leafVal "SHORT-LABEL" node) <+> equals <+> 
+    convertValueSpec1 top (leafVal "TYPE-TREF" el) node
 
-convertOp op =
+convertOp top op =
     txt "ClientServerOperation" <+> 
-    convertArgs (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c"
+    convertArgs top (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c"
 
-convertPrimitiveTypeCategory "VALUE"    = txt "Int"
+convertPrimitiveTypeCategory "VALUE"    = txt "Double"
 convertPrimitiveTypeCategory "BOOLEAN"  = txt "Bool"
 convertPrimitiveTypeCategory "STRING"   = txt "String"
 
-convertRecordElem tname node =
-    convertFieldname tname (shortName node) <+> txt "::" <+> convertTRef node
+convertRecordElem top tname node =
+    convertFieldname top tname (shortName node) <+> txt "::" <+> convertTRef top node
 
-convertQueued node
+convertQueued top node
     | isQueued  = txt "Queued"
     | otherwise = txt "Unqueued"
   where 
@@ -213,112 +237,123 @@ convertQueued node
                     _ -> False
             _ -> False
 
-convertArgs args = parens (commasep convertTRef ins) <+> parens (commasep convertTRef outs)
+convertArgs top args = parens (commasep (convertTRef top) ins) <+> parens (commasep (convertTRef top) outs)
   where
     ins  = filter ((`elem`["IN", "INOUT"]) . leafVal "DIRECTION") args
     outs = filter ((`elem`["OUT","INOUT"]) . leafVal "DIRECTION") args
 
-convertTRef node =
-    convertQualName mkUp "TYPE-TREF" node
+convertTRef top node =
+    convertQualName mkUp (leafVal "TYPE-TREF" node)
 
-convertInterfaceType name [] =
-    nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> txt (mkUp name) <+> txt "()"
-convertInterfaceType name ports =
-    nl <> txt "data" <+> txt (mkUp name) <+> txt "c" <+> equals <+> txt (mkUp name) <+> lbrace $$
-    nest 4 (vcat . punctuate comma $ map (convertSignature name) ports) $$
+convertInterfaceType top name [] =
+    nl <> txt "data" <+> txt (mkUp name) <+> equals <+> txt (mkUp name) <+> txt "()"
+convertInterfaceType top name ports =
+    nl <> txt "data" <+> txt (mkUp name) <+> equals <+> txt (mkUp name) <+> lbrace $$
+    nest 4 (vcat . punctuate comma $ map (convertSignature top name) ports) $$
     nest 2 rbrace
 
-convertInterfaceTerm name ports = empty
+convertInterfaceTerm top name [] =
+    txt (mkUp name) <+> txt "()"
+convertInterfaceTerm top name ports =
+    txt "sealBy" <+> txt (mkUp name) <+> (hcat . punctuate space $ map (txt . mkLo . shortName) ports)
 
-convertSignature :: Name -> XML.Element -> Doc
-convertSignature tname node
-    | isTag "R-PORT-PROTOTYPE" node =
-        fname <+> txt "::" <+> rTRef <+> txt "Required" <+> txt "c"
-    | isTag "P-PORT-PROTOTYPE" node =
-        fname <+> txt "::" <+> pTRef <+> txt "Provided" <+> txt "c"
-    | otherwise =
-        empty
+convertSignature top tname node =
+    case tagOf node of
+        "R-PORT-PROTOTYPE" ->
+            fname <+> txt "::" <+> rTRef <+> txt "Required" <+> txt "()"
+        "P-PORT-PROTOTYPE" ->
+            fname <+> txt "::" <+> pTRef <+> txt "Provided" <+> txt "()"
+        _ ->
+            empty
     where
-        fname = convertFieldname tname (shortName node)
-        rTRef = convertQualName mkUp "REQUIRED-INTERFACE-TREF" node
-        pTRef = convertQualName mkUp "PROVIDED-INTERFACE-TREF" node
+        fname = convertFieldname top tname (shortName node)
+        rTRef = convertQualName mkUp (leafVal "REQUIRED-INTERFACE-TREF" node)
+        pTRef = convertQualName mkUp (leafVal "PROVIDED-INTERFACE-TREF" node)
 
-convertFieldname tname name =
+convertFieldname top tname name =
     txt $ mkLo $ Text.append tname $ Text.append "_" name
 
-convertPort :: XML.Element -> Doc
-convertPort node
-    | isTag "R-PORT-PROTOTYPE" node =
-        txt name <+> txt "<-" <+> txt "require" <+> convertComSpecs rComSpecs
-    | isTag "P-PORT-PROTOTYPE" node =
-        txt name <+> txt "<-" <+> txt "provide" <+> convertComSpecs pComSpecs
-    | otherwise =
-        empty
+convertPort top node =
+    case tagOf node of
+        "R-PORT-PROTOTYPE" ->
+            txt name <+> txt "<-" <+> txt "require" <+> convertComSpecs top (rComSpecs `zip` rElems)
+        "P-PORT-PROTOTYPE" ->
+            txt name <+> txt "<-" <+> txt "provide" <+> convertComSpecs top (pComSpecs `zip` pElems)
+        _ ->
+            empty
     where
         name = mkLo (shortName node)
         rComSpecs = grandChildren "REQUIRED-COM-SPECS" "*" node
         pComSpecs = grandChildren "PROVIDED-COM-SPECS" "*" node
+        rElems = grandChildren "DATA-ELEMENTS" "*" $ lookupNode top $ leafVal "REQUIRED-INTERFACE-TREF" node
+        pElems = grandChildren "DATA-ELEMENTS" "*" $ lookupNode top $ leafVal "PROVIDED-INTERFACE-TREF" node
 
-convertComSpecs [] =
+convertComSpecs top [] =
     txt "()"
-convertComSpecs specs =
-    parens (commasep convertComSpec specs)
+convertComSpecs top specs =
+    parens (commasep (convertComSpec top) specs)
 
-convertComSpec :: XML.Element -> Doc
-convertComSpec node
-    | isTag "NONQUEUED-RECEIVER-COM-SPEC" node =
-        txt "UnqueuedReceiverComSpec{ initSend =" <+> initVal <+> txt "}"
-    | isTag "NONQUEUED-SENDER-COM-SPEC" node =
-        txt "UnqueuedSenderComSpec{ initValue =" <+> initVal <+> txt "}"
-    | isTag "QUEUED-RECEIVER-COM-SPEC" node =
-        txt "QueuedReceiverComSpec{ queueLength =" <+> queueLength <+> txt "}"
-    | isTag "QUEUED-SENDER-COM-SPEC" node =
-        txt "QueuedSenderComSpec"
-    | isTag "SERVER-COM-SPEC" node =
-        txt "ServerComSpec{ bufferLength =" <+> queueLength <+> txt "}"
-    | isTag "CLIENT-COM-SPEC" node =
-        txt "ClientComSpec"
+convertComSpec top (node,el) =
+    case tagOf node of
+        "NONQUEUED-RECEIVER-COM-SPEC" ->
+            txt "UnqueuedReceiverComSpec{ initValue =" <+> initVal <+> txt "}"
+        "NONQUEUED-SENDER-COM-SPEC" ->
+            txt "UnqueuedSenderComSpec{ initSend =" <+> initVal <+> txt "}"
+        "QUEUED-RECEIVER-COM-SPEC" ->
+            txt "QueuedReceiverComSpec{ queueLength =" <+> queueLength <+> txt "}"
+        "QUEUED-SENDER-COM-SPEC" ->
+            txt "QueuedSenderComSpec"
+        "SERVER-COM-SPEC" ->
+            txt "ServerComSpec{ bufferLength =" <+> queueLength <+> txt "}"
+        "CLIENT-COM-SPEC" ->
+            txt "ClientComSpec"
     where
+        tref = leafVal "TYPE-TREF" el
         initVal = case optChild "INIT-VALUE" node of 
                     Nothing -> txt "Nothing"
-                    Just node' -> txt "Just" <+> convertExp (onlyChild node')
+                    Just node' -> txt "Just" <+> convertExp top tref (onlyChild node')
         queueLength = txt (leafVal "QUEUE-LENGTH" node)
 
-convertExp :: XML.Element -> Doc
-convertExp node
-    | isTag "CONSTANT-REFERENCE" node =
-        convertQualName mkLo "CONSTANT-REF" node
-    | otherwise =
-        error ("Exp node: " ++ show node)
+lookupNode top ref = walk top (tail $ Text.splitOn "/" ref)
+    where
+        walk node []            = node
+        walk node (name:names)  = case [ n | n <- grandChildren "*" "*" node, hasName n name ] of
+                                    [node'] -> walk node' names
+                                    _       -> error ("Can't find path " ++ show (name:names) ++ " in " ++ show node)
 
-convertComp :: XML.Element -> Doc
-convertComp node
-    | isTag "SW-COMPONENT-PROTOTYPE" node =
-        txt name <+> txt "<-" <+> convertQualName mkLo "TYPE-TREF" node
-    | otherwise =
-        empty
+convertExp top tref node = 
+    case tagOf node of
+        "CONSTANT-REFERENCE" ->
+            convertValueSpec top tref $ lookupNode top (leafVal "CONSTANT-REF" node)
+--            convertQualName mkLo (leafVal "CONSTANT-REF" node)
+        _ -> 
+            error ("Exp node: " ++ show node)
+
+convertComp top node =
+    case tagOf node of
+        "SW-COMPONENT-PROTOTYPE" ->
+            txt name <+> txt "<-" <+> convertQualName mkLo (leafVal "TYPE-TREF" node)
+        _ ->
+            empty
     where
         name = mkLo (shortName node)
 
-convertQualName :: (Text -> Text) -> Text -> XML.Element -> Doc
-convertQualName f tag node = txt $ Text.intercalate "." items
+convertQualName f ref = txt $ Text.intercalate "." items
   where
-    names = tail $ Text.splitOn "/" $ leafVal tag node
+    names = tail $ Text.splitOn "/" ref
     items = map mkUp modules ++ [f element]
     modules = init names
     element = last names
 
-convertQualName2 :: (Text -> Text) -> Text -> XML.Element -> Doc
-convertQualName2 f tag node = txt $ Text.intercalate "." items
+convertQualName2 f ref = txt $ Text.intercalate "." items
   where
-    names = tail $ Text.splitOn "/" $ leafVal tag node
+    names = tail $ Text.splitOn "/" ref
     items = map mkUp modules ++ [f element]
     path = init names
     modules = init path
     element = Text.append (last path) (Text.append "_" (last names))
 
-convertAssemblyConn :: XML.Element -> Doc
-convertAssemblyConn node =
+convertAssemblyConn top node =
     txt "connect" <+>
     parens (convertSel "TARGET-P-PORT-REF" "CONTEXT-COMPONENT-REF" pnode) <+>
     parens (convertSel "TARGET-R-PORT-REF" "CONTEXT-COMPONENT-REF" rnode)
@@ -327,20 +362,17 @@ convertAssemblyConn node =
     rnode = child "REQUESTER-IREF" node
 
 convertSel tag1 tag2 node =
-    convertQualName2 mkLo tag1 node <+> txt (lastPathVal tag2 node)
+    convertQualName2 mkLo (leafVal tag1 node) <+> txt (mkLo (lastPathVal tag2 node))
 
-convertDelegationConns :: [XML.Element] -> Doc
-convertDelegationConns nodes = vmap convertDelegation (MMap.assocs connmap)
-    where connmap = MMap.fromList (map extractDelegationConn nodes)
+convertDelegationConns top tname nodes = vmap (convertDelegation top tname) (MMap.assocs connmap)
+    where connmap = MMap.fromList (map (extractDelegationConn top) nodes)
 
-convertDelegation :: (Text,[Doc]) -> Doc
-convertDelegation (outer, [single]) = 
-    txt "let" <+> txt outer <+> equals <+> single
-convertDelegation (outer, multiple) =
-    txt outer <+> txt "<- delegate" <+> brackets (commasep id multiple)
+convertDelegation top tname (outer, [single]) = 
+    txt "let" <+> convertFieldname top tname outer <+> equals <+> single
+convertDelegation top tname (outer, multiple) =
+    convertFieldname top tname outer <+> txt "<- delegate" <+> brackets (commasep id multiple)
 
-extractDelegationConn :: XML.Element -> (Text,Doc)
-extractDelegationConn node =
+extractDelegationConn top node =
     case (optChild "R-PORT-IN-COMPOSITION-INSTANCE-REF" inner,
           optChild "P-PORT-IN-COMPOSITION-INSTANCE-REF" inner) of
         (Just rnode, _) ->
@@ -351,16 +383,16 @@ extractDelegationConn node =
     inner = child "INNER-PORT-IREF" node
     outer = lastPathVal "OUTER-PORT-REF" node
 
-convertInternalBehavior comp node =
-    vmap (convertRunnable comp events vars excl) runnables
+convertInternalBehavior top comp node =
+    vmap (convertRunnable top comp events vars excl) runnables
   where
     runnables = grandChildren "RUNNABLES" "RUNNABLE-ENTITY" node
     events = grandChildren "EVENTS" "*" node
     vars = grandChildren "EXPLICIT-INTER-RUNNABLE-VARIABLES" "VARIABLE-DATA-PROTOTYPE" node
     excl = grandChildren "EXCLUSIVE-AREAS" "EXCLUSIVE-AREA" node
 
-convertRunnable comp events vars excl node =
-    runnable <+> arg <+> brackets (commasep convertEvent myEvents) <+> txt "$ do" $$ nest 4 (txt "undefined")
+convertRunnable top comp events vars excl node =
+    runnable <+> arg <+> brackets (commasep (convertEvent top) myEvents) <+> txt "$ do" $$ nest 4 (txt "undefined")
   where
     name        = shortName node
     concurrent  = leafVal "CAN-BE-INVOKED-CONCURRENTLY" node
@@ -371,20 +403,21 @@ convertRunnable comp events vars excl node =
     runnable    = if null opInvoked then txt "runnable" else txt "serverRunnable"
 
 handledEvent rname event =
-    lastPathVal "START-ON-EVENT-REF" event == rname &&
+    mkLo (lastPathVal "START-ON-EVENT-REF" event) == rname &&
     tagOf event `elem` ["OPERATION-INVOKED","DATA-RECEIVED-EVENT","TIMING-EVENT","INIT-EVENT"]
 
-convertEvent node
-    | isTag "OPERATION-INVOKED" node =
-        txt "OperationInvokedEvent" <+> parens operRef
-    | isTag "DATA-RECEIVED-EVENT" node =
-        txt "DataReceivedEvent" <+> parens elemRef
-    | isTag "TIMING-EVENT" node =
-        txt "TimingEvent" <+> txt (leafVal "PERIOD" node)
-    | isTag "INIT-EVENT" node =
-        txt "InitEvent"
-    | otherwise =
-        empty
+convertEvent top node =
+    case tagOf node of
+        "OPERATION-INVOKED" ->
+            txt "OperationInvokedEvent" <+> parens operRef
+        "DATA-RECEIVED-EVENT" ->
+            txt "DataReceivedEvent" <+> parens elemRef
+        "TIMING-EVENT" ->
+            txt "TimingEvent" <+> txt (leafVal "PERIOD" node)
+        "INIT-EVENT" ->
+            txt "InitEvent"
+        _ ->
+            empty
   where
     operRef = convertSel "OPERATION-PROTOTYPE-REF" "P-PORT-PROTOTYPE-REF" (child "OPERATION-IREF" node)
     elemRef = convertSel "DATA-ELEMENT-PROTOTYPE-REF" "R-PORT-PROTOTYPE-REF" (child "DATA-IREF" node)
@@ -410,16 +443,14 @@ convertStub comp rhs runnable =
 
 
 
-mkLo :: Text -> Text
 mkLo s = if Data.Char.isLower (Text.head s) then s else Text.cons 'x' s
 
-mkUp :: Text -> Text
 mkUp s = if Data.Char.isUpper (Text.head s) then s else Text.cons 'X' s
 
 splitPath :: Text -> [Text]
 splitPath = Text.splitOn "/"
 
-lastPathVal tag = mkLo . last . splitPath . leafVal tag
+lastPathVal tag = last . splitPath . leafVal tag
 
 pathStr path = Text.intercalate "." (reverse path)
 
@@ -443,6 +474,11 @@ child tag node =
         _ -> error ("#Bad tag: " ++ Text.unpack tag ++ " (has: " ++ 
                     render (commasep (txt . tagOf) (children "*" node)) ++ ")")
 
+hasName node name =
+    case optChild "SHORT-NAME" node of
+        Just n -> name == nodeVal n
+        _      -> False
+
 hasChild tag node =
     case optChild tag node of
         Just _ -> True
@@ -461,6 +497,8 @@ children tag node =
 grandChildren tag1 tag2 =
     List.concatMap (children tag2) . children tag1
 
+grandChild tag1 tag2 =
+    head . grandChildren tag1 tag2
 
 txt = text . Text.unpack
 
@@ -472,10 +510,9 @@ commasep f = hcat . punctuate comma . map f
 
 nl = text "\n"
 
-out = putStr . render
+info = putStrLn . render
 
-write :: Path -> Name -> Doc -> IO ()
-write revPath name doc
+writeModule revPath name doc
     | isEmpty doc =
         return ()
     | otherwise = do
