@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Main where
 
 import NewARSim
@@ -77,7 +78,7 @@ sequencer setup step ctrl = do
                             | otherwise        -> step i
             rteIrvWrite state s'
             rteExit excl
-        onoff <- provide ServerComSpec{bufferLength=0}
+        onoff <- providedPort
         serverRunnable (MinInterval 0) [OperationInvokedEvent onoff] $ \on -> do
             rteEnter excl
             s <- ctrl on
@@ -132,8 +133,8 @@ type Relief = ( DataElem Unqueued Accel Required,
 
 relief_seq :: AUTOSAR Relief
 relief_seq = atomic $ do
-        valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
-        accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
+        valve <- providedPort
+        accel <- requiredPort
         ctrl <- sequencer (relief_setup valve)
                           (relief_step  valve accel)
                           (relief_ctrl  valve accel)
@@ -191,8 +192,8 @@ type PresSeq = ( DataElem Unqueued Accel Required,
 
 pressure_seq :: AUTOSAR PresSeq
 pressure_seq = atomic $ do
-        valve <- provide UnqueuedSenderComSpec{initSend=Nothing}
-        accel <- require UnqueuedReceiverComSpec{initValue=Nothing}
+        valve <- providedPort
+        accel <- requiredPort
         ctrl <- sequencer (pressure_setup valve)
                           (pressure_step  valve accel)
                           (pressure_ctrl  valve accel)
@@ -217,9 +218,10 @@ data Controller = Controller {
 controller :: AUTOSAR Controller
 controller = atomic $ do
         memo <- interRunnableVariable 1.0
-        slipstream     <- require QueuedReceiverComSpec{queueLength=10}
-        onoff_pressure <- require ClientComSpec
-        onoff_relief   <- require ClientComSpec
+        slipstream     <- requiredPort
+        onoff_pressure <- requiredPort
+        onoff_relief   <- requiredPort
+        comSpec slipstream (QueueLength 10)
         runnable (MinInterval 0) [DataReceivedEvent slipstream] $ do
             Ok slip   <- rteReceive slipstream
             Ok slip'  <- rteIrvRead memo
@@ -247,16 +249,19 @@ data ValvePort r c = ValvePort {
         pressure :: DataElement Unqueued Valve r c }
 type ValveP r = ValvePort r ()
 
+instance ComSpec (ValvePort Required) where
+    type ComSpecFor (ValvePort Required) = InitValue (Bool,Bool)
+    comSpec p (InitValue (rv,pv)) = do
+        comSpec (relief p) (InitValue rv)
+
 instance Port ValvePort where
-        type PComSpec ValvePort = (UnqueuedSenderComSpec Valve, UnqueuedSenderComSpec Valve)
-        type RComSpec ValvePort = (UnqueuedReceiverComSpec Valve, UnqueuedReceiverComSpec Valve)
-        provide (a,b) = do
-            relief <- provide a
-            pressure <- provide b
+        providedPort = do
+            relief <- providedPort
+            pressure <- providedPort
             return ValvePort{..}
-        require (a,b) = do
-            relief <- require a
-            pressure <- require b
+        requiredPort = do
+            relief <- requiredPort
+            pressure <- requiredPort
             return ValvePort{..}
         connect a b = do
             connect (relief a) (relief b)
@@ -314,8 +319,8 @@ data MainLoop = MainLoop {
 
 main_loop :: AUTOSAR MainLoop
 main_loop = atomic $ do
-        velos_in <- replicateM 4 (require UnqueuedReceiverComSpec{initValue=Nothing})
-        slips_out <- replicateM 4 (provide QueuedSenderComSpec)
+        velos_in <- replicateM 4 requiredPort
+        slips_out <- replicateM 4 providedPort
         runnable (MinInterval 0) [TimingEvent 0.01] $ do
             velos <- mapM (liftM fromOk . rteRead) velos_in
             let v0 = maximum velos
@@ -386,10 +391,12 @@ data Car = Car {
 simulated_car :: AUTOSAR Car
 simulated_car = atomic $ do
         wheels <- forM [1..4] $ \i -> do
-            actuator <- require (UnqueuedReceiverComSpec{initValue=Just False},
-                                 UnqueuedReceiverComSpec{initValue=Just True})
-            v_sensor <- provide UnqueuedSenderComSpec{initSend=Just init_v}
-            a_sensor <- provide UnqueuedSenderComSpec{initSend=Just init_a}
+            actuator <- requiredPort
+            v_sensor <- providedPort
+            a_sensor <- providedPort
+            comSpec actuator (InitValue (False, True))
+            comSpec v_sensor (InitValue init_v)
+            comSpec a_sensor (InitValue init_a)
             when (i<=2) $ do
                 probeWrite ("wheel "++show i++" speed")         v_sensor
                 probeWrite ("wheel "++show i++" acceleration")  a_sensor

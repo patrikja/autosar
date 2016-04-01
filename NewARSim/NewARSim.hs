@@ -125,12 +125,8 @@ data Unqueued
 data Required       -- Parameter r above
 data Provided
 
-data UnqueuedSenderComSpec a    = UnqueuedSenderComSpec { initSend :: Maybe a }
-data UnqueuedReceiverComSpec a  = UnqueuedReceiverComSpec { initValue :: Maybe a }
-data QueuedSenderComSpec a      = QueuedSenderComSpec
-data QueuedReceiverComSpec a    = QueuedReceiverComSpec { queueLength :: Int }
-data ServerComSpec a b          = ServerComSpec { bufferLength :: Int }
-data ClientComSpec              = ClientComSpec
+data InitValue a                = InitValue a
+data QueueLength a              = QueueLength a
 
 newtype InterRunnableVariable a c   = IV Address
 newtype ExclusiveArea c             = EX Address
@@ -213,6 +209,7 @@ apInit conn mp p            = p
 data ARInstr c a where
     NewAddress              :: ARInstr c Address
     NewProcess              :: Proc -> ARInstr c ()
+    ModProcess              :: (Proc -> Proc) -> ARInstr c ()
     NewProbe                :: String -> (Label -> Maybe Value) -> ARInstr c ()
     NewInit                 :: Address -> Value -> ARInstr c ()
     NewComponent            :: AR c a -> ARInstr c a  -- Too strong requirement on the argument.
@@ -235,6 +232,8 @@ runAR sys st                = run sys st
                             = run (sys (nextA st)) (st { nextA = nextA st + 1 })
     run' (NewProcess p :>>= sys) st
                             = run (sys ()) (st { procs = p : procs st })
+    run' (ModProcess f :>>= sys) st
+                            = run (sys ()) (st { procs = map f (procs st) })
     run' (NewProbe s f :>>= sys) st
                             = run (sys ()) (st { simProbes = (s,f) : simProbes st })
     run' (NewInit a v :>>= sys) st
@@ -253,14 +252,18 @@ initialize sys              = (a, st { procs = map (apInit (conns st) (initvals 
 
 -- Restricting connections ----------------------------------------------------
 
+
+
 class Port p where
-    type PComSpec p :: *
-    type RComSpec p :: *
     connect  :: p Provided () -> p Required () -> AUTOSAR ()
     delegateP :: [p Provided ()] -> AUTOSAR (p Provided ())
     delegateR :: [p Required ()] -> AUTOSAR (p Required ())
-    provide  :: PComSpec p -> Atomic c (p Provided c)
-    require  :: RComSpec p -> Atomic c (p Required c)
+    providedPort  :: Atomic c (p Provided c)
+    requiredPort  :: Atomic c (p Required c)
+
+class ComSpec p where
+    type ComSpecFor p :: *
+    comSpec :: p c -> ComSpecFor p -> Atomic c ()
 
 class Delegate p r where
     delegate :: Port p => [p r ()] -> AUTOSAR (p r ())
@@ -271,9 +274,21 @@ instance Delegate p Provided where
 instance Delegate p Required where
     delegate = delegateR
 
+instance Data a => ComSpec (DataElement Unqueued a Provided) where
+    type ComSpecFor (DataElement Unqueued a Provided) = InitValue a
+    comSpec (DE a) (InitValue x) = do
+        newInit a (toValue x)
+        
+instance Data a => ComSpec (DataElement Unqueued a Required) where
+    type ComSpecFor (DataElement Unqueued a Required) = InitValue a
+    comSpec (DE a) (InitValue x) = do
+        modProcess f
+      where
+        f (DElem b s _) | a==b  = DElem b s (Ok (toValue x))
+        f p                     = p
+        
+
 instance Data a => Port (DataElement Unqueued a) where
-    type PComSpec (DataElement Unqueued a) = UnqueuedSenderComSpec a
-    type RComSpec (DataElement Unqueued a) = UnqueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
     delegateP ps = do
         a <- newAddress
@@ -283,25 +298,23 @@ instance Data a => Port (DataElement Unqueued a) where
         a <- newAddress
         mapM newConnection [ (a,p) | DE p <- ps ]
         return (DE a)
-    provide UnqueuedSenderComSpec{initSend=Nothing} = do
+    providedPort = do
         a <- newAddress
         return (DE a)
-    provide UnqueuedSenderComSpec{initSend=Just x} = do
-        a <- newAddress
-        newInit a (toValue x)
-        return (DE a)
-    require UnqueuedReceiverComSpec{initValue=Nothing} = do
+    requiredPort = do
         a <- newAddress
         newProcess (DElem a False NO_DATA)
         return (DE a)
-    require UnqueuedReceiverComSpec{initValue=Just x} = do
-        a <- newAddress
-        newProcess (DElem a False (Ok (toValue x)))
-        return (DE a)
+
+instance Data a => ComSpec (DataElement Queued a Required) where
+    type ComSpecFor (DataElement Queued a Required) = QueueLength Int
+    comSpec (DE a) (QueueLength l) = do
+        modProcess f
+      where
+        f (QElem b _ vs) | a==b = QElem b l vs
+        f p                     = p
 
 instance Port (DataElement Queued a) where
-    type PComSpec (DataElement Queued a) = QueuedSenderComSpec a
-    type RComSpec (DataElement Queued a) = QueuedReceiverComSpec a
     connect (DE a) (DE b) = newConnection (a,b)
     delegateP ps = do
         a <- newAddress
@@ -311,12 +324,17 @@ instance Port (DataElement Queued a) where
         a <- newAddress
         mapM newConnection [ (a,p) | DE p <- ps ]
         return (DE a)
-    provide s = do a <- newAddress; return (DE a)
-    require s = do a <- newAddress; newProcess (QElem a (queueLength s) []); return (DE a)
+    providedPort = do a <- newAddress; return (DE a)
+    requiredPort = do a <- newAddress; newProcess (QElem a 10 []); return (DE a)
+
+instance ComSpec (ClientServerOperation a b Provided) where
+    type ComSpecFor (ClientServerOperation a b Provided) = QueueLength Int
+    comSpec (OP a) (QueueLength l) = do
+        -- There is a queueLength defined in AUTOSAR, but it is unclear what is means
+        -- for a ClientServerOperation: argument or result buffer length? Or both?
+        return ()
 
 instance Port (ClientServerOperation a b) where
-    type PComSpec (ClientServerOperation a b) = ServerComSpec a b
-    type RComSpec (ClientServerOperation a b) = ClientComSpec
     connect (OP a) (OP b) = newConnection (a,b)
     delegateP ps = do
         a <- newAddress
@@ -326,12 +344,10 @@ instance Port (ClientServerOperation a b) where
         a <- newAddress
         mapM newConnection [ (a,p) | OP p <- ps ]
         return (OP a)
-    provide s = do a <- newAddress; return (OP a)
-    require s = do a <- newAddress;
-                   newProcess (Op a []); -- result buffer allocation
-                   return (OP a)
-      -- There is a bufferLength in s, but it is unclear (in AUTOSAR)
-      -- what is means: argument or result buffer length? Or both?
+    providedPort = do a <- newAddress; return (OP a)
+    requiredPort = do a <- newAddress;
+                      newProcess (Op a []);
+                      return (OP a)
 
 
 connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AUTOSAR ()
@@ -401,6 +417,7 @@ atomic c                    = singleton $ NewComponent c
 newConnection c             = singleton $ NewConnection c
 newAddress                  = singleton $ NewAddress
 newProcess p                = singleton $ NewProcess p
+modProcess f                = singleton $ ModProcess f
 newInit a v                 = singleton $ NewInit a v
 
 interRunnableVariable val   = do a <- newAddress; newProcess (Irv a (toValue val)); return (IV a)
@@ -716,10 +733,23 @@ simulation sched sys        = do trs <- simulate sched conn (procs state1)
         a `conn` b          = (a,b) `elem` conns state1
 
 simulate                    :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m [Transition]
-simulate sched conn procs
-  | null alts               = return []
-  | otherwise               = do trans@Trans{transProcs = procs1} <- maximumProgress sched alts
-                                 liftM (trans:) $ simulate sched conn procs1
+simulate sched conn procs   = do next <- simulate1 sched conn procs
+                                 case next of
+                                     Nothing ->
+                                         return []
+                                     Just trans@Trans{transProcs = procs1} ->
+                                         liftM (trans:) $ simulate sched conn procs1
+
+simulate0                   :: Monad m => Scheduler m -> AUTOSAR a -> m (a,Trace)
+simulate0 sched sys         = do trs <- simulate sched conn (procs state1)
+                                 return (res, (state1,trs))
+  where (res,state1)        = initialize sys
+        a `conn` b          = (a,b) `elem` conns state1
+
+simulate1                   :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
+simulate1 sched conn procs
+  | null alts               = return Nothing
+  | otherwise               = liftM Just $ maximumProgress sched alts
   where alts                = step conn procs
 
 maximumProgress             :: Scheduler m -> Scheduler m
