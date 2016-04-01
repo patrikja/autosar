@@ -130,14 +130,14 @@ convertElement top path node =
             root = grandChild "ROOT-SOFTWARE-COMPOSITIONS" "ROOT-SW-COMPOSITION-PROTOTYPE" node
         "COMPOSITION-SW-COMPONENT-TYPE" ->
             convertInterfaceType top name ports <> nl $$
-            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt (mkUp name) $$
+            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt tname $$
             txt (mkLo name) <+> equals <+> txt "composition $ do" $$ 
             nest 4 (
                 -- vmap (convertPort top) ports $$
                 vmap (convertComp top) components $$
                 vmap (convertAssemblyConn top) assemblies $$
-                convertDelegationConns top (mkUp name) delegates $$
-                txt "return" <+> txt (mkUp name) <+> txt "{..}" )
+                convertDelegationConns top tname delegates $$
+                txt "return" <+> txt tname <+> txt "{..}" )
           where
             ports      = grandChildren "PORTS" "*" node
             components = grandChildren "COMPONENTS" "*" node
@@ -145,7 +145,7 @@ convertElement top path node =
             delegates  = grandChildren "CONNECTORS" "DELEGATION-SW-CONNECTOR" node
         "APPLICATION-SW-COMPONENT-TYPE" ->
             convertInterfaceType top name ports <> nl $$
-            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt (mkUp name) $$
+            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt tname $$
             txt (mkLo name) <+> equals <+> txt "atomic $ do" $$ 
             nest 4 (
                 vmap (convertPort top) ports $$
@@ -156,9 +156,9 @@ convertElement top path node =
             ports      = grandChildren "PORTS" "*" node
             behaviors  = grandChildren "INTERNAL-BEHAVIORS" "SWC-INTERNAL-BEHAVIOR" node
         "APPLICATION-PRIMITIVE-DATA-TYPE" ->
-            txt "type" <+> txt (mkUp name) <+> equals <+> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
+            txt "type" <+> txt tname <+> equals <+> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
         "APPLICATION-RECORD-DATA-TYPE" ->
-            txt "data" <+> txt (mkUp name) <+> equals <+> txt (mkUp name)  <+> txt "{" $$
+            txt "data" <+> txt tname <+> equals <+> txt tname  <+> txt "{" $$
             nest 4 (vcat . punctuate comma $ map (convertRecordElem top name) elems) <+> txt "}" <+>
             txt "deriving Data"
           where
@@ -166,26 +166,46 @@ convertElement top path node =
         "SENDER-RECEIVER-INTERFACE" ->
             case grandChildren "DATA-ELEMENTS" "VARIABLE-DATA-PROTOTYPE" node of
                 [delem] ->
-                    nl <> txt "type" <+> txt (mkUp name) <+> txt "r c = DataElement" <+> 
-                    convertQueued top delem <+> convertTRef top delem <+> txt "r c" $$
-                    convertFieldname top name (shortName delem) <+> equals <+> txt "id"
+                    nl <> txt "type" <+> txt tname <+> txt "r c" <+> equals <+> convertDataElem top delem $$
+                    convertFieldname top tname (shortName delem) <+> equals <+> txt "id"
                 delems ->
-                    -- data ...
-                    error "not yet: multiple delems"
+                    nl <> txt "data" <+> txt tname <+> txt "r c =" <+> txt tname <+> lbrace $$
+                    nest 4 (vcat . punctuate comma $ map (convertDataElemField top tname) delems) $$
+                    nest 2 rbrace
         "CLIENT-SERVER-INTERFACE" ->
 --          case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of       -- r3.x
             case grandChildren "OPERATIONS" "CLIENT-SERVER-OPERATION" node of   -- r4.0
                 [op] ->
-                    nl <> txt "type" <+> txt (mkUp name) <+> txt "r c =" <+> convertOp top op $$
-                    txt (mkLo (shortName op)) <+> equals <+> txt "id"
+                    nl <> txt "type" <+> txt tname <+> txt "r c" <+> equals <+> convertOp top op $$
+                    convertFieldname top tname (shortName op) <+> equals <+> txt "id"
                 ops ->
-                    nl <> txt "data" <+> txt (mkUp name) <+> txt "r c =" <+> txt (mkUp name) <+> lbrace $$
-                    nest 4 (vcat . punctuate comma $ map (convertOp top) ops) $$
+                    nl <> txt "data" <+> txt tname <+> txt "r c =" <+> txt tname <+> lbrace $$
+                    nest 4 (vcat . punctuate comma $ map (convertOpField top tname) ops) $$
                     nest 2 rbrace
-        _ ->
-            empty
+        "SW-BASE-TYPE" ->
+            txt "type" <+> txt tname <+> equals <+> case leafVal "BASE-TYPE-ENCODING" node of
+                                                        "ISO-8859-1" -> txt "String"
+                                                        "ISO-8859-2" -> txt "String"
+                                                        "WINDOWS-1252" -> txt "String"
+                                                        "UTF-8" -> txt "Char"
+                                                        "UTF-16" -> txt "Char"
+                                                        "UCS-2" -> txt "Char"
+                                                        "NONE" -> txt "Int"
+                                                        "1C" -> txt "Int"
+                                                        "2C" -> txt "Int"
+                                                        "VOID" -> txt "()"
+                                                        "BOOLEAN" -> txt "Bool"
+                                                        _ -> txt "Double"
+        "IMPLEMENTATION-DATA-TYPE" ->
+            txt "type" <+> txt tname <+> equals <+>
+            case defProps "BASE-TYPE-REF" node of
+                [ref] -> convertQualName mkUp (nodeVal ref)
+                _     -> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
+        x ->
+            txt "{-" <+> txt x <+> txt name <+> txt "-}"
   where
     name = shortName node
+    tname = mkUp name
 
 convertValueSpec top tref node = convertValueSpec1 top tref (grandChild "VALUE-SPEC" "*" node)
 
@@ -207,18 +227,29 @@ convertField top tname (node, el) =
     convertFieldname top tname (leafVal "SHORT-LABEL" node) <+> equals <+> 
     convertValueSpec1 top (leafVal "TYPE-TREF" el) node
 
-convertOp top op =
-    txt "ClientServerOperation" <+> 
-    convertArgs top (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c"
+convertDataElemField top tname delem =
+    convertFieldname top tname (shortName delem) <+> equals <+> convertDataElem top delem
 
-convertPrimitiveTypeCategory "VALUE"    = txt "Double"
-convertPrimitiveTypeCategory "BOOLEAN"  = txt "Bool"
-convertPrimitiveTypeCategory "STRING"   = txt "String"
+convertDataElem top delem =
+    txt "DataElement" <+> convertQueued top delem <+> convertTRef top delem <+> txt "r c"
+
+convertOpField top tname op =
+    convertFieldname top tname (shortName op) <+> equals <+> convertOp top op
+    
+convertOp top op =
+    txt "ClientServerOperation" <+> convertArgs top (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c"
+
+convertPrimitiveTypeCategory "VALUE"            = txt "Double"
+convertPrimitiveTypeCategory "BOOLEAN"          = txt "Bool"
+convertPrimitiveTypeCategory "STRING"           = txt "String"
+convertPrimitiveTypeCategory "DATA_REFERENCE"   = txt "Int {- DATA_REFERENCE -}"     -- Really dubious, of course!
+convertPrimitiveTypeCategory x                  = txt "?" <> txt x <> txt "?"
+
 
 convertRecordElem top tname node =
     convertFieldname top tname (shortName node) <+> txt "::" <+> convertTRef top node
 
-convertQueued top node
+convertQueued1 top node
     | isQueued  = txt "Queued"
     | otherwise = txt "Unqueued"
   where 
@@ -236,6 +267,13 @@ convertQueued top node
                             _ -> False
                     _ -> False
             _ -> False
+
+convertQueued top node = case defProps "SW-IMPL-POLICY" node of
+                            [policy] -> if nodeVal policy == "queued" then txt "Queued" else txt "Unqueued"
+                            _ -> txt "Unqueued"
+
+defProps tag node = concat $ map (grandChildren "SW-DATA-DEF-PROPS-CONDITIONAL" tag)
+                           $ grandChildren "SW-DATA-DEF-PROPS" "SW-DATA-DEF-PROPS-VARIANTS" node
 
 convertArgs top args = parens (commasep (convertTRef top) ins) <+> parens (commasep (convertTRef top) outs)
   where
