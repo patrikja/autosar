@@ -1,0 +1,869 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 autosar_4-1-1.xsd">
+  <AR-PACKAGES>
+    <AR-PACKAGE>
+      <SHORT-NAME>Demo</SHORT-NAME>
+      <AR-PACKAGES>
+        <AR-PACKAGE>
+          <SHORT-NAME>Door</SHORT-NAME>
+          <ELEMENTS>
+            <APPLICATION-SW-COMPONENT-TYPE UUID="2dbc5fd9-e3c1-3151-a0e4-b723a660be32">
+              <SHORT-NAME>Door</SHORT-NAME>
+              <PORTS>
+                <P-PORT-PROTOTYPE UUID="9dc49b58-a185-36d4-8594-1e564711dd28">
+                  <SHORT-NAME>Status</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="SENDER-RECEIVER-INTERFACE">/Demo/Interfaces/DoorStatus</PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+                <P-PORT-PROTOTYPE UUID="48d04d5b-cf28-3086-80a1-8712384b653f">
+                  <SHORT-NAME>Command</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Demo/Interfaces/DoorCommands</PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+              </PORTS>
+              <INTERNAL-BEHAVIORS>
+                <SWC-INTERNAL-BEHAVIOR UUID="bb6117d7-83a1-3462-b603-ee7ec68670c8">
+                  <SHORT-NAME>DoorInternals</SHORT-NAME>
+                  <EVENTS>
+                    <TIMING-EVENT UUID="57cbf43a-2a8f-4509-91d8-c1a559dc4aa6">
+                      <SHORT-NAME>timingEvent_0_1</SHORT-NAME>
+                      <START-ON-EVENT-REF DEST="RUNNABLE-ENTITY">/Demo/Door/Door/DoorInternals/DoorMain</START-ON-EVENT-REF>
+                      <PERIOD>0.1</PERIOD>
+                    </TIMING-EVENT>
+                    <OPERATION-INVOKED-EVENT UUID="7b360f21-6683-466d-b140-1c575170e137">
+                      <SHORT-NAME>Command_SetLock</SHORT-NAME>
+                      <START-ON-EVENT-REF DEST="RUNNABLE-ENTITY">/Demo/Door/Door/DoorInternals/SetLocked</START-ON-EVENT-REF>
+                      <OPERATION-IREF>
+                        <CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Command</CONTEXT-P-PORT-REF>
+                        <TARGET-PROVIDED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Demo/Interfaces/DoorCommands/SetLock</TARGET-PROVIDED-OPERATION-REF>
+                      </OPERATION-IREF>
+                    </OPERATION-INVOKED-EVENT>
+                  </EVENTS>
+                  <HANDLE-TERMINATION-AND-RESTART>NO-SUPPORT</HANDLE-TERMINATION-AND-RESTART>
+                  <RUNNABLES>
+                    <RUNNABLE-ENTITY UUID="63379bbf-877f-310e-adeb-86aa20deec24">
+                      <SHORT-NAME>DoorMain</SHORT-NAME>
+                      <MINIMUM-START-INTERVAL>0.0</MINIMUM-START-INTERVAL>
+                      <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>
+                      <DATA-WRITE-ACCESSS>
+                        <VARIABLE-ACCESS UUID="acead1d5-c7e1-3d1b-8656-87aa5df8f12e">
+                          <SHORT-NAME>dataWriteAccess_DoorMain_Status_Locked</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Status</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/DoorStatus/Locked</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="9ac5c9f5-122b-3a58-91c9-92f989b6cec0">
+                          <SHORT-NAME>dataWriteAccess_DoorMain_Status_Open</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Status</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/DoorStatus/Open</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                      </DATA-WRITE-ACCESSS>
+                      <SYMBOL>DoorMain</SYMBOL>
+                    </RUNNABLE-ENTITY>
+                    <RUNNABLE-ENTITY UUID="2a34834f-1c98-305e-ad9e-a063fd47f3ad">
+                      <SHORT-NAME>SetLocked</SHORT-NAME>
+                      <MINIMUM-START-INTERVAL>0.0</MINIMUM-START-INTERVAL>
+                      <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>
+                      <SYMBOL>SetLocked</SYMBOL>
+                    </RUNNABLE-ENTITY>
+                  </RUNNABLES>
+                  <SUPPORTS-MULTIPLE-INSTANTIATION>false</SUPPORTS-MULTIPLE-INSTANTIATION>
+                </SWC-INTERNAL-BEHAVIOR>
+              </INTERNAL-BEHAVIORS>
+            </APPLICATION-SW-COMPONENT-TYPE>
+            <SWC-IMPLEMENTATION UUID="0854a69e-6bbb-3735-80a1-2345b6c7942e">
+              <SHORT-NAME>DoorImplementation</SHORT-NAME>
+              <CODE-DESCRIPTORS>
+                <CODE UUID="78204713-7fd6-385e-b3d9-88572ee8e5dd">
+                  <SHORT-NAME>src</SHORT-NAME>
+                  <ARTIFACT-DESCRIPTORS>
+                    <AUTOSAR-ENGINEERING-OBJECT>
+                      <SHORT-LABEL>artifactDescriptor</SHORT-LABEL>
+                      <CATEGORY>artifactDescriptorCategory</CATEGORY>
+                    </AUTOSAR-ENGINEERING-OBJECT>
+                  </ARTIFACT-DESCRIPTORS>
+                </CODE>
+              </CODE-DESCRIPTORS>
+              <PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>
+              <RESOURCE-CONSUMPTION UUID="7117abb6-f2cc-309f-85e7-2cfb6558e478">
+                <SHORT-NAME>resourceConsumption</SHORT-NAME>
+              </RESOURCE-CONSUMPTION>
+              <VENDOR-ID>0</VENDOR-ID>
+              <BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Demo/Door/Door/DoorInternals</BEHAVIOR-REF>
+            </SWC-IMPLEMENTATION>
+          </ELEMENTS>
+        </AR-PACKAGE>
+        <AR-PACKAGE>
+          <SHORT-NAME>Services</SHORT-NAME>
+          <AR-PACKAGES>
+            <AR-PACKAGE>
+              <SHORT-NAME>IoHwAb</SHORT-NAME>
+              <ELEMENTS>
+                <IMPLEMENTATION-DATA-TYPE UUID="6e499ceb-e086-39a3-a8aa-cad156c2235d">
+                  <SHORT-NAME>IoHwAb_SignalType_</SHORT-NAME>
+                  <CATEGORY>TYPE_REFERENCE</CATEGORY>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/uint32</IMPLEMENTATION-DATA-TYPE-REF>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                </IMPLEMENTATION-DATA-TYPE>
+                <APPLICATION-PRIMITIVE-DATA-TYPE UUID="8968fc96-1503-316f-ba51-1e3d7e72eaae">
+                  <SHORT-NAME>dummy_IoHwAb_SignalType_</SHORT-NAME>
+                  <CATEGORY>VALUE</CATEGORY>
+                </APPLICATION-PRIMITIVE-DATA-TYPE>
+                <DATA-TYPE-MAPPING-SET UUID="280a6153-330a-3898-bc36-1586c4372f47">
+                  <SHORT-NAME>dummyMappingSet</SHORT-NAME>
+                  <DATA-TYPE-MAPS>
+                    <DATA-TYPE-MAP>
+                      <APPLICATION-DATA-TYPE-REF DEST="APPLICATION-PRIMITIVE-DATA-TYPE">/Demo/Services/IoHwAb/dummy_IoHwAb_SignalType_</APPLICATION-DATA-TYPE-REF>
+                      <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/Demo/Services/IoHwAb/IoHwAb_SignalType_</IMPLEMENTATION-DATA-TYPE-REF>
+                    </DATA-TYPE-MAP>
+                  </DATA-TYPE-MAPS>
+                </DATA-TYPE-MAPPING-SET>
+                <IMPLEMENTATION-DATA-TYPE UUID="db4b6add-7698-3ee4-9dae-adaa7488c81a">
+                  <SHORT-NAME>SignalQuality</SHORT-NAME>
+                  <CATEGORY>TYPE_REFERENCE</CATEGORY>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <COMPU-METHOD-REF DEST="COMPU-METHOD">/Demo/Services/IoHwAb/SignalQuality_def</COMPU-METHOD-REF>
+                        <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/uint8</IMPLEMENTATION-DATA-TYPE-REF>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                </IMPLEMENTATION-DATA-TYPE>
+                <COMPU-METHOD UUID="b846afca-e52e-31cd-8e75-8cd16e26e46f">
+                  <SHORT-NAME>SignalQuality_def</SHORT-NAME>
+                  <CATEGORY>TEXTTABLE</CATEGORY>
+                  <COMPU-INTERNAL-TO-PHYS>
+                    <COMPU-SCALES>
+                      <COMPU-SCALE>
+                        <LOWER-LIMIT INTERVAL-TYPE="CLOSED">0</LOWER-LIMIT>
+                        <UPPER-LIMIT INTERVAL-TYPE="CLOSED">0</UPPER-LIMIT>
+                        <COMPU-CONST>
+                          <VT>IOHWAB_INIVAL</VT>
+                        </COMPU-CONST>
+                      </COMPU-SCALE>
+                      <COMPU-SCALE>
+                        <LOWER-LIMIT INTERVAL-TYPE="CLOSED">1</LOWER-LIMIT>
+                        <UPPER-LIMIT INTERVAL-TYPE="CLOSED">1</UPPER-LIMIT>
+                        <COMPU-CONST>
+                          <VT>IOHWAB_ERR</VT>
+                        </COMPU-CONST>
+                      </COMPU-SCALE>
+                      <COMPU-SCALE>
+                        <LOWER-LIMIT INTERVAL-TYPE="CLOSED">2</LOWER-LIMIT>
+                        <UPPER-LIMIT INTERVAL-TYPE="CLOSED">2</UPPER-LIMIT>
+                        <COMPU-CONST>
+                          <VT>IOHWAB_BAD</VT>
+                        </COMPU-CONST>
+                      </COMPU-SCALE>
+                      <COMPU-SCALE>
+                        <LOWER-LIMIT INTERVAL-TYPE="CLOSED">3</LOWER-LIMIT>
+                        <UPPER-LIMIT INTERVAL-TYPE="CLOSED">3</UPPER-LIMIT>
+                        <COMPU-CONST>
+                          <VT>IOHWAB_GOOD</VT>
+                        </COMPU-CONST>
+                      </COMPU-SCALE>
+                    </COMPU-SCALES>
+                  </COMPU-INTERNAL-TO-PHYS>
+                </COMPU-METHOD>
+                <IMPLEMENTATION-DATA-TYPE UUID="ce7d4658-6239-3091-8e78-7747c6a4fdfd">
+                  <SHORT-NAME>DigitalLevel</SHORT-NAME>
+                  <CATEGORY>TYPE_REFERENCE</CATEGORY>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <COMPU-METHOD-REF DEST="COMPU-METHOD">/Demo/Services/IoHwAb/DigitalLevel_def</COMPU-METHOD-REF>
+                        <IMPLEMENTATION-DATA-TYPE-REF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/uint8</IMPLEMENTATION-DATA-TYPE-REF>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                </IMPLEMENTATION-DATA-TYPE>
+                <COMPU-METHOD UUID="f716328f-e783-329b-a342-af0ccd060cef">
+                  <SHORT-NAME>DigitalLevel_def</SHORT-NAME>
+                  <CATEGORY>TEXTTABLE</CATEGORY>
+                  <COMPU-INTERNAL-TO-PHYS>
+                    <COMPU-SCALES>
+                      <COMPU-SCALE>
+                        <LOWER-LIMIT INTERVAL-TYPE="CLOSED">0</LOWER-LIMIT>
+                        <UPPER-LIMIT INTERVAL-TYPE="CLOSED">0</UPPER-LIMIT>
+                        <COMPU-CONST>
+                          <VT>IOHWAB_LOW</VT>
+                        </COMPU-CONST>
+                      </COMPU-SCALE>
+                      <COMPU-SCALE>
+                        <LOWER-LIMIT INTERVAL-TYPE="CLOSED">1</LOWER-LIMIT>
+                        <UPPER-LIMIT INTERVAL-TYPE="CLOSED">1</UPPER-LIMIT>
+                        <COMPU-CONST>
+                          <VT>IOHWAB_HIGH</VT>
+                        </COMPU-CONST>
+                      </COMPU-SCALE>
+                    </COMPU-SCALES>
+                  </COMPU-INTERNAL-TO-PHYS>
+                </COMPU-METHOD>
+                <CLIENT-SERVER-INTERFACE UUID="3134600e-be9d-377d-bdba-008a5441a7e2">
+                  <SHORT-NAME>DigitalServiceWrite</SHORT-NAME>
+                  <IS-SERVICE>true</IS-SERVICE>
+                  <OPERATIONS>
+                    <CLIENT-SERVER-OPERATION UUID="dd88cf8a-23ab-37e8-a76c-091e9d710794">
+                      <SHORT-NAME>Write</SHORT-NAME>
+                      <ARGUMENTS>
+                        <ARGUMENT-DATA-PROTOTYPE UUID="6d32b864-ef0d-3a9d-bff2-bc7bfc13c06d">
+                          <SHORT-NAME>Level</SHORT-NAME>
+                          <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/Demo/Services/IoHwAb/DigitalLevel</TYPE-TREF>
+                          <DIRECTION>IN</DIRECTION>
+                        </ARGUMENT-DATA-PROTOTYPE>
+                      </ARGUMENTS>
+                      <POSSIBLE-ERROR-REFS>
+                        <POSSIBLE-ERROR-REF DEST="APPLICATION-ERROR">/Demo/Services/IoHwAb/DigitalServiceWrite/E_OK</POSSIBLE-ERROR-REF>
+                        <POSSIBLE-ERROR-REF DEST="APPLICATION-ERROR">/Demo/Services/IoHwAb/DigitalServiceWrite/E_NOT_OK</POSSIBLE-ERROR-REF>
+                      </POSSIBLE-ERROR-REFS>
+                    </CLIENT-SERVER-OPERATION>
+                  </OPERATIONS>
+                  <POSSIBLE-ERRORS>
+                    <APPLICATION-ERROR UUID="1d7ed684-3d16-38d3-a1a2-a0e0c39c9bc4">
+                      <SHORT-NAME>E_OK</SHORT-NAME>
+                      <ERROR-CODE>0</ERROR-CODE>
+                    </APPLICATION-ERROR>
+                    <APPLICATION-ERROR UUID="9d93fffd-5efc-3045-aafd-2f6154db6f11">
+                      <SHORT-NAME>E_NOT_OK</SHORT-NAME>
+                      <ERROR-CODE>1</ERROR-CODE>
+                    </APPLICATION-ERROR>
+                  </POSSIBLE-ERRORS>
+                </CLIENT-SERVER-INTERFACE>
+                <SERVICE-SW-COMPONENT-TYPE UUID="c97e31d8-af34-3dd0-9392-52e0287af468">
+                  <SHORT-NAME>IoHwAb</SHORT-NAME>
+                  <PORTS>
+                    <P-PORT-PROTOTYPE UUID="48892b28-c309-3dea-8d9f-988a97beb6f6">
+                      <SHORT-NAME>Digital_Led</SHORT-NAME>
+                      <PROVIDED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Demo/Services/IoHwAb/DigitalServiceWrite</PROVIDED-INTERFACE-TREF>
+                    </P-PORT-PROTOTYPE>
+                  </PORTS>
+                  <INTERNAL-BEHAVIORS>
+                    <SWC-INTERNAL-BEHAVIOR UUID="4662198d-0242-3cad-bdb4-5dc69cab0129">
+                      <SHORT-NAME>IoHwAbBehavior</SHORT-NAME>
+                      <EVENTS>
+                        <OPERATION-INVOKED-EVENT UUID="3ed86257-0078-400a-a1f6-cbacef1f1375">
+                          <SHORT-NAME>Digital_Led_Write</SHORT-NAME>
+                          <START-ON-EVENT-REF DEST="RUNNABLE-ENTITY">/Demo/Services/IoHwAb/IoHwAb/IoHwAbBehavior/DigitalWrite</START-ON-EVENT-REF>
+                          <OPERATION-IREF>
+                            <CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Services/IoHwAb/IoHwAb/Digital_Led</CONTEXT-P-PORT-REF>
+                            <TARGET-PROVIDED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Demo/Services/IoHwAb/DigitalServiceWrite/Write</TARGET-PROVIDED-OPERATION-REF>
+                          </OPERATION-IREF>
+                        </OPERATION-INVOKED-EVENT>
+                      </EVENTS>
+                      <HANDLE-TERMINATION-AND-RESTART>NO-SUPPORT</HANDLE-TERMINATION-AND-RESTART>
+                      <PORT-API-OPTIONS>
+                        <PORT-API-OPTION>
+                          <PORT-ARG-VALUES>
+                            <PORT-DEFINED-ARGUMENT-VALUE>
+                              <VALUE>
+                                <NUMERICAL-VALUE-SPECIFICATION>
+                                  <SHORT-LABEL>IoHwAb_SignalType_</SHORT-LABEL>
+                                  <VALUE>0</VALUE>
+                                </NUMERICAL-VALUE-SPECIFICATION>
+                              </VALUE>
+                              <VALUE-TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/Demo/Services/IoHwAb/IoHwAb_SignalType_</VALUE-TYPE-TREF>
+                            </PORT-DEFINED-ARGUMENT-VALUE>
+                          </PORT-ARG-VALUES>
+                          <PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Services/IoHwAb/IoHwAb/Digital_Led</PORT-REF>
+                        </PORT-API-OPTION>
+                      </PORT-API-OPTIONS>
+                      <RUNNABLES>
+                        <RUNNABLE-ENTITY UUID="22494afe-312b-368d-8232-3e304753c18f">
+                          <SHORT-NAME>DigitalWrite</SHORT-NAME>
+                          <MINIMUM-START-INTERVAL>0.0</MINIMUM-START-INTERVAL>
+                          <CAN-BE-INVOKED-CONCURRENTLY>true</CAN-BE-INVOKED-CONCURRENTLY>
+                          <SYMBOL>IoHwAb_Digital_Write</SYMBOL>
+                        </RUNNABLE-ENTITY>
+                      </RUNNABLES>
+                      <SUPPORTS-MULTIPLE-INSTANTIATION>false</SUPPORTS-MULTIPLE-INSTANTIATION>
+                    </SWC-INTERNAL-BEHAVIOR>
+                  </INTERNAL-BEHAVIORS>
+                </SERVICE-SW-COMPONENT-TYPE>
+                <SWC-IMPLEMENTATION UUID="943c7691-0acc-341e-b272-c0a71a5c8cba">
+                  <SHORT-NAME>IoHwAbImpl</SHORT-NAME>
+                  <CODE-DESCRIPTORS>
+                    <CODE UUID="7c82cbc4-9a44-3e72-89a5-a7e7df1d3d95">
+                      <SHORT-NAME>src</SHORT-NAME>
+                      <ARTIFACT-DESCRIPTORS>
+                        <AUTOSAR-ENGINEERING-OBJECT>
+                          <SHORT-LABEL>artifactDescriptor</SHORT-LABEL>
+                          <CATEGORY>artifactDescriptorCategory</CATEGORY>
+                        </AUTOSAR-ENGINEERING-OBJECT>
+                      </ARTIFACT-DESCRIPTORS>
+                    </CODE>
+                  </CODE-DESCRIPTORS>
+                  <PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>
+                  <RESOURCE-CONSUMPTION UUID="ebb04534-91bc-3ba7-9255-1ea138661b90">
+                    <SHORT-NAME>resourceConsumption</SHORT-NAME>
+                  </RESOURCE-CONSUMPTION>
+                  <VENDOR-ID>0</VENDOR-ID>
+                  <BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Demo/Services/IoHwAb/IoHwAb/IoHwAbBehavior</BEHAVIOR-REF>
+                </SWC-IMPLEMENTATION>
+              </ELEMENTS>
+            </AR-PACKAGE>
+          </AR-PACKAGES>
+        </AR-PACKAGE>
+        <AR-PACKAGE>
+          <SHORT-NAME>Interfaces</SHORT-NAME>
+          <ELEMENTS>
+            <SENDER-RECEIVER-INTERFACE UUID="1aa75fd5-0de9-3040-bdb6-cd3cf3d3964e">
+              <SHORT-NAME>DoorStatus</SHORT-NAME>
+              <IS-SERVICE>false</IS-SERVICE>
+              <DATA-ELEMENTS>
+                <VARIABLE-DATA-PROTOTYPE UUID="1801e168-fcc8-362f-b5f0-3a7f5d392a9b">
+                  <SHORT-NAME>Locked</SHORT-NAME>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <SW-IMPL-POLICY>STANDARD</SW-IMPL-POLICY>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+                <VARIABLE-DATA-PROTOTYPE UUID="ed09ee66-7aa2-335d-b6d5-cc88d496f5ce">
+                  <SHORT-NAME>Open</SHORT-NAME>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <SW-IMPL-POLICY>STANDARD</SW-IMPL-POLICY>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+              </DATA-ELEMENTS>
+            </SENDER-RECEIVER-INTERFACE>
+            <CLIENT-SERVER-INTERFACE UUID="0fc0e7ac-fbe4-3814-94c3-69077a1f35f3">
+              <SHORT-NAME>DoorCommands</SHORT-NAME>
+              <IS-SERVICE>false</IS-SERVICE>
+              <OPERATIONS>
+                <CLIENT-SERVER-OPERATION UUID="a73320ad-51df-3501-92c1-2fc861753e9a">
+                  <SHORT-NAME>SetLock</SHORT-NAME>
+                  <ARGUMENTS>
+                    <ARGUMENT-DATA-PROTOTYPE UUID="c7c13e49-2905-3f35-a105-94268ffb4ba1">
+                      <SHORT-NAME>Locked</SHORT-NAME>
+                      <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                      <DIRECTION>IN</DIRECTION>
+                    </ARGUMENT-DATA-PROTOTYPE>
+                  </ARGUMENTS>
+                </CLIENT-SERVER-OPERATION>
+              </OPERATIONS>
+            </CLIENT-SERVER-INTERFACE>
+            <SENDER-RECEIVER-INTERFACE UUID="ac79088e-db77-300d-b6bf-72580349ffb0">
+              <SHORT-NAME>CombinedStatus</SHORT-NAME>
+              <IS-SERVICE>false</IS-SERVICE>
+              <DATA-ELEMENTS>
+                <VARIABLE-DATA-PROTOTYPE UUID="a4fbcfbd-24e9-3222-9fbe-be25ac6e9740">
+                  <SHORT-NAME>LockedLeft</SHORT-NAME>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <SW-IMPL-POLICY>STANDARD</SW-IMPL-POLICY>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+                <VARIABLE-DATA-PROTOTYPE UUID="080e1423-0f5b-3f2f-83e8-25b9c81d65ef">
+                  <SHORT-NAME>OpenLeft</SHORT-NAME>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <SW-IMPL-POLICY>STANDARD</SW-IMPL-POLICY>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+                <VARIABLE-DATA-PROTOTYPE UUID="3c81145a-4f69-3436-8b28-a9edf9359d90">
+                  <SHORT-NAME>LockedRight</SHORT-NAME>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <SW-IMPL-POLICY>STANDARD</SW-IMPL-POLICY>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+                <VARIABLE-DATA-PROTOTYPE UUID="6f5961a2-003e-3845-8369-62d2f365fa8c">
+                  <SHORT-NAME>OpenRight</SHORT-NAME>
+                  <SW-DATA-DEF-PROPS>
+                    <SW-DATA-DEF-PROPS-VARIANTS>
+                      <SW-DATA-DEF-PROPS-CONDITIONAL>
+                        <SW-IMPL-POLICY>STANDARD</SW-IMPL-POLICY>
+                      </SW-DATA-DEF-PROPS-CONDITIONAL>
+                    </SW-DATA-DEF-PROPS-VARIANTS>
+                  </SW-DATA-DEF-PROPS>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/ArcCore/Platform/ImplementationDataTypes/boolean</TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+              </DATA-ELEMENTS>
+            </SENDER-RECEIVER-INTERFACE>
+          </ELEMENTS>
+        </AR-PACKAGE>
+        <AR-PACKAGE>
+          <SHORT-NAME>DoorControl</SHORT-NAME>
+          <ELEMENTS>
+            <APPLICATION-SW-COMPONENT-TYPE UUID="01ed669d-6d02-35c0-9433-9b2acdd49751">
+              <SHORT-NAME>DoorControl</SHORT-NAME>
+              <PORTS>
+                <R-PORT-PROTOTYPE UUID="3179e3a7-1b49-3950-86db-d5c615049fb4">
+                  <SHORT-NAME>StatusLeft</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SENDER-RECEIVER-INTERFACE">/Demo/Interfaces/DoorStatus</REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+                <R-PORT-PROTOTYPE UUID="6f3c8fac-0a52-381b-a69a-9387a3306235">
+                  <SHORT-NAME>StatusRight</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SENDER-RECEIVER-INTERFACE">/Demo/Interfaces/DoorStatus</REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+                <R-PORT-PROTOTYPE UUID="f4d8a3f8-863b-350a-a7b3-58e627e2e373">
+                  <SHORT-NAME>CommandsLeft</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Demo/Interfaces/DoorCommands</REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+                <R-PORT-PROTOTYPE UUID="f5508438-caf6-31e3-9dd4-dbeb1dc46417">
+                  <SHORT-NAME>CommandsRight</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Demo/Interfaces/DoorCommands</REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+                <R-PORT-PROTOTYPE UUID="44652102-e3c2-3674-a07b-5b8a3294a3de">
+                  <SHORT-NAME>Led</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Demo/Services/IoHwAb/DigitalServiceWrite</REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+                <P-PORT-PROTOTYPE UUID="5a63577a-a4d8-342f-8daf-d7cf49be95b3">
+                  <SHORT-NAME>CombinedStatus</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="SENDER-RECEIVER-INTERFACE">/Demo/Interfaces/CombinedStatus</PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+              </PORTS>
+              <INTERNAL-BEHAVIORS>
+                <SWC-INTERNAL-BEHAVIOR UUID="b88b3e24-7769-3458-82de-ab6db1ba97b8">
+                  <SHORT-NAME>DoorControlInternals</SHORT-NAME>
+                  <EVENTS>
+                    <TIMING-EVENT UUID="b4ece841-5f77-424f-ad60-91091aa4c7f8">
+                      <SHORT-NAME>timingEvent_0_1</SHORT-NAME>
+                      <START-ON-EVENT-REF DEST="RUNNABLE-ENTITY">/Demo/DoorControl/DoorControl/DoorControlInternals/Main</START-ON-EVENT-REF>
+                      <PERIOD>0.1</PERIOD>
+                    </TIMING-EVENT>
+                  </EVENTS>
+                  <HANDLE-TERMINATION-AND-RESTART>NO-SUPPORT</HANDLE-TERMINATION-AND-RESTART>
+                  <RUNNABLES>
+                    <RUNNABLE-ENTITY UUID="87d18679-251c-3c5e-87b7-259b28927aad">
+                      <SHORT-NAME>Main</SHORT-NAME>
+                      <MINIMUM-START-INTERVAL>0.0</MINIMUM-START-INTERVAL>
+                      <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>
+                      <DATA-READ-ACCESSS>
+                        <VARIABLE-ACCESS UUID="d7ab52ff-82f1-3f37-9649-43e2ba32c781">
+                          <SHORT-NAME>dataReadAccess_Main_StatusLeft_Locked</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/StatusLeft</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/DoorStatus/Locked</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="df32f250-ca1d-3068-be61-14bf84db4b3a">
+                          <SHORT-NAME>dataReadAccess_Main_StatusLeft_Open</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/StatusLeft</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/DoorStatus/Open</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="effed70f-505e-37b5-ad79-ccd89154c414">
+                          <SHORT-NAME>dataReadAccess_Main_StatusRight_Locked</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/StatusRight</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/DoorStatus/Locked</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="fc0f2ea1-d839-3a89-b70f-d7ddd8fa4eb6">
+                          <SHORT-NAME>dataReadAccess_Main_StatusRight_Open</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/StatusRight</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/DoorStatus/Open</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                      </DATA-READ-ACCESSS>
+                      <DATA-WRITE-ACCESSS>
+                        <VARIABLE-ACCESS UUID="ca82bb23-0daf-3596-bda7-d058c21c1dcb">
+                          <SHORT-NAME>dataWriteAccess_Main_CombinedStatus_LockedLeft</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="P-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CombinedStatus</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/LockedLeft</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="d0bb1ea0-f590-331d-8db2-47909514367d">
+                          <SHORT-NAME>dataWriteAccess_Main_CombinedStatus_OpenLeft</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="P-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CombinedStatus</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/OpenLeft</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="6142fbc6-bc76-3e3a-86d2-9d9d38bbffc0">
+                          <SHORT-NAME>dataWriteAccess_Main_CombinedStatus_LockedRight</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="P-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CombinedStatus</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/LockedRight</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                        <VARIABLE-ACCESS UUID="88e56eff-d627-35a2-a94b-1931318886a6">
+                          <SHORT-NAME>dataWriteAccess_Main_CombinedStatus_OpenRight</SHORT-NAME>
+                          <ACCESSED-VARIABLE>
+                            <AUTOSAR-VARIABLE-IREF>
+                              <PORT-PROTOTYPE-REF DEST="P-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CombinedStatus</PORT-PROTOTYPE-REF>
+                              <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/OpenRight</TARGET-DATA-PROTOTYPE-REF>
+                            </AUTOSAR-VARIABLE-IREF>
+                          </ACCESSED-VARIABLE>
+                        </VARIABLE-ACCESS>
+                      </DATA-WRITE-ACCESSS>
+                      <SERVER-CALL-POINTS>
+                        <SYNCHRONOUS-SERVER-CALL-POINT UUID="28d6be91-d390-3c9c-8f6e-83a772af7aaf">
+                          <SHORT-NAME>serverCallPoint_Main_CommandsLeft_SetLock</SHORT-NAME>
+                          <OPERATION-IREF>
+                            <CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CommandsLeft</CONTEXT-R-PORT-REF>
+                            <TARGET-REQUIRED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Demo/Interfaces/DoorCommands/SetLock</TARGET-REQUIRED-OPERATION-REF>
+                          </OPERATION-IREF>
+                          <TIMEOUT>0.0</TIMEOUT>
+                        </SYNCHRONOUS-SERVER-CALL-POINT>
+                        <SYNCHRONOUS-SERVER-CALL-POINT UUID="6a60becc-873f-3d30-b75d-e1cc43775da9">
+                          <SHORT-NAME>serverCallPoint_Main_CommandsRight_SetLock</SHORT-NAME>
+                          <OPERATION-IREF>
+                            <CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CommandsRight</CONTEXT-R-PORT-REF>
+                            <TARGET-REQUIRED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Demo/Interfaces/DoorCommands/SetLock</TARGET-REQUIRED-OPERATION-REF>
+                          </OPERATION-IREF>
+                          <TIMEOUT>0.0</TIMEOUT>
+                        </SYNCHRONOUS-SERVER-CALL-POINT>
+                        <SYNCHRONOUS-SERVER-CALL-POINT UUID="a681e8d8-7b49-37f5-8ae5-f4bd6fafe998">
+                          <SHORT-NAME>serverCallPoint_Main_Led_Write</SHORT-NAME>
+                          <OPERATION-IREF>
+                            <CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/Led</CONTEXT-R-PORT-REF>
+                            <TARGET-REQUIRED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Demo/Services/IoHwAb/DigitalServiceWrite/Write</TARGET-REQUIRED-OPERATION-REF>
+                          </OPERATION-IREF>
+                          <TIMEOUT>0.0</TIMEOUT>
+                        </SYNCHRONOUS-SERVER-CALL-POINT>
+                      </SERVER-CALL-POINTS>
+                      <SYMBOL>Main</SYMBOL>
+                    </RUNNABLE-ENTITY>
+                  </RUNNABLES>
+                  <SUPPORTS-MULTIPLE-INSTANTIATION>false</SUPPORTS-MULTIPLE-INSTANTIATION>
+                </SWC-INTERNAL-BEHAVIOR>
+              </INTERNAL-BEHAVIORS>
+            </APPLICATION-SW-COMPONENT-TYPE>
+            <SWC-IMPLEMENTATION UUID="219f3a51-31ab-3858-87ed-16e0299c4f28">
+              <SHORT-NAME>DoorControlImplementation</SHORT-NAME>
+              <CODE-DESCRIPTORS>
+                <CODE UUID="8e85c128-2474-3493-b033-511f3cf36294">
+                  <SHORT-NAME>src</SHORT-NAME>
+                  <ARTIFACT-DESCRIPTORS>
+                    <AUTOSAR-ENGINEERING-OBJECT>
+                      <SHORT-LABEL>artifactDescriptor</SHORT-LABEL>
+                      <CATEGORY>artifactDescriptorCategory</CATEGORY>
+                    </AUTOSAR-ENGINEERING-OBJECT>
+                  </ARTIFACT-DESCRIPTORS>
+                </CODE>
+              </CODE-DESCRIPTORS>
+              <PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>
+              <RESOURCE-CONSUMPTION UUID="e4332506-d976-3450-bfe9-8716a5ae2483">
+                <SHORT-NAME>resourceConsumption</SHORT-NAME>
+              </RESOURCE-CONSUMPTION>
+              <VENDOR-ID>0</VENDOR-ID>
+              <BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Demo/DoorControl/DoorControl/DoorControlInternals</BEHAVIOR-REF>
+            </SWC-IMPLEMENTATION>
+          </ELEMENTS>
+        </AR-PACKAGE>
+        <AR-PACKAGE>
+          <SHORT-NAME>EDC</SHORT-NAME>
+          <ELEMENTS>
+            <COMPOSITION-SW-COMPONENT-TYPE UUID="034525f7-3ff6-33b2-a2b2-56321b03e240">
+              <SHORT-NAME>EDC</SHORT-NAME>
+              <PORTS>
+                <P-PORT-PROTOTYPE UUID="dc98dc78-1aca-36dd-9d98-e0a89fd18a21">
+                  <SHORT-NAME>CombinedStatus</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="SENDER-RECEIVER-INTERFACE">/Demo/Interfaces/CombinedStatus</PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+              </PORTS>
+              <COMPONENTS>
+                <SW-COMPONENT-PROTOTYPE UUID="0d9d3407-5a9c-33f3-84b4-9080804a4ad0">
+                  <SHORT-NAME>DoorLeft</SHORT-NAME>
+                  <TYPE-TREF DEST="APPLICATION-SW-COMPONENT-TYPE">/Demo/Door/Door</TYPE-TREF>
+                </SW-COMPONENT-PROTOTYPE>
+                <SW-COMPONENT-PROTOTYPE UUID="8b499a52-aea4-3b6a-a1bc-f52dbc9c776c">
+                  <SHORT-NAME>DoorRight</SHORT-NAME>
+                  <TYPE-TREF DEST="APPLICATION-SW-COMPONENT-TYPE">/Demo/Door/Door</TYPE-TREF>
+                </SW-COMPONENT-PROTOTYPE>
+                <SW-COMPONENT-PROTOTYPE UUID="89c6bf8e-984f-376e-ad33-607d91e5a6ab">
+                  <SHORT-NAME>Control</SHORT-NAME>
+                  <TYPE-TREF DEST="APPLICATION-SW-COMPONENT-TYPE">/Demo/DoorControl/DoorControl</TYPE-TREF>
+                </SW-COMPONENT-PROTOTYPE>
+                <SW-COMPONENT-PROTOTYPE UUID="c4d885db-369c-3268-bdaf-521bdf1887ab">
+                  <SHORT-NAME>IO</SHORT-NAME>
+                  <TYPE-TREF DEST="SERVICE-SW-COMPONENT-TYPE">/Demo/Services/IoHwAb/IoHwAb</TYPE-TREF>
+                </SW-COMPONENT-PROTOTYPE>
+              </COMPONENTS>
+              <CONNECTORS>
+                <ASSEMBLY-SW-CONNECTOR UUID="a9c2b7f4-ee22-3bed-af64-d39c1194552a">
+                  <SHORT-NAME>DoorLeft_Command_to_Control_CommandsLeft</SHORT-NAME>
+                  <DESC>
+                    <L-2 L="FOR-ALL">The connector</L-2>
+                  </DESC>
+                  <PROVIDER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/DoorLeft</CONTEXT-COMPONENT-REF>
+                    <TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Command</TARGET-P-PORT-REF>
+                  </PROVIDER-IREF>
+                  <REQUESTER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</CONTEXT-COMPONENT-REF>
+                    <TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CommandsLeft</TARGET-R-PORT-REF>
+                  </REQUESTER-IREF>
+                </ASSEMBLY-SW-CONNECTOR>
+                <ASSEMBLY-SW-CONNECTOR UUID="b50acda8-1379-30f2-8b5b-9620a85276d1">
+                  <SHORT-NAME>DoorRight_Command_to_Control_CommandsRight</SHORT-NAME>
+                  <PROVIDER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/DoorRight</CONTEXT-COMPONENT-REF>
+                    <TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Command</TARGET-P-PORT-REF>
+                  </PROVIDER-IREF>
+                  <REQUESTER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</CONTEXT-COMPONENT-REF>
+                    <TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CommandsRight</TARGET-R-PORT-REF>
+                  </REQUESTER-IREF>
+                </ASSEMBLY-SW-CONNECTOR>
+                <ASSEMBLY-SW-CONNECTOR UUID="f297dc64-c381-377b-b5f5-06db999a09fb">
+                  <SHORT-NAME>DoorLeft_Status_to_Control_StatusLeft</SHORT-NAME>
+                  <PROVIDER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/DoorLeft</CONTEXT-COMPONENT-REF>
+                    <TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Status</TARGET-P-PORT-REF>
+                  </PROVIDER-IREF>
+                  <REQUESTER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</CONTEXT-COMPONENT-REF>
+                    <TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/StatusLeft</TARGET-R-PORT-REF>
+                  </REQUESTER-IREF>
+                </ASSEMBLY-SW-CONNECTOR>
+                <ASSEMBLY-SW-CONNECTOR UUID="ed1d8867-02cb-3bda-8263-3a2bbd9cb01e">
+                  <SHORT-NAME>DoorRight_Status_to_Control_StatusRight</SHORT-NAME>
+                  <PROVIDER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/DoorRight</CONTEXT-COMPONENT-REF>
+                    <TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Door/Door/Status</TARGET-P-PORT-REF>
+                  </PROVIDER-IREF>
+                  <REQUESTER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</CONTEXT-COMPONENT-REF>
+                    <TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/StatusRight</TARGET-R-PORT-REF>
+                  </REQUESTER-IREF>
+                </ASSEMBLY-SW-CONNECTOR>
+                <ASSEMBLY-SW-CONNECTOR UUID="d86f2f14-ec48-3159-ba69-d029e2628924">
+                  <SHORT-NAME>IO_Digital_Led_to_Control_Led</SHORT-NAME>
+                  <PROVIDER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/IO</CONTEXT-COMPONENT-REF>
+                    <TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/Services/IoHwAb/IoHwAb/Digital_Led</TARGET-P-PORT-REF>
+                  </PROVIDER-IREF>
+                  <REQUESTER-IREF>
+                    <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</CONTEXT-COMPONENT-REF>
+                    <TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/Led</TARGET-R-PORT-REF>
+                  </REQUESTER-IREF>
+                </ASSEMBLY-SW-CONNECTOR>
+                <DELEGATION-SW-CONNECTOR UUID="f7b45156-878a-3beb-895e-85845c887435">
+                  <SHORT-NAME>CombinedStatus_delegate_connector0</SHORT-NAME>
+                  <INNER-PORT-IREF>
+                    <P-PORT-IN-COMPOSITION-INSTANCE-REF>
+                      <CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</CONTEXT-COMPONENT-REF>
+                      <TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/DoorControl/DoorControl/CombinedStatus</TARGET-P-PORT-REF>
+                    </P-PORT-IN-COMPOSITION-INSTANCE-REF>
+                  </INNER-PORT-IREF>
+                  <OUTER-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/EDC/EDC/CombinedStatus</OUTER-PORT-REF>
+                </DELEGATION-SW-CONNECTOR>
+              </CONNECTORS>
+            </COMPOSITION-SW-COMPONENT-TYPE>
+            <SYSTEM UUID="76a90898-1abb-44ea-9f66-df8486e35a2e">
+              <SHORT-NAME>EDCEcuExtract</SHORT-NAME>
+              <CATEGORY>ECU_EXTRACT</CATEGORY>
+              <MAPPINGS>
+                <SYSTEM-MAPPING UUID="5911842c-0e9d-4e31-9302-a06b70855efc">
+                  <SHORT-NAME>ImplementationMappings</SHORT-NAME>
+                  <SW-IMPL-MAPPINGS>
+                    <SWC-TO-IMPL-MAPPING UUID="9568678c-3676-46c1-a8bd-dff34a1935c7">
+                      <SHORT-NAME>DoorLeftMapping</SHORT-NAME>
+                      <COMPONENT-IMPLEMENTATION-REF DEST="SWC-IMPLEMENTATION">/Demo/Door/DoorImplementation</COMPONENT-IMPLEMENTATION-REF>
+                      <COMPONENT-IREFS>
+                        <COMPONENT-IREF>
+                          <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                          <TARGET-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/DoorLeft</TARGET-COMPONENT-REF>
+                        </COMPONENT-IREF>
+                      </COMPONENT-IREFS>
+                    </SWC-TO-IMPL-MAPPING>
+                    <SWC-TO-IMPL-MAPPING UUID="178ff4de-9526-48ef-baac-a3df23139594">
+                      <SHORT-NAME>DoorRightMapping</SHORT-NAME>
+                      <COMPONENT-IMPLEMENTATION-REF DEST="SWC-IMPLEMENTATION">/Demo/Door/DoorImplementation</COMPONENT-IMPLEMENTATION-REF>
+                      <COMPONENT-IREFS>
+                        <COMPONENT-IREF>
+                          <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                          <TARGET-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/DoorRight</TARGET-COMPONENT-REF>
+                        </COMPONENT-IREF>
+                      </COMPONENT-IREFS>
+                    </SWC-TO-IMPL-MAPPING>
+                    <SWC-TO-IMPL-MAPPING UUID="e9229db9-7a9a-4c62-a1ea-616190f1fe26">
+                      <SHORT-NAME>ControlMapping</SHORT-NAME>
+                      <COMPONENT-IMPLEMENTATION-REF DEST="SWC-IMPLEMENTATION">/Demo/DoorControl/DoorControlImplementation</COMPONENT-IMPLEMENTATION-REF>
+                      <COMPONENT-IREFS>
+                        <COMPONENT-IREF>
+                          <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                          <TARGET-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/Control</TARGET-COMPONENT-REF>
+                        </COMPONENT-IREF>
+                      </COMPONENT-IREFS>
+                    </SWC-TO-IMPL-MAPPING>
+                    <SWC-TO-IMPL-MAPPING UUID="5bfaf6df-ddc1-48d5-8501-0056103023e7">
+                      <SHORT-NAME>IOMapping</SHORT-NAME>
+                      <COMPONENT-IMPLEMENTATION-REF DEST="SWC-IMPLEMENTATION">/Demo/Services/IoHwAb/IoHwAbImpl</COMPONENT-IMPLEMENTATION-REF>
+                      <COMPONENT-IREFS>
+                        <COMPONENT-IREF>
+                          <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                          <TARGET-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Demo/EDC/EDC/IO</TARGET-COMPONENT-REF>
+                        </COMPONENT-IREF>
+                      </COMPONENT-IREFS>
+                    </SWC-TO-IMPL-MAPPING>
+                  </SW-IMPL-MAPPINGS>
+                </SYSTEM-MAPPING>
+                <SYSTEM-MAPPING UUID="d2306cba-48e2-43d5-9378-888efc6ac72f">
+                  <SHORT-NAME>SignalMappings</SHORT-NAME>
+                  <DATA-MAPPINGS>
+                    <SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                      <DATA-ELEMENT-IREF>
+                        <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                        <CONTEXT-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/EDC/EDC/CombinedStatus</CONTEXT-PORT-REF>
+                        <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/LockedLeft</TARGET-DATA-PROTOTYPE-REF>
+                      </DATA-ELEMENT-IREF>
+                      <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusLockedLeftSSig</SYSTEM-SIGNAL-REF>
+                    </SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                    <SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                      <DATA-ELEMENT-IREF>
+                        <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                        <CONTEXT-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/EDC/EDC/CombinedStatus</CONTEXT-PORT-REF>
+                        <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/OpenLeft</TARGET-DATA-PROTOTYPE-REF>
+                      </DATA-ELEMENT-IREF>
+                      <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusOpenLeftSSig</SYSTEM-SIGNAL-REF>
+                    </SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                    <SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                      <DATA-ELEMENT-IREF>
+                        <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                        <CONTEXT-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/EDC/EDC/CombinedStatus</CONTEXT-PORT-REF>
+                        <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/LockedRight</TARGET-DATA-PROTOTYPE-REF>
+                      </DATA-ELEMENT-IREF>
+                      <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusLockedRightSSig</SYSTEM-SIGNAL-REF>
+                    </SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                    <SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                      <DATA-ELEMENT-IREF>
+                        <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Demo/EDC/EDCEcuExtract/EDCPrototype</CONTEXT-COMPOSITION-REF>
+                        <CONTEXT-PORT-REF DEST="P-PORT-PROTOTYPE">/Demo/EDC/EDC/CombinedStatus</CONTEXT-PORT-REF>
+                        <TARGET-DATA-PROTOTYPE-REF DEST="VARIABLE-DATA-PROTOTYPE">/Demo/Interfaces/CombinedStatus/OpenRight</TARGET-DATA-PROTOTYPE-REF>
+                      </DATA-ELEMENT-IREF>
+                      <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusOpenRightSSig</SYSTEM-SIGNAL-REF>
+                    </SENDER-RECEIVER-TO-SIGNAL-MAPPING>
+                  </DATA-MAPPINGS>
+                </SYSTEM-MAPPING>
+              </MAPPINGS>
+              <ROOT-SOFTWARE-COMPOSITIONS>
+                <ROOT-SW-COMPOSITION-PROTOTYPE UUID="3c4ddf13-ba2f-4c58-a177-22e870fe2a3e">
+                  <SHORT-NAME>EDCPrototype</SHORT-NAME>
+                  <SOFTWARE-COMPOSITION-TREF DEST="COMPOSITION-SW-COMPONENT-TYPE">/Demo/EDC/EDC</SOFTWARE-COMPOSITION-TREF>
+                </ROOT-SW-COMPOSITION-PROTOTYPE>
+              </ROOT-SOFTWARE-COMPOSITIONS>
+            </SYSTEM>
+          </ELEMENTS>
+          <AR-PACKAGES>
+            <AR-PACKAGE UUID="68c0ebba-6211-49fe-9ca1-5bc4468efdc7">
+              <SHORT-NAME>SystemSignals</SHORT-NAME>
+              <ELEMENTS>
+                <SYSTEM-SIGNAL UUID="c4811a00-69c8-4728-917c-e457c27ff634">
+                  <SHORT-NAME>CombinedStatusLockedLeftSSig</SHORT-NAME>
+                </SYSTEM-SIGNAL>
+                <SYSTEM-SIGNAL UUID="14babacb-ba03-47e2-8ba9-082f5e96cb2e">
+                  <SHORT-NAME>CombinedStatusOpenLeftSSig</SHORT-NAME>
+                </SYSTEM-SIGNAL>
+                <SYSTEM-SIGNAL UUID="0fbdc633-0325-43a4-aad9-94a561e5641f">
+                  <SHORT-NAME>CombinedStatusLockedRightSSig</SHORT-NAME>
+                </SYSTEM-SIGNAL>
+                <SYSTEM-SIGNAL UUID="225a0314-2688-42f9-8134-b0815975dd5e">
+                  <SHORT-NAME>CombinedStatusOpenRightSSig</SHORT-NAME>
+                </SYSTEM-SIGNAL>
+              </ELEMENTS>
+            </AR-PACKAGE>
+            <AR-PACKAGE UUID="5b8edb26-d0e2-4531-8838-b6afc177ec0c">
+              <SHORT-NAME>Communication</SHORT-NAME>
+              <ELEMENTS>
+                <I-SIGNAL UUID="367f345e-2e71-4ee9-b986-b12f0b595e25">
+                  <SHORT-NAME>CombinedStatusLockedLeftISig</SHORT-NAME>
+                  <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusLockedLeftSSig</SYSTEM-SIGNAL-REF>
+                </I-SIGNAL>
+                <I-SIGNAL-I-PDU UUID="a8e6243d-3672-4024-9196-666863d7a492">
+                  <SHORT-NAME>CombinedStatusLockedLeftIPdu</SHORT-NAME>
+                  <I-SIGNAL-TO-PDU-MAPPINGS>
+                    <I-SIGNAL-TO-I-PDU-MAPPING UUID="5f744f66-d397-4852-962a-e2e3843d5d6a">
+                      <SHORT-NAME>CombinedStatusLockedLeftMapping</SHORT-NAME>
+                      <I-SIGNAL-REF DEST="I-SIGNAL">/Demo/EDC/Communication/CombinedStatusLockedLeftISig</I-SIGNAL-REF>
+                    </I-SIGNAL-TO-I-PDU-MAPPING>
+                  </I-SIGNAL-TO-PDU-MAPPINGS>
+                </I-SIGNAL-I-PDU>
+                <I-SIGNAL UUID="be04e28c-d2af-4709-b308-1e399ccd930d">
+                  <SHORT-NAME>CombinedStatusOpenLeftISig</SHORT-NAME>
+                  <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusOpenLeftSSig</SYSTEM-SIGNAL-REF>
+                </I-SIGNAL>
+                <I-SIGNAL-I-PDU UUID="0b5e696b-ac49-4403-83de-19182302cdb6">
+                  <SHORT-NAME>CombinedStatusOpenLeftIPdu</SHORT-NAME>
+                  <I-SIGNAL-TO-PDU-MAPPINGS>
+                    <I-SIGNAL-TO-I-PDU-MAPPING UUID="db74e5c5-7c34-4438-86fd-913346cbec90">
+                      <SHORT-NAME>CombinedStatusOpenLeftMapping</SHORT-NAME>
+                      <I-SIGNAL-REF DEST="I-SIGNAL">/Demo/EDC/Communication/CombinedStatusOpenLeftISig</I-SIGNAL-REF>
+                    </I-SIGNAL-TO-I-PDU-MAPPING>
+                  </I-SIGNAL-TO-PDU-MAPPINGS>
+                </I-SIGNAL-I-PDU>
+                <I-SIGNAL UUID="31c4d740-ce00-420a-a0d1-8dd3d4f49871">
+                  <SHORT-NAME>CombinedStatusLockedRightISig</SHORT-NAME>
+                  <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusLockedRightSSig</SYSTEM-SIGNAL-REF>
+                </I-SIGNAL>
+                <I-SIGNAL-I-PDU UUID="e2aed00f-acef-4118-867f-4e0726f26610">
+                  <SHORT-NAME>CombinedStatusLockedRightIPdu</SHORT-NAME>
+                  <I-SIGNAL-TO-PDU-MAPPINGS>
+                    <I-SIGNAL-TO-I-PDU-MAPPING UUID="e4ec3c11-f7ce-4b19-9c7b-648de8b25c28">
+                      <SHORT-NAME>CombinedStatusLockedRightMapping</SHORT-NAME>
+                      <I-SIGNAL-REF DEST="I-SIGNAL">/Demo/EDC/Communication/CombinedStatusLockedRightISig</I-SIGNAL-REF>
+                    </I-SIGNAL-TO-I-PDU-MAPPING>
+                  </I-SIGNAL-TO-PDU-MAPPINGS>
+                </I-SIGNAL-I-PDU>
+                <I-SIGNAL UUID="49b53301-aba1-4ccc-935c-792a9dece0a8">
+                  <SHORT-NAME>CombinedStatusOpenRightISig</SHORT-NAME>
+                  <SYSTEM-SIGNAL-REF DEST="SYSTEM-SIGNAL">/Demo/EDC/SystemSignals/CombinedStatusOpenRightSSig</SYSTEM-SIGNAL-REF>
+                </I-SIGNAL>
+                <I-SIGNAL-I-PDU UUID="de0dcabd-13d5-4ada-994e-332046f64c71">
+                  <SHORT-NAME>CombinedStatusOpenRightIPdu</SHORT-NAME>
+                  <I-SIGNAL-TO-PDU-MAPPINGS>
+                    <I-SIGNAL-TO-I-PDU-MAPPING UUID="443c59ba-44d3-4ed3-a108-091e27e2b962">
+                      <SHORT-NAME>CombinedStatusOpenRightMapping</SHORT-NAME>
+                      <I-SIGNAL-REF DEST="I-SIGNAL">/Demo/EDC/Communication/CombinedStatusOpenRightISig</I-SIGNAL-REF>
+                    </I-SIGNAL-TO-I-PDU-MAPPING>
+                  </I-SIGNAL-TO-PDU-MAPPINGS>
+                </I-SIGNAL-I-PDU>
+              </ELEMENTS>
+            </AR-PACKAGE>
+          </AR-PACKAGES>
+        </AR-PACKAGE>
+      </AR-PACKAGES>
+    </AR-PACKAGE>
+  </AR-PACKAGES>
+</AUTOSAR>
