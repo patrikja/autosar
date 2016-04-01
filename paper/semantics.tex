@@ -2,6 +2,9 @@
 \newcommand{\Preduce}[3]{\ensuremath{#1 &\xrightarrow{#2}& #3}}
 \newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
 \newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
+\newcommand{\Psay}[2]{#1!#2}
+\newcommand{\Phear}[2]{#1?#2}
+
 
 (Pre-writing)
 
@@ -18,8 +21,8 @@ names of) these are wired together with the relation
 Finally the ternary operator \(\begin{array}{r@{}c@{}l}\Preduce{\mathit{Before}}{\mathit{Label}}{\mathit{After}}\end{array}\) is
 used for the labeled transitions (reductions).
 
-The top level labels are of the form \verb+say(A,L)+,
-\verb+hear(A,L)+, and \verb+delta(T)+.
+The top level labels are of the form \Psay{A}{L},
+\Phear{A}{L}, and \verb+delta(T)+.
 
 The \verb+L+ can be of the following forms
 
@@ -66,12 +69,12 @@ TODO: prettify and explain the function ``eval''. (The relational version is inc
 
 \[
 \begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}
-  \Preduce{[]}{hear(\_A,\_L)}{[]}. & &
-\\\Preduce{[ P | Ps ]}{say(A,L)} {concat(eval([P2 | Ps2]))}  &\Pif& \Preduce{P}{say(A,L)}{P2}  ,&  \Preduce{Ps}{hear(A,L)}{Ps2}.
-\\\Preduce{[ P | Ps ]}{say(A,L)} {[ P2 | Ps2 ]}  &\Pif& \Preduce{P} {hear(A,L)}{P2}   ,&  \Preduce{Ps}{say(A,L)} {Ps2} .
-\\\Preduce{[ P | Ps ]}{hear(A,L)}{[ P2 | Ps2 ]}  &\Pif& \Preduce{P} {hear(A,L)}{P2}   ,&  \Preduce{Ps}{hear(A,L)}{Ps2} .
-\\\Preduce{[ P | Ps ]}{say(A,L)} {[ P  | Ps2 ]}  &\Pif& \Preduce{Ps}{say(A,L)} {Ps2}  ,&  \multicolumn{3}{c}{\Pignore{((A,L),P)}}    .
-\\\Preduce{[ P | Ps ]}{hear(A,L)}{[ P  | Ps2 ]}  &\Pif& \Preduce{Ps}{hear(A,L)}{Ps2}  ,&  \multicolumn{3}{c}{\Pignore{((A,L),P)}}    .
+  \Preduce{[]}{\Phear{\_A}{\_L}}{[]}. & &
+\\\Preduce{[ P | Ps ]}{\Psay{A}{L}} {concat(eval([P2 | Ps2]))}  &\Pif& \Preduce{P}{\Psay{A}{L}}{P2}  ,&  \Preduce{Ps}{\Phear{A}{L}}{Ps2}.
+\\\Preduce{[ P | Ps ]}{\Psay{A}{L}} {[ P2 | Ps2 ]}  &\Pif& \Preduce{P} {\Phear{A}{L}}{P2}   ,&  \Preduce{Ps}{\Psay{A}{L}} {Ps2} .
+\\\Preduce{[ P | Ps ]}{\Phear{A}{L}}{[ P2 | Ps2 ]}  &\Pif& \Preduce{P} {\Phear{A}{L}}{P2}   ,&  \Preduce{Ps}{\Phear{A}{L}}{Ps2} .
+\\\Preduce{[ P | Ps ]}{\Psay{A}{L}} {[ P  | Ps2 ]}  &\Pif& \Preduce{Ps}{\Psay{A}{L}} {Ps2}  ,&  \multicolumn{3}{c}{\Pignore{((A,L),P)}}    .
+\\\Preduce{[ P | Ps ]}{\Phear{A}{L}}{[ P  | Ps2 ]}  &\Pif& \Preduce{Ps}{\Phear{A}{L}}{Ps2}  ,&  \multicolumn{3}{c}{\Pignore{((A,L),P)}}    .
 \\\Preduce{[]}{\delta(\_T)}{[]}. & &
 \\\Preduce{[ P | Ps ]}{\delta(T)}{[ P2 | Ps2 ]}  &\Pif& \Preduce{P}{\delta(T)}{P2}    ,&  \Preduce{Ps}{\delta(T)}{Ps2}  .
 \end{array}
@@ -79,7 +82,7 @@ TODO: prettify and explain the function ``eval''. (The relational version is inc
 
 Think of
 \(\begin{array}{r@{}c@{}l}\Pignore{((A,L),P)} \Pif
-  \Preduce{P}{hear(A,L)}{P}\end{array}\).
+  \Preduce{P}{\Phear{A}{L}}{P}\end{array}\).
 but implemented to avoid overlap.
 
 TODO: can \Pignore{((A,L),P)} be written before the other reduction on the RHS?
@@ -94,20 +97,20 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 (TODO: comment about flagging error on attempted "bad" \rte{Exit}?)
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(R{:}I, C, Xs,     \rte{Enter}(X,K))}{say(X{:}I,enter)} {rinst(R{:}I, C, [X|Xs], ap(K,ok))}  .
-\\\Preduce{rinst(R{:}I, C, [X|Xs], \rte{Exit}(X,K))} {say(X{:}I,exit)}  {rinst(R{:}I, C, Xs,     ap(K,ok))}      .
-\\\Preduce{excl(X{:}I, free)}                     {hear(X{:}I,enter)}{excl(X{:}I, taken)}                 .
-\\\Preduce{excl(X{:}I, taken)}                    {hear(X{:}I,exit)} {excl(X{:}I, free)}                  .
+  \Preduce{rinst(R{:}I, C, Xs,     \rte{Enter}(X,K))}{\Psay{X{:}I}{enter}} {rinst(R{:}I, C, [X|Xs], ap(K,ok))}  .
+\\\Preduce{rinst(R{:}I, C, [X|Xs], \rte{Exit}(X,K))} {\Psay{X{:}I}{exit}}  {rinst(R{:}I, C, Xs,     ap(K,ok))}      .
+\\\Preduce{excl(X{:}I, free)}                     {\Phear{X{:}I}{enter}}{excl(X{:}I, taken)}                 .
+\\\Preduce{excl(X{:}I, taken)}                    {\Phear{X{:}I}{exit}} {excl(X{:}I, free)}                  .
 \end{array}
 \]
 \subsection{Inter-runnable variables}
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(R{:}I, C, Xs, \rte{IrvRead}(S,K))} {say(S{:}I,irvr(V))}  {rinst(R{:}I, C, Xs, ap(K,V))}  .
-\\\Preduce{rinst(R{:}I, C, Xs, \rte{IrvWrite}(S,K))}{say(S{:}I,irvw(\_V))}{rinst(R{:}I, C, Xs, ap(K,ok))} .
-\\\Preduce{irv(S{:}I, V)}                           {hear(S{:}I,irvr(V))} {irv(S{:}I, V)}                 .
-\\\Preduce{irv(S{:}I,\_)}                           {hear(S{:}I,irvw(V))} {irv(S{:}I, V)}                 .
+  \Preduce{rinst(R{:}I, C, Xs, \rte{IrvRead}(S,K))} {\Psay{S{:}I}{irvr(V)}}  {rinst(R{:}I, C, Xs, ap(K,V))}  .
+\\\Preduce{rinst(R{:}I, C, Xs, \rte{IrvWrite}(S,K))}{\Psay{S{:}I}{irvw(\_V)}}{rinst(R{:}I, C, Xs, ap(K,ok))} .
+\\\Preduce{irv(S{:}I, V)}                           {\Phear{S{:}I}{irvr(V)}} {irv(S{:}I, V)}                 .
+\\\Preduce{irv(S{:}I,\_)}                           {\Phear{S{:}I}{irvw(V)}} {irv(S{:}I, V)}                 .
 \end{array}
 \]
 
@@ -116,27 +119,27 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(R{:}I, C, Xs, \rte{Receive}(E{:}P,K))}{say(E{:}P{:}I,rcv(V))}    {rinst(R{:}I, C, Xs, ap(K,V))} .
-\\\Preduce{rinst(R{:}I, C, Xs, \rte{Send}(E{:}P,V,K))} {say(E{:}P{:}I,snd(V,Res))}{rinst(R{:}I, C, Xs, ap(K,Res))}.
+  \Preduce{rinst(R{:}I, C, Xs, \rte{Receive}(E{:}P,K))}{\Psay{E{:}P{:}I}{rcv(V)}}    {rinst(R{:}I, C, Xs, ap(K,V))} .
+\\\Preduce{rinst(R{:}I, C, Xs, \rte{Send}(E{:}P,V,K))} {\Psay{E{:}P{:}I}{snd(V,Res)}}{rinst(R{:}I, C, Xs, ap(K,Res))}.
 \end{array}
 \]
 
 \newcommand{\nodata}{\ensuremath{\mathit{no\_data}}}
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{qelem(E{:}P{:}I, N, [V|Vs])}{hear(E{:}P{:}I,rcv(V))}      {qelem(E{:}P{:}I, N, Vs)}    .
-\\\Preduce{qelem(E{:}P{:}I, N, [])}    {hear(E{:}P{:}I,rcv(\nodata))}{qelem(E{:}P{:}I, N, [])}    .
+  \Preduce{qelem(E{:}P{:}I, N, [V|Vs])}{\Phear{E{:}P{:}I}{rcv(V)}}      {qelem(E{:}P{:}I, N, Vs)}    .
+\\\Preduce{qelem(E{:}P{:}I, N, [])}    {\Phear{E{:}P{:}I}{rcv(\nodata)}}{qelem(E{:}P{:}I, N, [])}    .
 \end{array}
 \]
 
 
 \[
 \begin{array}{r@{}c@{}lcl}
-  \Preduce{qelem(E{:}P{:}I, N, Vs)}{hear(A,snd(V,ok))}{qelem(E{:}P{:}I, N, Vs++[V])}
+  \Preduce{qelem(E{:}P{:}I, N, Vs)}{\Phear{A}{snd(V,ok)}}{qelem(E{:}P{:}I, N, Vs++[V])}
     &\Pif &   A\Rightarrow{}E{:}P{:}I, length(Vs) < N.
-\\\Preduce{qelem(E{:}P{:}I, N, Vs)}{hear(A,snd(\_V,limit))}{qelem(E{:}P{:}I, length(Vs), Vs)}
+\\\Preduce{qelem(E{:}P{:}I, N, Vs)}{\Phear{A}{snd(\_V,limit)}}{qelem(E{:}P{:}I, length(Vs), Vs)}
     &\Pif &   A\Rightarrow{}E{:}P{:}I    .
-\\\Preduce{qelem(E{:}P{:}I, N, Vs)}{hear(A,snd(V,Res))}{qelem(E{:}P{:}I, N, Vs++[V])}
+\\\Preduce{qelem(E{:}P{:}I, N, Vs)}{\Phear{A}{snd(V,Res)}}{qelem(E{:}P{:}I, N, Vs++[V])}
     &\Pif &   A\Rightarrow{}E{:}P{:}I, length(Vs) < N, Res \neq ok    .
 \end{array}
 \]
@@ -146,9 +149,9 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{runnable(R{:}I, K, T, \_, N)} {hear(A,snd(\_V,ok))}   {runnable(R{:}I, K, T, pending, N)}
+  \Preduce{runnable(R{:}I, K, T, \_, N)} {\Phear{A}{snd(\_V,ok)}}   {runnable(R{:}I, K, T, pending, N)}
 \\ \multicolumn{3}{l}{\qquad \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .}
-\\\Preduce{runnable(R{:}I, K, T, Act, N)}{hear(A,snd(\_V,limit))}{runnable(R{:}I, K, T, Act, N)}
+\\\Preduce{runnable(R{:}I, K, T, Act, N)}{\Phear{A}{snd(\_V,limit)}}{runnable(R{:}I, K, T, Act, N)}
 \\ \multicolumn{3}{l}{\qquad \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .}
 \end{array}
 \]
@@ -159,15 +162,15 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(R{:}I, C, XS, \rte{Read}(E{:}P,K))}       {say(E{:}P{:}I,rd(V))} {rinst(R{:}I, C, XS, ap(K,V))} .
-\\\Preduce{rinst(R{:}I, C, XS, \rte{Write}(E{:}P,V,K))}    {say(E{:}P{:}I,wr(V))} {rinst(R{:}I, C, XS, ap(K,ok))}.
-\\\Preduce{delem(E{:}P{:}I, \_U, V)}                       {hear(E{:}P{:}I,rd(V))}{delem(E{:}P{:}I, false, V)}        .
-\\\Preduce{delem(E{:}P{:}I, \_U, \_)}                      {hear(A,wr(V))}        {delem(E{:}P{:}I, true, V)}            \Pif    A\Rightarrow{}E{:}P{:}I .
-\\\Preduce{runnable(R{:}I, K, T, \_, N)}                   {hear(A,wr(\_V))}      {runnable(R{:}I, K, T, pending, N)}    \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .
-\\\Preduce{rinst(R{:}I, C, XS, \rte{IsUpdated}(E{:}P,K))}  {say(E{:}P{:}I,up(U))} {rinst(R{:}I, C, XS, ap(K,U))} .
-\\\Preduce{rinst(R{:}I, C, XS, \rte{Invalidate}(E{:}P,K))} {say(E{:}P{:}I,inv)}   {rinst(R{:}I, C, XS, ap(K,ok))}.
-\\\Preduce{delem(E{:}P{:}I, U, V)}                         {hear(E{:}P{:}I,up(U))}{delem(E{:}P{:}I, U, V)} .
-\\\Preduce{delem(E{:}P{:}I, \_U, \_)}                      {hear(A,inv)}          {delem(E{:}P{:}I, true, invalid)}      \Pif    A\Rightarrow{}E{:}P{:}I .
+  \Preduce{rinst(R{:}I, C, XS, \rte{Read}(E{:}P,K))}       {\Psay{E{:}P{:}I}{rd(V)}} {rinst(R{:}I, C, XS, ap(K,V))} .
+\\\Preduce{rinst(R{:}I, C, XS, \rte{Write}(E{:}P,V,K))}    {\Psay{E{:}P{:}I}{wr(V)}} {rinst(R{:}I, C, XS, ap(K,ok))}.
+\\\Preduce{delem(E{:}P{:}I, \_U, V)}                       {\Phear{E{:}P{:}I}{rd(V)}}{delem(E{:}P{:}I, false, V)}        .
+\\\Preduce{delem(E{:}P{:}I, \_U, \_)}                      {\Phear{A}{wr(V)}}        {delem(E{:}P{:}I, true, V)}            \Pif    A\Rightarrow{}E{:}P{:}I .
+\\\Preduce{runnable(R{:}I, K, T, \_, N)}                   {\Phear{A}{wr(\_V)}}      {runnable(R{:}I, K, T, pending, N)}    \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .
+\\\Preduce{rinst(R{:}I, C, XS, \rte{IsUpdated}(E{:}P,K))}  {\Psay{E{:}P{:}I}{up(U)}} {rinst(R{:}I, C, XS, ap(K,U))} .
+\\\Preduce{rinst(R{:}I, C, XS, \rte{Invalidate}(E{:}P,K))} {\Psay{E{:}P{:}I}{inv}}   {rinst(R{:}I, C, XS, ap(K,ok))}.
+\\\Preduce{delem(E{:}P{:}I, U, V)}                         {\Phear{E{:}P{:}I}{up(U)}}{delem(E{:}P{:}I, U, V)} .
+\\\Preduce{delem(E{:}P{:}I, \_U, \_)}                      {\Phear{A}{inv}}          {delem(E{:}P{:}I, true, invalid)}      \Pif    A\Rightarrow{}E{:}P{:}I .
 \end{array}
 \]
 
@@ -178,18 +181,18 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 \newcommand{\Pbackslashplus}{\mathbin{\backslash\!{+}}}
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{say(O{:}P{:}I,call(V,O{:}P{:}I,Res))}{rinst(R{:}I, C, XS, ap(K,Res))}
+  \Preduce{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{\Psay{O{:}P{:}I}{call(V,O{:}P{:}I,Res)}}{rinst(R{:}I, C, XS, ap(K,Res))}
   \Pcontline{\Pif serverCallPoint(R{:}I, async(O{:}P)) ; Res \neq ok   .}
-\\\Preduce{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{say(O{:}P{:}I,call(V,O{:}P{:}I,ok))}{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}
+\\\Preduce{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{\Psay{O{:}P{:}I}{call(V,O{:}P{:}I,ok)}}{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}
   \Pcontline{\Pif serverCallPoint(R{:}I, sync(O{:}P))  .}
-\\\Preduce{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{hear(A,call(V,C,ok))}{runnable(R{:}I, K, T, serving(CS++[C],Vs++[V]), N)}
+\\\Preduce{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{\Phear{A}{call(V,C,ok)}}{runnable(R{:}I, K, T, serving(CS++[C],Vs++[V]), N)}
   \Pcontline{\begin{array}{l}
                \Pif
              \\A\Rightarrow{}O{:}P{:}I, events(R{:}I, operationInvoked(O{:}P)),
              \\\Pbackslashplus member(C, Cs)
              \\.
              \end{array}}
-\\\Preduce{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{hear(A,call(\_V,C,limit))}{runnable(R{:}I, K, T, serving(Cs,Vs), N)}
+\\\Preduce{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{\Phear{A}{call(\_V,C,limit)}}{runnable(R{:}I, K, T, serving(Cs,Vs), N)}
   \Pcontline{\begin{array}{l}
                \Pif
              \\A\Rightarrow{}O{:}P{:}I, events(R{:}I, operationInvoked(O{:}P)),
@@ -204,12 +207,12 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}{say(O{:}P{:}I,res(V))}         {rinst(R{:}I, C, XS, ap(K,V))}  .
-\\\Preduce{rinst(A, O{:}P{:}I, [], return(V))        }{say(O{:}P{:}I,ret(V))}         {rinst(A, nil, [], return(void))}.
-\\\Preduce{opres(O{:}P{:}I, [V|Vs])                  }{hear(O{:}P{:}I,res(V))}        {opres(O{:}P{:}I, Vs)}               .
-\\\Preduce{opres(O{:}P{:}I, [])                      }{hear(O{:}P{:}I,res(\nodata))}  {opres(O{:}P{:}I, [])}
+  \Preduce{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}{\Psay {O{:}P{:}I}{res(V)}}         {rinst(R{:}I, C, XS, ap(K,V))}  .
+\\\Preduce{rinst(A, O{:}P{:}I, [], return(V))        }{\Psay {O{:}P{:}I}{ret(V)}}         {rinst(A, nil, [], return(void))}.
+\\\Preduce{opres(O{:}P{:}I, [V|Vs])                  }{\Phear{O{:}P{:}I}{res(V)}}        {opres(O{:}P{:}I, Vs)}               .
+\\\Preduce{opres(O{:}P{:}I, [])                      }{\Phear{O{:}P{:}I}{res(\nodata)}}  {opres(O{:}P{:}I, [])}
   \Pcontline{\Pif    async\_result(O{:}P{:}I)   .}
-\\\Preduce{opres(O{:}P{:}I, Vs)                      }{hear(O{:}P{:}I,ret(V))}        {opres(O{:}P{:}I, Vs++[V])} .
+\\\Preduce{opres(O{:}P{:}I, Vs)                      }{\Phear{O{:}P{:}I}{ret(V)}}        {opres(O{:}P{:}I, Vs++[V])} .
 \end{array}
 \]
 
@@ -218,8 +221,8 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{rinst(A, nil, [], return(\_V))}{say(A,term)}{[]}    .
-\\\Preduce{runnable(A, K, T, Act, N)}{hear(A,term)}{runnable(A, K, T, Act, N-1)}.
+  \Preduce{rinst(A, nil, [], return(\_V))}{\Psay{A}{term}}{[]}    .
+\\\Preduce{runnable(A, K, T, Act, N)}{\Phear{A}{term}}{runnable(A, K, T, Act, N-1)}.
 \end{array}
 \]
 
@@ -227,7 +230,7 @@ Note the "time left" state has to be zero for these rules to fire.
 
 \[
 \begin{array}{r@{}c@{}l}
-  \Preduce{runnable(A, K, 0, pending, N)}{say(A,new)}{\begin{array}{l}
+  \Preduce{runnable(A, K, 0, pending, N)}{\Psay{A}{new}}{\begin{array}{l}
                                                         [ runnable(A, K, T, idle, N+1)
                                                       \\, rinst(A, nil, [], ap(K,void)) ]
                                                      \end{array}}
@@ -237,7 +240,7 @@ Note the "time left" state has to be zero for these rules to fire.
              \\minimumStartInterval(A, T)
              \\.
              \end{array}}
-\\\Preduce{runnable(A, K, 0, serving([C|Cs],[V|Vs]), N)}{say(A,new)}{[ runnable(A, K, T, serving(Cs,Vs), N+1)
+\\\Preduce{runnable(A, K, 0, serving([C|Cs],[V|Vs]), N)}{\Psay{A}{new}}{[ runnable(A, K, T, serving(Cs,Vs), N+1)
                                                                    , rinst(A, C, [], ap(K,V)) ]}
   \Pcontline{\begin{array}{l}
                \Pif
@@ -253,8 +256,8 @@ Note the "time left" state has to be zero for these rules to fire.
 
 \[
 \begin{array}{r@{}c@{}lcl}
-  \Preduce{timer(A, 0)             }{say(A,tick)} {timer(A, T)}                   & \Pif&    events(A, timing(T))    .
-\\\Preduce{runnable(A, K, T, \_, N)}{hear(A,tick)}{runnable(A, K, T, pending, N)} .
+  \Preduce{timer(A, 0)             }{\Psay{A}{tick}} {timer(A, T)}                   & \Pif&    events(A, timing(T))    .
+\\\Preduce{runnable(A, K, T, \_, N)}{\Phear{A}{tick}}{runnable(A, K, T, pending, N)} .
 \end{array}
 \]
 
