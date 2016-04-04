@@ -87,6 +87,8 @@ convertPackageElements top path node =
         Just node' ->
             txt "{-# LANGUAGE RecordWildCards #-}" $$
             txt "{-# LANGUAGE DeriveDataTypeable #-}" $$
+            txt "{-# LANGUAGE TypeFamilies #-}" $$
+            txt "{-# LANGUAGE UndecidableInstances #-}" $$
             txt "module" <+> txt modname <+> txt "where" <> nl $$
             convertImports top modname node' <> nl $$
             vmap (convertElement top path) (children "*" node') $$
@@ -113,7 +115,7 @@ convertImports top modname node =
 
 refTags0 = [ "CONSTANT-REF" ]
 
-refTags1 = [ "TYPE-TREF", "SOFTWARE-COMPOSITION-TREF" ]
+refTags1 = [ "TYPE-TREF", "SOFTWARE-COMPOSITION-TREF", "BASE-TYPE-REF" ]
 
 refTags2 = [ "TARGET-P-PORT-REF", "TARGET-R-PORT-REF",
              "OPERATION-PROTOTYPE-REF", "DATA-ELEMENT-PROTOTYPE-REF" ]
@@ -155,6 +157,18 @@ convertElement top path node =
           where
             ports      = grandChildren "PORTS" "*" node
             behaviors  = grandChildren "INTERNAL-BEHAVIORS" "SWC-INTERNAL-BEHAVIOR" node
+        "SERVICE-SW-COMPONENT-TYPE" ->
+            convertInterfaceType top name ports <> nl $$
+            txt (mkLo name) <+> txt ":: AUTOSAR" <+> txt tname $$
+            txt (mkLo name) <+> equals <+> txt "atomic $ do" $$ 
+            nest 4 (
+                vmap (convertPort top) ports $$
+                vmap (convertInternalBehavior top name) behaviors $$
+                txt "return $" <+> convertInterfaceTerm top name ports )
+--          nl <> vmap (convertStubs (equals <+> txt "undefined") name) behaviors
+          where
+            ports      = grandChildren "PORTS" "*" node
+            behaviors  = grandChildren "INTERNAL-BEHAVIORS" "SWC-INTERNAL-BEHAVIOR" node
         "APPLICATION-PRIMITIVE-DATA-TYPE" ->
             txt "type" <+> txt tname <+> equals <+> convertPrimitiveTypeCategory (leafVal "CATEGORY" node)
         "APPLICATION-RECORD-DATA-TYPE" ->
@@ -171,7 +185,8 @@ convertElement top path node =
                 delems ->
                     nl <> txt "data" <+> txt tname <+> txt "r c =" <+> txt tname <+> lbrace $$
                     nest 4 (vcat . punctuate comma $ map (convertDataElemField top tname) delems) $$
-                    nest 2 rbrace
+                    nest 2 rbrace $$
+                    makePortInstanceSR top tname delems
         "CLIENT-SERVER-INTERFACE" ->
 --          case grandChildren "OPERATIONS" "OPERATION-PROTOTYPE" node of       -- r3.x
             case grandChildren "OPERATIONS" "CLIENT-SERVER-OPERATION" node of   -- r4.0
@@ -181,7 +196,8 @@ convertElement top path node =
                 ops ->
                     nl <> txt "data" <+> txt tname <+> txt "r c =" <+> txt tname <+> lbrace $$
                     nest 4 (vcat . punctuate comma $ map (convertOpField top tname) ops) $$
-                    nest 2 rbrace
+                    nest 2 rbrace $$
+                    makePortInstanceCS top tname ops
         "SW-BASE-TYPE" ->
             txt "type" <+> txt tname <+> equals <+> case leafVal "BASE-TYPE-ENCODING" node of
                                                         "ISO-8859-1" -> txt "String"
@@ -228,21 +244,58 @@ convertField top tname (node, el) =
     convertValueSpec1 top (leafVal "TYPE-TREF" el) node
 
 convertDataElemField top tname delem =
-    convertFieldname top tname (shortName delem) <+> equals <+> convertDataElem top delem
+    convertFieldname top tname (shortName delem) <+> txt "::" <+> convertDataElem top delem
 
 convertDataElem top delem =
     txt "DataElement" <+> convertQueued top delem <+> convertTRef top delem <+> txt "r c"
 
+makePortInstanceSR top tname delems =
+    txt "instance Port" <+> txt tname <+> txt "where" $$
+    nest 4 (
+        txt "providedPort" <+> equals <+> txt "do" $$
+        nest 4 (
+            vmap (\d -> fname d <+> txt "<-" <+> txt "providedPort") delems $$
+            txt "return" <+> txt tname <> txt "{..}"
+        ) $$
+        txt "requiredPort" <+> equals <+> txt "do" $$
+        nest 4 (
+            vmap (\d -> fname d <+> txt "<-" <+> txt "requiredPort") delems $$
+            txt "return" <+> txt tname <> txt "{..}"
+        ) $$
+        txt "connect a b = do" $$
+        nest 4 (
+            vmap (\d -> txt "connect" <+> parens (fname d <+> txt "a") <+> parens (fname d <+> txt "b")) delems
+        ) $$
+        txt "delegateP ps = do" $$
+        nest 4 (
+            vmap (\d -> fname d <+> txt "<-" <+> txt "delegateP" <+> 
+                        brackets (txt " v |" <+> txt tname <> braces (fname d <+> equals <+> txt "v") <+> txt "<- ps ")) delems $$
+            txt "return" <+> txt tname <> txt "{..}"
+        ) $$
+        txt "delegateR ps = do" $$
+        nest 4 (
+            vmap (\d -> fname d <+> txt "<-" <+> txt "delegateR" <+> 
+                        brackets (txt " v |" <+> txt tname <> braces (fname d <+> equals <+> txt "v") <+> txt "<- ps ")) delems $$
+            txt "return" <+> txt tname <> txt "{..}"
+        )
+    )
+  where
+    fname d = convertFieldname top tname (shortName d)
+
 convertOpField top tname op =
-    convertFieldname top tname (shortName op) <+> equals <+> convertOp top op
+    convertFieldname top tname (shortName op) <+> txt "::" <+> convertOp top op
     
 convertOp top op =
     txt "ClientServerOperation" <+> convertArgs top (grandChildren "ARGUMENTS" "ARGUMENT-PROTOTYPE" op) <+> txt "r c"
 
+makePortInstanceCS top tname ios =
+    undefined
+
 convertPrimitiveTypeCategory "VALUE"            = txt "Double"
 convertPrimitiveTypeCategory "BOOLEAN"          = txt "Bool"
 convertPrimitiveTypeCategory "STRING"           = txt "String"
-convertPrimitiveTypeCategory "DATA_REFERENCE"   = txt "Int {- DATA_REFERENCE -}"     -- Really dubious, of course!
+convertPrimitiveTypeCategory "TYPE_REFERENCE"   = txt "Int {- TYPE_REFERENCE -}"     -- Really dubious, of course...
+convertPrimitiveTypeCategory "DATA_REFERENCE"   = txt "Int {- DATA_REFERENCE -}"     -- Really dubious, of course...
 convertPrimitiveTypeCategory x                  = txt "?" <> txt x <> txt "?"
 
 
@@ -314,9 +367,11 @@ convertFieldname top tname name =
 convertPort top node =
     case tagOf node of
         "R-PORT-PROTOTYPE" ->
-            txt name <+> txt "<-" <+> txt "require" <+> convertComSpecs top (rComSpecs `zip` rElems)
+            txt name <+> txt "<-" <+> txt "requiredPort" $$
+            convertComSpecs top name (rComSpecs `zip` rElems)
         "P-PORT-PROTOTYPE" ->
-            txt name <+> txt "<-" <+> txt "provide" <+> convertComSpecs top (pComSpecs `zip` pElems)
+            txt name <+> txt "<-" <+> txt "providedPort" $$
+            convertComSpecs top name (pComSpecs `zip` pElems)
         _ ->
             empty
     where
@@ -326,31 +381,29 @@ convertPort top node =
         rElems = grandChildren "DATA-ELEMENTS" "*" $ lookupNode top $ leafVal "REQUIRED-INTERFACE-TREF" node
         pElems = grandChildren "DATA-ELEMENTS" "*" $ lookupNode top $ leafVal "PROVIDED-INTERFACE-TREF" node
 
-convertComSpecs top [] =
-    txt "()"
-convertComSpecs top specs =
-    parens (commasep (convertComSpec top) specs)
+convertComSpecs top name specs =
+    vmap (convertComSpec top name) specs
 
-convertComSpec top (node,el) =
+convertComSpec top name (node,el) =
     case tagOf node of
         "NONQUEUED-RECEIVER-COM-SPEC" ->
-            txt "UnqueuedReceiverComSpec{ initValue =" <+> initVal <+> txt "}"
+            convInitVal
         "NONQUEUED-SENDER-COM-SPEC" ->
-            txt "UnqueuedSenderComSpec{ initSend =" <+> initVal <+> txt "}"
+            convInitVal
         "QUEUED-RECEIVER-COM-SPEC" ->
-            txt "QueuedReceiverComSpec{ queueLength =" <+> queueLength <+> txt "}"
+            convQueueLength
         "QUEUED-SENDER-COM-SPEC" ->
-            txt "QueuedSenderComSpec"
+            empty
         "SERVER-COM-SPEC" ->
-            txt "ServerComSpec{ bufferLength =" <+> queueLength <+> txt "}"
+            convQueueLength
         "CLIENT-COM-SPEC" ->
-            txt "ClientComSpec"
+            empty
     where
-        tref = leafVal "TYPE-TREF" el
-        initVal = case optChild "INIT-VALUE" node of 
-                    Nothing -> txt "Nothing"
-                    Just node' -> txt "Just" <+> convertExp top tref (onlyChild node')
-        queueLength = txt (leafVal "QUEUE-LENGTH" node)
+        convInitVal     = conv "INIT-VALUE" "InitValue" (convertExp top (leafVal "TYPE-TREF" el) . onlyChild)
+        convQueueLength = conv "QUEUE-LENGTH" "QueueLength" (txt . nodeVal)
+        conv spec con f = case optChild spec node of
+                            Nothing -> empty
+                            Just node' -> txt "comSpec" <+> txt name <+> parens (txt con <+> f node')
 
 lookupNode top ref = walk top (tail $ Text.splitOn "/" ref)
     where
@@ -435,7 +488,7 @@ convertRunnable top comp events vars excl node =
     name        = shortName node
     concurrent  = leafVal "CAN-BE-INVOKED-CONCURRENTLY" node
     minStart    = leafVal "MINIMUM-START-INTERVAL" node
-    arg         = if concurrent == "true" then txt "Concurrent" else txt "MinInterval" <+> txt minStart
+    arg         = if concurrent == "true" then txt "Concurrent" else parens (txt "MinInterval" <+> txt minStart)
     myEvents    = filter (handledEvent name) events
     opInvoked   = filter (isTag "OPERATION-INVOKED") myEvents
     runnable    = if null opInvoked then txt "runnable" else txt "serverRunnable"
