@@ -1,3 +1,8 @@
+2016-04-01:
+
+  TODO: re-translate the semantics to LaTeX: now from ../prolog/semantics.eprover
+
+
 2015-12-16:
 
   TODO: make the semantics "work" for us (possibility to test if certain transitions are possible)
