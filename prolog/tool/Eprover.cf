@@ -7,62 +7,20 @@ Directive . Clause ::= ":-" [Predicate] ;
 APred    . Predicate ::= Atom ;
 CPred    . Predicate ::= Atom "(" [Term] ")" ;
 NotPPred . Predicate ::= "~" Term ;
-PPred    . Predicate ::= "\\+" Term ;
 TPred    . Predicate ::= Term;
-NPred    . Predicate ::= "!";
 
+TParen   . Term ::= "(" Term ")" ;
 
--- OTerm    . Term ::= Term Op Term;
-LCons    . Term1 ::= Term1 ":"   Term2 ;
-
-TEq      . Term2 ::= Term3 "="   Term3 ;
-TNEq     . Term2 ::= Term3 "\\=" Term3 ;
-TIs      . Term2 ::= Term3 "is"  Term3 ;
-TEqEq    . Term2 ::= Term3 "=="  Term3 ;
-TEqDot   . Term2 ::= Term3 "=.." Term3 ;
-TNEqEq   . Term2 ::= Term3 "\\==" Term3 ;
-TLess    . Term2 ::= Term3 "<"   Term3 ;
-TGE      . Term2 ::= Term3 ">="  Term3 ;
-TRule    . Term2 ::= Term3 "==>" Term3 ;
-
-TFrom    . Term3 ::= Term5 "---" Term5 ;
-
-TMinus   . Term4 ::= Term4 "-"   Term5 ;
-TPlus    . Term4 ::= Term4 "+"   Term4 ;
-TPlusPlus. Term4 ::= Term4 "++"  Term4 ; -- Prolog extension
-
-TTo      . Term5 ::= Term6 "--->" Term6 ;
-
-Semi     . Term6 ::= Term7 ";"   Term7 ;
-
-TCons    . Term7 ::= "[" Term "|" Term "]" ;
-TDouble  . Term7 ::= "[" Term "," Term "]" ;
-TSing    . Term7 ::= "[" Term "]" ;
-TNil     . Term7 ::= "[" "]" ;
-TPair    . Term7 ::= "(" Term "," Term ")" ;
-TParen   . Term7 ::= "(" Term ")" ;
-TString  . Term7 ::= TokString ;
-
-TAtom    . Term7 ::= Atom ;
-VarT     . Term7 ::= Var ;
-Complex  . Term7 ::= Atom "(" [Term] ")" ;
-TInt     . Term7 ::= Integer ;
--- TList    . Term ::= List ;
-
-coercions Term 7;
-
-
+TAtom    . Term ::= Atom ;
+VarT     . Term ::= Var ;
+Complex  . Term ::= Atom "(" [Term] ")" ;
+TInt     . Term ::= Integer ;
 
 Atm      . Atom ::=  LIdent ;
 SAtom    . Atom ::=  LitString ;
 
 V        . Var ::= UIdent ;
 A        . Var ::= Wild ;
-
-Empty . List ::= "[" "]";
-Enum  . List ::= "[" [Term] "]" ;
-Cons  . List ::= "[" [Term] "|" List "]" ;
-ConsV . List ::= "[" [Term] "|" Var "]" ;
 
 -- List definitions
 
@@ -73,12 +31,9 @@ separator nonempty Term "," ;
 -- Token definitions
 
 token LitString '\'' (char - '\'')* '\'' ;
-token TokString '"' (char - '"')* '"' ;
 token UIdent (upper (letter | digit | '_' )*) ;
 token LIdent (lower (letter | digit | '_' | '-')*) ;
 token Wild   '_' (letter | digit | '_')* ;
-
-token Op ([":=>-"][":=>-."]*) ;
 
 -- Comments
 comment "%" ;
