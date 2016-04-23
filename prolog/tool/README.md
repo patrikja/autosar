@@ -1,6 +1,10 @@
-2015-12-16:
+2016-04-23: Draft conversion done.
 
-
+  TODO: match on rte_ and generate a special LaTeX command
+  TODO: Check if ep is used with different arity (and if so, generate
+    different LaTeX commands depending on arity).
+  TODO: Implement all the LaTeX commands
+  TODO: Splice in the generated LaTeX in the paper and try it out
 
 2015-06-12: Sorting out the different "equality" operators
 
