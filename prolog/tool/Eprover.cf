@@ -4,9 +4,7 @@ Fact      . Clause ::= Predicate ;
 Rule      . Clause ::= Predicate ":-" [Predicate] ;
 Directive . Clause ::= ":-" [Predicate] ;
 
-APred    . Predicate ::= Atom ;
-CPred    . Predicate ::= Atom "(" [Term] ")" ;
-NotPPred . Predicate ::= "~" Term ;
+NPred    . Predicate ::= "~" Term ;
 TPred    . Predicate ::= Term;
 
 TParen   . Term ::= "(" Term ")" ;
@@ -17,7 +15,7 @@ Complex  . Term ::= Atom "(" [Term] ")" ;
 TInt     . Term ::= Integer ;
 
 Atm      . Atom ::=  LIdent ;
-SAtom    . Atom ::=  LitString ;
+-- SAtom    . Atom ::=  LitString ;
 
 V        . Var ::= UIdent ;
 A        . Var ::= Wild ;

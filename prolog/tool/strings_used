@@ -1,0 +1,29 @@
+Constructors used:
+  Db,
+  Fact, Rule, {- but not Directive -}
+  NPred, TPred,
+  TAtom, VarT, Complex, TInt, {- but not TParen -}
+  Atm,
+  UIdent, Wild
+  LIdent,
+  V, A,
+
+Strings used:
+* Variables (after V . UIdent): "A", "Act", "B", "C", "Code", "Cs",
+  "E", "I", "K", "L", "N", "O", "P", "P1", "P2", "Q1", "Q2", "R",
+  "Res", "S", "T", "U", "V", "Vs", "X", "XS", "Xs"
+* Wildcards (unused variables): "_", "_U", "_V"
+* Other strings: "ap", "async", "async_result", "call",
+  "canBeInvokedConcurrently", "connect", "cons", "dataReceived",
+  "delem", "delta", "e", "enter", "ep", "eps", "equal", "events",
+  "excl", "exit", "false", "free", "hear", "idle", "inv", "invalid",
+  "irv", "irvr", "irvw", "length", "less", "lesseq", "limit",
+  "member", "minimumStartInterval", "minus", "new", "nil", "no_data",
+  "null", "o", "ok", "op", "operationInvoked", "opres", "par",
+  "pending", "plus", "qelem", "r", "rcv", "rd", "res", "ret",
+  "return", "rinst", "rte_Call", "rte_Enter", "rte_Exit",
+  "rte_Invalidate", "rte_IrvRead", "rte_IrvWrite", "rte_IsUpdated",
+  "rte_Read", "rte_Receive", "rte_Result", "rte_Send", "rte_Write",
+  "runnable", "s", "say", "seq", "serverCallPoint", "serving", "snd",
+  "step", "taken", "term", "tick", "timer", "timing", "true", "up",
+  "void", "wr", "x"
