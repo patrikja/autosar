@@ -22,7 +22,9 @@
 \newcommand{\Tx}    [2]{#1{:}#2}
 \newcommand{\Ts}    [2]{#1{:}#2}
 \newcommand{\Te}    [2]{#1{:}#2}
+\newcommand{\To}    [2]{#1{:}#2}
 \newcommand{\Tep}   [3]{#1{:}#2{:}#3}
+\newcommand{\Top}   [3]{#1{:}#2{:}#3}
 
 %\newcommand{\Trte}[1]{\mathrm{rte\_#1}}
 \newcommand{\Trte}[2]{\mathrm{#1}#2}
@@ -43,65 +45,60 @@
 \newcommand{\Tap}           [2]{#1@#2}
 \newcommand{\Texcl}         [2]{\mathrm{excl}(#1,#2)}
 \newcommand{\Tirv}          [2]{\mathrm{irv}(#1,#2)}
-\newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
-\newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
 \newcommand{\Tqelem}        [3]{\mathrm{qelem}(#1,#2,#3)}
-\newcommand{\Trcv}          [1]{\mathrm{rcv}(#1)}
-\newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
 \newcommand{\Tseq}          [2]{#1{\plusplus}#2}
 
-%**TODO: convert some of the below to macros - erase the rest
-\newcommand{\Tasync}                          {async}
-\newcommand{\Tasyncresult}                    {async\_result}
-\newcommand{\Tcall}                           {call}
-\newcommand{\TcanBeInvokedConcurrently}       {canBeInvokedConcurrently}
-\newcommand{\Tconnect}                        {connect}
-\newcommand{\TdataReceived}                   {dataReceived}
-\newcommand{\Tdelem}                          {delem}
-\newcommand{\Tenter}                          {enter}
+\newcommand{\Tasyncresult}                 [1]{\mathrm{async\_result}(#1)}
+\newcommand{\Tasync}                       [1]{\mathrm{async}(#1)}
+\newcommand{\Trunnable}                    [5]{\mathrm{runnable}{(#1,#2,#3,#4,#5)}}
+\newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
+\newcommand{\Tevents}                      [2]{\mathrm{events}(#1,#2)}
+\newcommand{\Tdelem}                       [3]{\mathrm{delem}(#1,#2,#3)}
+
+% static properties
+\newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)} %**TODO: shorter name?
+\newcommand{\TminimumStartInterval}        [2]{\mathrm{minimumStartInterval}(#1,#2)}  %**TODO: shorter name?
+\newcommand{\TdataReceived}                [1]{\mathrm{dataReceived}(#1)}
+
+% operators
+\newcommand{\Tless}                        [2]{#1<#2}
+\newcommand{\Tlesseq}                      [2]{#1 \leq #2}
+
+% payload
+\newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
+\newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
+\newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
+\newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
+\newcommand{\Trcv}          [1]{\mathrm{rcv}(#1)}
+\newcommand{\Trd}           [1]{\mathrm{rd}(#1)}
+\newcommand{\Twr}           [1]{\mathrm{wr}(#1)}
+\newcommand{\Tres}          [1]{\mathrm{res}(#1)}
+\newcommand{\Tret}          [1]{\mathrm{ret}(#1)}
+\newcommand{\Tup}           [1]{\mathrm{up}(#1)}
+
+%**TODO: match the macros with those in the main paper
+
+%**TODO: convert the below to macros
 \newcommand{\Teps}                            {eps}
 \newcommand{\Tequal}                          {equal}
-\newcommand{\Tevents}                         {events}
-\newcommand{\Texit}                           {exit}
 \newcommand{\Tfalse}                          {false}
 \newcommand{\Tidle}                           {idle}
-\newcommand{\Tinv}                            {inv}
 \newcommand{\Tinvalid}                        {invalid}
 \newcommand{\Tlength}                         {length}
-\newcommand{\Tless}                           {less}
-\newcommand{\Tlesseq}                         {lesseq}
 \newcommand{\Tlimit}                          {limit}
 \newcommand{\Tmember}                         {member}
-\newcommand{\TminimumStartInterval}           {minimumStartInterval}
 \newcommand{\Tminus}                          {minus}
-\newcommand{\Tnew}                            {new}
-\newcommand{\Tnil}                            {nil}
-\newcommand{\Tnodata}                         {no\_data}
-\newcommand{\Tnull}                           {null}
-\newcommand{\To}                              {o}
 \newcommand{\Tok}                             {ok}
-\newcommand{\Top}                             {op}
 \newcommand{\ToperationInvoked}               {operationInvoked}
 \newcommand{\Topres}                          {opres}
-\newcommand{\Tpending}                        {pending}
 \newcommand{\Tplus}                           {plus}
-\newcommand{\Trd}                             {rd}
-\newcommand{\Tres}                            {res}
-\newcommand{\Tret}                            {ret}
+
 \newcommand{\Treturn}                         {return}
-\newcommand{\Trunnable}                       {runnable}
 \newcommand{\TserverCallPoint}                {serverCallPoint}
 \newcommand{\Tserving}                        {serving}
 \newcommand{\Tsync}                           {sync}
-\newcommand{\Ttaken}                          {taken}
-\newcommand{\Tterm}                           {term}
-\newcommand{\Ttick}                           {tick}
 \newcommand{\Ttimer}                          {timer}
 \newcommand{\Ttiming}                         {timing}
-\newcommand{\Ttrue}                           {true}
-\newcommand{\Tup}                             {up}
-\newcommand{\Tvoid}                           {void}
-\newcommand{\Twr}                             {wr}
 
 \[
 \begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}
