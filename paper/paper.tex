@@ -85,11 +85,11 @@ Exclusive area $X$ of component $I$, with boolean occupation state $B$.
 Inter-runnable variable $S$ of component $I$, currently holding value $V$.
 \item $\delem{\adr{E:U:I}}{B}{V}$ \newline
 Non-queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
-\item $\qelem{\adr{E:U:I}}{\Vs}$ \newline
+\item $\qelem{\adr{E:U:I}}{\Vs}{TODO}$ \newline
 Queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value sequence $\Vs$.
 \item $\opres{\adr{O:U:I}}{\Vs}$ \newline
 Client-server operation $O$ in port $U$ of component $I$, currently holding result value sequence $\Vs$.
-\item $\timer{\adr{R:I}}{T_p}{T}$ \newline
+\item $\timer{\adr{R:I}}{T_p}{T}$ \newline  %TODO: timer has only 2 args in the semantics
 Timer state for runnable $R$ of component $I$ and period $T_p$, with $T$ seconds left of its current cycle.
 \end{itemize}
 
@@ -107,6 +107,7 @@ $$
 We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\adr{V:Vs}$ ($\adr{Vs:V}$).
 
 The code part of a runnable instance should technically be a representation of the C or Matlab function that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in every detail, a more abstract notion of executable code will be required. To this end, we have chosen to ignore all details of internal computations, and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. Because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style to allow any data-dependencies to be expressed.
+%TODO: several LaTeX commands here are used with more arguments than in the semantics below
 $$
 \begin{array}{lll}
 	\Code	& ::=	& \Enter{X}{\Cont}			\\
@@ -131,7 +132,7 @@ Together with an operator for composing process terms in parallel, the process g
 $$
 \begin{array}{rcll}
 	P,Q 	& ::= &
-		\runnable{A}{T}{\Act}{N}	\\
+		\runnable{A}{K}{T}{\Act}{N}	\\
 		& | &
 		\rinst{A}{C}{\Xs}{\Code}	\\
 		& | &
@@ -141,7 +142,7 @@ $$
 		& | &
 		\delem{A}{B}{V}			\\
 		& | &
-		\qelem{A}{\Vs}			\\
+		\qelem{A}{\Vs}{TODO}			\\
 		& | &
 		\opres{A}{\Vs}			\\
 		& | &
@@ -208,7 +209,7 @@ The initial process $P_0$ is determined fully by the AUTOSAR model under study, 
 \item For each runnable $R$ of each component $I$, a term
 $$
 \begin{array}{c}
-	\runnable{\adr{R:I}}{0.0}{\Act}{0}
+	\runnable{\adr{R:I}}{TODO}{0.0}{\Act}{0}
 \end{array}
 $$
 where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\pending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\idle$.
@@ -232,7 +233,7 @@ where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is 
 \item For each data element $E$ of each required port $U$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\qelem{\adr{E:U:I}}{\epsilon}
+	\qelem{\adr{E:U:I}}{\epsilon}{TODO}
 \end{array}
 $$
 if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued}; otherwise, a term

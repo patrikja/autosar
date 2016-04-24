@@ -24,28 +24,29 @@
 \newcommand{\pending} {\kw{pending}}
 \newcommand{\serving}[2]{\kw{serving}(#1,#2)}
 
-\newcommand{\runnable}[4]{\kw{runnable}(#1,#2,#3,#4)}
+\newcommand{\runnable}[5]{\kw{runnable}(#1,#2,#3,#4,#5)}
 \newcommand{\rinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
 \newcommand{\excl}    [2]{\kw{excl}(#1,#2)}
 \newcommand{\irv}     [2]{\kw{irv}(#1,#2)}
-\newcommand{\qelem}   [2]{\kw{qelem}(#1,#2)}
+\newcommand{\qelem}   [3]{\kw{qelem}(#1,#2,#3)}
 \newcommand{\delem}   [3]{\kw{delem}(#1,#2,#3)}
 \newcommand{\opres}   [2]{\kw{opres}(#1,#2)}
-\newcommand{\timer}   [3]{\kw{timer}(#1,#2,#3)}
+\newcommand{\timer}   [2]{\kw{timer}(#1,#2)}
 
-\newcommand{\rte}[1]{\text{rte\_#1}}
+\newcommand{\rte}[1]{\text{#1}}
+%\newcommand{\rte}[1]{\text{rte\_#1}}
 \newcommand{\Enter}     [2]{\rte{Enter}(#1,#2)}
 \newcommand{\Exit}      [2]{\rte{Exit}(#1,#2)}
-\newcommand{\IrvWrite}  [3]{\rte{IrvWrite}(#1,#2,#3)}  %TODO 2 args in semantics.eprover
+\newcommand{\IrvWrite}  [2]{\rte{IrvWrite}(#1,#2)}
 \newcommand{\IrvRead}   [2]{\rte{IrvRead}(#1,#2)}
-\newcommand{\Send}      [4]{\rte{Send}(#1,#2,#3,#4)}
-\newcommand{\Receive}   [3]{\rte{Receive}(#1,#2,#3)}   %TODO 2 args in semantics.eprover
-\newcommand{\Write}     [4]{\rte{Write}(#1,#2,#3,#4)}  %TODO 3 args in semantics.eprover
-\newcommand{\Read}      [3]{\rte{Read}(#1,#2,#3)}      %TODO 2 args in semantics.eprover
-\newcommand{\Invalidate}[3]{\rte{Invalidate}(#1,#2,#3)}%TODO 2 args in semantics.eprover
-\newcommand{\IsUpdated} [3]{\rte{IsUpdated}(#1,#2,#3)} %TODO 2 args in semantics.eprover
-\newcommand{\Call}      [4]{\rte{Call}(#1,#2,#3,#4)}   %TODO 3 args in semantics.eprover
-\newcommand{\Result}    [3]{\rte{Result}(#1,#2,#3)}    %TODO 2 args in semantics.eprover
+\newcommand{\Send}      [3]{\rte{Send}(#1,#2,#3)}
+\newcommand{\Receive}   [2]{\rte{Receive}(#1,#2)}
+\newcommand{\Write}     [3]{\rte{Write}(#1,#2,#3)}
+\newcommand{\Read}      [2]{\rte{Read}(#1,#2)}
+\newcommand{\Invalidate}[2]{\rte{Invalidate}(#1,#2)}
+\newcommand{\IsUpdated} [2]{\rte{IsUpdated}(#1,#2)}
+\newcommand{\Call}      [3]{\rte{Call}(#1,#2,#3)}
+\newcommand{\Result}    [2]{\rte{Result}(#1,#2)}
 
 \newcommand{\Return}    [1]{\text{return}(#1)}
 
@@ -53,3 +54,108 @@
 \newcommand{\say} [2]{#1 ! #2}
 %\newcommand{\say}  [2]{#1\mathrel{\,!\,}#2}
 \newcommand{\hear}[2]{#1 ? #2}
+
+% ----------------------------------------------------------------
+
+\newcommand{\plusplus}{\mathbin{+\!\!+}}
+
+\newcommand{\Tvar}  [1]{\V{#1}}
+\newcommand{\Tatom} [1]{\kw{#1}}
+
+\newcommand{\Tserving}{\serving}
+
+\newcommand{\Trunnable}     {\runnable}
+\newcommand{\Trinst}        {\rinst}
+\newcommand{\Texcl}         {\excl}
+\newcommand{\Tirv}          {\irv}
+\newcommand{\Tqelem}        {\qelem}
+\newcommand{\Tdelem}        {\delem}
+\newcommand{\Topres}        {\opres}
+\newcommand{\Ttimer}        {\timer}
+
+%\newcommand{\Trte}[1]{\mathrm{rte\_#1}}
+\newcommand{\Trte}[2]{\mathrm{#1}#2}
+\newcommand{\TrteEnter}     {\Enter}
+\newcommand{\TrteExit}      {\Exit}
+\newcommand{\TrteIrvWrite}  {\IrvWrite}
+\newcommand{\TrteIrvRead}   {\IrvRead}
+\newcommand{\TrteSend}      {\Send}
+\newcommand{\TrteReceive}   {\Receive}
+\newcommand{\TrteWrite}     {\Write}
+\newcommand{\TrteRead}      {\Read}
+\newcommand{\TrteInvalidate}{\Invalidate}
+\newcommand{\TrteIsUpdated} {\IsUpdated}
+\newcommand{\TrteCall}      {\Call}
+\newcommand{\TrteResult}    {\Result}
+
+\newcommand{\Treturn}       {\Return}
+
+\newcommand{\Tstep}      [3]{\ensuremath{#1 &\red{#2}& #3}}
+\newcommand{\Tsay}          {\say}
+\newcommand{\Thear}         {\hear}
+\newcommand{\Tdelta}     [1]{\delta(#1)}
+
+% ----------------
+
+\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
+\newcommand{\Prule}[2]{#1 \Pif #2}
+\newcommand{\Pfact}[1]{#1}
+\newcommand{\Pnegate}[1]{\neg(#1)}
+\newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
+
+
+\newcommand{\Tpar}  [2]{#1 \mathbin{\,|\,} #2}
+%\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
+%\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
+%\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
+\newcommand{\Tr}    [2]{#1{.}#2}
+\newcommand{\Tx}    [2]{#1{.}#2}
+\newcommand{\Ts}    [2]{#1{.}#2}
+\newcommand{\Te}    [2]{#1{.}#2}
+\newcommand{\To}    [2]{#1{.}#2}
+\newcommand{\Tep}   [3]{#1{.}#2{.}#3}
+\newcommand{\Top}   [3]{#1{.}#2{.}#3}
+
+%\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
+\newcommand{\Tcons}         [2]{#1{:}#2}
+\newcommand{\Tap}           [2]{#1@#2}
+\newcommand{\Tseq}          [2]{#1{\plusplus}#2}
+
+\newcommand{\Tasyncresult}                 [1]{\mathrm{async\_result}(#1)}
+\newcommand{\Tasync}                       [1]{\mathrm{async}(#1)}
+\newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
+\newcommand{\Tevents}                      [2]{\mathrm{events}(#1,#2)}
+
+% static properties
+\newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)} %**TODO: shorter name?
+\newcommand{\TminimumStartInterval}        [2]{\mathrm{minimumStartInterval}(#1,#2)}  %**TODO: shorter name?
+\newcommand{\TdataReceived}                [1]{\mathrm{dataReceived}(#1)}
+
+% operators
+\newcommand{\Tless}                        [2]{#1<#2}
+\newcommand{\Tlesseq}                      [2]{#1 \leq #2}
+
+% payload
+\newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
+\newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
+\newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
+\newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
+\newcommand{\Trcv}          [1]{\mathrm{rcv}(#1)}
+\newcommand{\Trd}           [1]{\mathrm{rd}(#1)}
+\newcommand{\Twr}           [1]{\mathrm{wr}(#1)}
+\newcommand{\Tres}          [1]{\mathrm{res}(#1)}
+\newcommand{\Tret}          [1]{\mathrm{ret}(#1)}
+\newcommand{\Tup}           [1]{\mathrm{up}(#1)}
+
+\newcommand{\Tminus}        [2]{{#1}-{#2}}
+\newcommand{\Tplus}         [2]{{#1}+{#2}}
+\newcommand{\Tequal}        [2]{{#1}={#2}}
+
+\newcommand{\Tlength}       [1]{\mathrm{length}(#1)}
+\newcommand{\Tmember}       [2]{\mathrm{member}(#1,#2)}
+
+\newcommand{\ToperationInvoked}[1]{\mathrm{operationInvoked}(#1)}
+
+\newcommand{\TserverCallPoint}[2]{\mathrm{serverCallPoint}(#1,#2)}
+\newcommand{\Tsync}         [1]{\mathrm{sync}(#1)}
+\newcommand{\Ttiming}       [1]{\mathrm{timing}(#1)}
