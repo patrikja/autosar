@@ -82,14 +82,14 @@ instance Print LitString where
 
 
 instance Print UIdent where
-  prt _ (UIdent i) = doc (showString i)
+  prt _ (UIdent i) = docS ("\\Tvar{"++i++"}")
 
 instance Print LIdent where
   prt _ (LIdent i) = doc (showString i)
 
 
 instance Print Wild where
-  prt _ (Wild i) = doc (showString i)
+  prt _ (Wild i) = doc (showString ('\\':i))
 
 instance Print Database where
   prt i e = case e of
@@ -141,7 +141,7 @@ instance Print Term where
                           , prt 0 terms
                           , docS "}"
                           ])
-    TAtom   atom  -> prPrec i 0 (concatD [prt 0 atom])
+    TAtom   atom  -> prPrec i 0 (concatD [docS "\\Tatom{", prt 0 atom, docS "}"])
     VarT    var   -> prPrec i 0 (concatD [prt 0 var])
     TInt    n     -> prPrec i 0 (concatD [prt 0 n])
     TParen  term  -> prPrec i 0 (concatD [doc (showString "("), prt 0 term, doc (showString ")")])
@@ -149,11 +149,12 @@ instance Print Term where
   prtList _ (x:xs)  = concatD [prt 0 x, doc (showString "}{"), prt 0 xs]
 instance Print Atom where
   prt i e = case e of
-    Atm lident -> prPrec i 0 (concatD [prt 0 lident])
+    Atm (LIdent s) | elem '_' s -> prPrec i 0 (concatD [prt 0 (LIdent (filter ('_'/=) s))])
+                   | otherwise  -> prPrec i 0 (concatD [prt 0 (LIdent s)])
 
 instance Print Var where
   prt i e = case e of
-    V uident -> prPrec i 0 (concatD [prt 0 uident])
-    A wild -> prPrec i 0 (concatD [prt 0 wild])
+    V uident  -> prPrec i 0 (concatD [prt 0 uident])
+    A wild    -> prPrec i 0 (concatD [prt 0 wild])
 
 main = putStrLn (printTree sem)

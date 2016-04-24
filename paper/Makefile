@@ -1,4 +1,4 @@
-paper.pdf: paper.tex semantics.tex
+paper.pdf: paper.tex semantics.tex ../prolog/tool/semantics.tex
 	latexmk -pdf paper.tex
 
 clean:
