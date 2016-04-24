@@ -1,0 +1,55 @@
+\newcommand{\adr}[1]{\emph{#1}}
+\newcommand{\sep}{\hspace{2ex}|\hspace{2ex}}
+
+\newcommand{\ent}{\text{\small ent}}
+\newcommand{\ex} {\text{\small ex}}
+
+%----------------
+\newcommand{\V}[1]{\text{\it #1}}
+\newcommand{\Code} {\V{Code}}
+\newcommand{\Cont} {\V{Cont}}
+\newcommand{\State}{\V{State}}
+\newcommand{\Act}  {\V{Act}}
+\newcommand{\Upd}  {\V{Upd}}
+\newcommand{\Xs}   {\V{Xs}}
+\newcommand{\Vs}   {\V{Vs}}
+\newcommand{\Cs}   {\V{Cs}}
+
+\newcommand{\kw}[1]{\textbf{#1}}
+\newcommand{\void}    {\kw{void}}
+\newcommand{\nil}     {\kw{nil}}
+\newcommand{\true}    {\kw{true}}
+\newcommand{\false}   {\kw{false}}
+\newcommand{\idle}    {\kw{idle}}
+\newcommand{\pending} {\kw{pending}}
+\newcommand{\serving}[2]{\kw{serving}(#1,#2)}
+
+\newcommand{\runnable}[4]{\kw{runnable}(#1,#2,#3,#4)}
+\newcommand{\rinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
+\newcommand{\excl}    [2]{\kw{excl}(#1,#2)}
+\newcommand{\irv}     [2]{\kw{irv}(#1,#2)}
+\newcommand{\qelem}   [2]{\kw{qelem}(#1,#2)}
+\newcommand{\delem}   [3]{\kw{delem}(#1,#2,#3)}
+\newcommand{\opres}   [2]{\kw{opres}(#1,#2)}
+\newcommand{\timer}   [3]{\kw{timer}(#1,#2,#3)}
+
+\newcommand{\rte}[1]{\text{rte\_#1}}
+\newcommand{\Enter}     [2]{\rte{Enter}(#1,#2)}
+\newcommand{\Exit}      [2]{\rte{Exit}(#1,#2)}
+\newcommand{\IrvWrite}  [3]{\rte{IrvWrite}(#1,#2,#3)}  %TODO 2 args in semantics.eprover
+\newcommand{\IrvRead}   [2]{\rte{IrvRead}(#1,#2)}
+\newcommand{\Send}      [4]{\rte{Send}(#1,#2,#3,#4)}
+\newcommand{\Receive}   [3]{\rte{Receive}(#1,#2,#3)}   %TODO 2 args in semantics.eprover
+\newcommand{\Write}     [4]{\rte{Write}(#1,#2,#3,#4)}  %TODO 3 args in semantics.eprover
+\newcommand{\Read}      [3]{\rte{Read}(#1,#2,#3)}      %TODO 2 args in semantics.eprover
+\newcommand{\Invalidate}[3]{\rte{Invalidate}(#1,#2,#3)}%TODO 2 args in semantics.eprover
+\newcommand{\IsUpdated} [3]{\rte{IsUpdated}(#1,#2,#3)} %TODO 2 args in semantics.eprover
+\newcommand{\Call}      [4]{\rte{Call}(#1,#2,#3,#4)}   %TODO 3 args in semantics.eprover
+\newcommand{\Result}    [3]{\rte{Result}(#1,#2,#3)}    %TODO 2 args in semantics.eprover
+
+\newcommand{\Return}    [1]{\text{return}(#1)}
+
+\newcommand{\red} [1]{\xrightarrow{#1}}
+\newcommand{\say} [2]{#1 ! #2}
+%\newcommand{\say}  [2]{#1\mathrel{\,!\,}#2}
+\newcommand{\hear}[2]{#1 ? #2}

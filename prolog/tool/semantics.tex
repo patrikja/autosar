@@ -1,3 +1,41 @@
+\newcommand{\Tvar}  [1]{\V{#1}}
+\newcommand{\Tatom} [1]{\kw{#1}}
+
+\newcommand{\Tserving}{\serving}
+
+\newcommand{\Trunnable}     {\runnable}
+\newcommand{\Trinst}        {\rinst}
+\newcommand{\Texcl}         {\excl}
+\newcommand{\Tirv}          {\irv}
+\newcommand{\Tqelem}        {\qelem}
+\newcommand{\Tdelem}        {\delem}
+\newcommand{\Topres}        {\opres}
+\newcommand{\Ttimer}        {\timer}
+
+%\newcommand{\Trte}[1]{\mathrm{rte\_#1}}
+\newcommand{\Trte}[2]{\mathrm{#1}#2}
+\newcommand{\TrteEnter}     {\Enter}
+\newcommand{\TrteExit}      {\Exit}
+\newcommand{\TrteIrvWrite}  {\IrvWrite}
+\newcommand{\TrteIrvRead}   {\IrvRead}
+\newcommand{\TrteSend}      {\Send}
+\newcommand{\TrteReceive}   {\Receive}
+\newcommand{\TrteWrite}     {\Write}
+\newcommand{\TrteRead}      {\Read}
+\newcommand{\TrteInvalidate}{\Invalidate}
+\newcommand{\TrteIsUpdated} {\IsUpdated}
+\newcommand{\TrteCall}      {\Call}
+\newcommand{\TrteResult}    {\Result}
+
+\newcommand{\Treturn}       {\Return}
+
+\newcommand{\Tstep}      [3]{\ensuremath{#1 &\red{#2}& #3}}
+\newcommand{\Tsay}          {\say}
+\newcommand{\Thear}         {\hear}
+
+%**TODO: continue
+% ----------------
+
 \newcommand{\plusplus}{\mathbin{+\!\!+}}
 
 \newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
@@ -7,14 +45,8 @@
 \newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
 
 
-\newcommand{\Tvar}  [1]{\mathit{#1}}
-\newcommand{\Tatom} [1]{\mathrm{#1}}
-\newcommand{\Tstep} [3]{\ensuremath{#1 &\xrightarrow{#2}& #3}}
-\newcommand{\Tsay}  [2]{#1\mathrel{\,!\,}#2}
-\newcommand{\Thear} [2]{#1?#2}
 \newcommand{\Tdelta}[1]{\delta^{#1}}
-\newcommand{\Tpar}  [2]{#1 \| #2}
-\newcommand{\Trinst}[4]{\mathrm{rinst}(#1,#2,#3,#4)}
+\newcommand{\Tpar}  [2]{#1 | #2}
 %\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
 %\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
 %\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
@@ -26,34 +58,15 @@
 \newcommand{\Tep}   [3]{#1{:}#2{:}#3}
 \newcommand{\Top}   [3]{#1{:}#2{:}#3}
 
-%\newcommand{\Trte}[1]{\mathrm{rte\_#1}}
-\newcommand{\Trte}[2]{\mathrm{#1}#2}
-\newcommand{\TrteCall}      [3]{\Trte{Call}      {(#1,#2,#3)}}
-\newcommand{\TrteEnter}     [2]{\Trte{Enter}     {(#1,#2)}}
-\newcommand{\TrteExit}      [2]{\Trte{Exit}      {(#1,#2)}}
-\newcommand{\TrteInvalidate}[2]{\Trte{Invalidate}{(#1,#2)}}
-\newcommand{\TrteIrvRead}   [2]{\Trte{IrvRead}   {(#1,#2)}}
-\newcommand{\TrteIrvWrite}  [2]{\Trte{IrvWrite}  {(#1,#2)}}
-\newcommand{\TrteIsUpdated} [2]{\Trte{IsUpdated} {(#1,#2)}}
-\newcommand{\TrteRead}      [2]{\Trte{Read}      {(#1,#2)}}
-\newcommand{\TrteReceive}   [2]{\Trte{Receive}   {(#1,#2)}}
-\newcommand{\TrteResult}    [2]{\Trte{Result}    {(#1,#2)}}
-\newcommand{\TrteSend}      [3]{\Trte{Send}      {(#1,#2,#3)}}
-\newcommand{\TrteWrite}     [3]{\Trte{Write}     {(#1,#2,#3)}}
 %\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
 \newcommand{\Tcons}         [2]{#1{:}#2}
 \newcommand{\Tap}           [2]{#1@#2}
-\newcommand{\Texcl}         [2]{\mathrm{excl}(#1,#2)}
-\newcommand{\Tirv}          [2]{\mathrm{irv}(#1,#2)}
-\newcommand{\Tqelem}        [3]{\mathrm{qelem}(#1,#2,#3)}
 \newcommand{\Tseq}          [2]{#1{\plusplus}#2}
 
 \newcommand{\Tasyncresult}                 [1]{\mathrm{async\_result}(#1)}
 \newcommand{\Tasync}                       [1]{\mathrm{async}(#1)}
-\newcommand{\Trunnable}                    [5]{\mathrm{runnable}{(#1,#2,#3,#4,#5)}}
 \newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
 \newcommand{\Tevents}                      [2]{\mathrm{events}(#1,#2)}
-\newcommand{\Tdelem}                       [3]{\mathrm{delem}(#1,#2,#3)}
 
 % static properties
 \newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)} %**TODO: shorter name?
@@ -90,14 +103,10 @@
 \newcommand{\Tminus}                          {minus}
 \newcommand{\Tok}                             {ok}
 \newcommand{\ToperationInvoked}               {operationInvoked}
-\newcommand{\Topres}                          {opres}
 \newcommand{\Tplus}                           {plus}
 
-\newcommand{\Treturn}                         {return}
 \newcommand{\TserverCallPoint}                {serverCallPoint}
-\newcommand{\Tserving}                        {serving}
 \newcommand{\Tsync}                           {sync}
-\newcommand{\Ttimer}                          {timer}
 \newcommand{\Ttiming}                         {timing}
 
 \[
