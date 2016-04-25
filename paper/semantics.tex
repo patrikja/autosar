@@ -58,8 +58,6 @@ part before the punctuation):
 
 \subsection{Combining reductions}
 
-TODO: prettify and explain the function ``eval''. (The relational version is included further down.)
-
 \[
 \begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}
   \Prule{\Tstep{\Tpar{\Tvar{P1}}{\Tvar{Q1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P2}}{\Tvar{Q2}}}}{\Tstep{\Tvar{P1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{P2}},&\Tstep{\Tvar{Q1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q2}}}.
@@ -107,20 +105,12 @@ Strict stack-based locking enforced: reduction gets stuck otherwise
 \]
 
 \[
-\begin{array}{r@{}c@{}l}
-\\\Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tvar{V}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}}.
-\\\Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tatom{nodata}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}}.
-\end{array}
-\]
-
-
-\[
 \begin{array}{r@{}c@{}lcl}
-  \Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\Tvar{V}}{\Tatom{ok}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tless{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
+  \Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tvar{V}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}}.
+\\\Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tatom{nodata}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}}.
+\\\Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\Tvar{V}}{\Tatom{ok}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tless{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
 \\\Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{limit}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tequal{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
 \\\Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\Tvar{V}}{\Tatom{limit}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tless{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
 \end{array}
 \]
 
@@ -129,61 +119,42 @@ is a static property of this runnable from \Tatom{pending} it will
 move on to spawn an \Tatom{rinst} which will execute some ``data
 handler'' code.
 
-%**TODO: continue
-
-%TOD: compare order to semantics.eprover
+%TODO: perhaps change LaTeX translation to avoid emitting the end of rule period.
 \[
-\begin{array}{r@{}c@{}l}
-  \Tstep{runnable(R{:}I, K, T, \_, N)} {\Thear{A}{snd(\_V,ok)}}   {runnable(R{:}I, K, T, pending, N)}
-\\ \multicolumn{3}{l}{\qquad \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .}
-\\\Tstep{runnable(R{:}I, K, T, Act, N)}{\Thear{A}{snd(\_V,limit)}}{runnable(R{:}I, K, T, Act, N)}
-\\ \multicolumn{3}{l}{\qquad \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .}
+\begin{array}{r@{}c@{}lcl}
+  \PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
 \end{array}
 \]
+
 
 
 \subsection{Reading/writing (unbuffered versions of rcv and snd)}
 
 
 \[
-\begin{array}{r@{}c@{}l}
-  \Tstep{rinst(R{:}I, C, XS, \rte{Read}(E{:}P,K))}       {\Tsay{E{:}P{:}I}{rd(V)}} {rinst(R{:}I, C, XS, ap(K,V))} .
-\\\Tstep{rinst(R{:}I, C, XS, \rte{Write}(E{:}P,V,K))}    {\Tsay{E{:}P{:}I}{wr(V)}} {rinst(R{:}I, C, XS, ap(K,ok))}.
-\\\Tstep{delem(E{:}P{:}I, \_U, V)}                       {\Thear{E{:}P{:}I}{rd(V)}}{delem(E{:}P{:}I, false, V)}        .
-\\\Tstep{delem(E{:}P{:}I, \_U, \_)}                      {\Thear{A}{wr(V)}}        {delem(E{:}P{:}I, true, V)}            \Pif    A\Rightarrow{}E{:}P{:}I .
-\\\Tstep{runnable(R{:}I, K, T, \_, N)}                   {\Thear{A}{wr(\_V)}}      {runnable(R{:}I, K, T, pending, N)}    \Pif    A\Rightarrow{}E{:}P{:}I, events(R{:}I, dataReceived(E{:}P))    .
-\\\Tstep{rinst(R{:}I, C, XS, \rte{IsUpdated}(E{:}P,K))}  {\Tsay{E{:}P{:}I}{up(U)}} {rinst(R{:}I, C, XS, ap(K,U))} .
-\\\Tstep{rinst(R{:}I, C, XS, \rte{Invalidate}(E{:}P,K))} {\Tsay{E{:}P{:}I}{inv}}   {rinst(R{:}I, C, XS, ap(K,ok))}.
-\\\Tstep{delem(E{:}P{:}I, U, V)}                         {\Thear{E{:}P{:}I}{up(U)}}{delem(E{:}P{:}I, U, V)} .
-\\\Tstep{delem(E{:}P{:}I, \_U, \_)}                      {\Thear{A}{inv}}          {delem(E{:}P{:}I, true, invalid)}      \Pif    A\Rightarrow{}E{:}P{:}I .
+\begin{array}{r@{}c@{}lcl}
+  \Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteRead{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trd{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}.
+\\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteWrite{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Twr{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tatom{ok}}}}}.
+\\\Pfact{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\_}{\Tvar{V}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trd{\Tvar{V}}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{false}}{\Tvar{V}}}}.
+\\\Prule{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\_}{\_}}{\Thear{\Tvar{A}}{\Twr{\Tvar{V}}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{true}}{\Tvar{V}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Twr{\_}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}.}
+\\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteIsUpdated{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tup{\Tvar{U}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{U}}}}}.
+\\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteInvalidate{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{inv}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tatom{ok}}}}}.
+\\\Pfact{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{U}}{\Tvar{V}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tup{\Tvar{U}}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{U}}{\Tvar{V}}}}.
+\\\Prule{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\_U}{\_}}{\Thear{\Tvar{A}}{\Tatom{inv}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{true}}{\Tatom{invalid}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}}.
 \end{array}
 \]
 
-
 \subsection{Calling a server}
 
-\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
-\newcommand{\Pbackslashplus}{\mathbin{\backslash\!{+}}}
 \[
-\begin{array}{r@{}c@{}l}
-  \Tstep{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{\Tsay{O{:}P{:}I}{call(V,O{:}P{:}I,Res)}}{rinst(R{:}I, C, XS, ap(K,Res))}
-  \Pcontline{\Pif serverCallPoint(R{:}I, async(O{:}P)) ; Res \neq ok   .}
-\\\Tstep{rinst(R{:}I, C, XS, \rte{Call}(O{:}P,V,K))}{\Tsay{O{:}P{:}I}{call(V,O{:}P{:}I,ok)}}{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}
-  \Pcontline{\Pif serverCallPoint(R{:}I, sync(O{:}P))  .}
-\\\Tstep{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{\Thear{A}{call(V,C,ok)}}{runnable(R{:}I, K, T, serving(CS++[C],Vs++[V]), N)}
-  \Pcontline{\begin{array}{l}
-               \Pif
-             \\A\Rightarrow{}O{:}P{:}I, events(R{:}I, operationInvoked(O{:}P)),
-             \\\Pbackslashplus member(C, Cs)
-             \\.
-             \end{array}}
-\\\Tstep{runnable(R{:}I, K, T, serving(Cs,Vs), N)}{\Thear{A}{call(\_V,C,limit)}}{runnable(R{:}I, K, T, serving(Cs,Vs), N)}
-  \Pcontline{\begin{array}{l}
-               \Pif
-             \\A\Rightarrow{}O{:}P{:}I, events(R{:}I, operationInvoked(O{:}P)),
-             \\member(C, Cs)
-             \\.
-             \end{array}}
+\begin{array}{r@{}c@{}lcl}
+  \PruleLong{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteResult{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{K}}}}}{\TserverCallPoint{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tsync{\To{\Tvar{O}}{\Tvar{P}}}}.}
+\\\PruleLong{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{Res}}}}}{\TserverCallPoint{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tasync{\To{\Tvar{O}}{\Tvar{P}}}}.}
+\\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{limit}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{Res}}}}.}
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tseq{\Tvar{Cs}}{\Tvar{A}}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\ToperationInvoked{\To{\Tvar{O}}{\Tvar{P}}}},\Pnegate{\Tmember{\Tvar{A}}{\Tvar{Cs}}}.}
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tcall{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\ToperationInvoked{\To{\Tvar{O}}{\Tvar{P}}}},\Tmember{\Tvar{A}}{\Tvar{Cs}}.}
 \end{array}
 \]
 
@@ -191,128 +162,63 @@ handler'' code.
 \subsection{Obtaining a server result}
 
 \[
-\begin{array}{r@{}c@{}l}
-  \Tstep{rinst(R{:}I, C, XS, \rte{Result}(O{:}P,K))}{\Tsay {O{:}P{:}I}{res(V)}}         {rinst(R{:}I, C, XS, ap(K,V))}  .
-\\\Tstep{rinst(A, O{:}P{:}I, [], return(V))        }{\Tsay {O{:}P{:}I}{ret(V)}}         {rinst(A, nil, [], return(void))}.
-\\\Tstep{opres(O{:}P{:}I, [V|Vs])                  }{\Thear{O{:}P{:}I}{res(V)}}        {opres(O{:}P{:}I, Vs)}               .
-\\\Tstep{opres(O{:}P{:}I, [])                      }{\Thear{O{:}P{:}I}{res(\nodata)}}  {opres(O{:}P{:}I, [])}
-  \Pcontline{\Pif    async\_result(O{:}P{:}I)   .}
-\\\Tstep{opres(O{:}P{:}I, Vs)                      }{\Thear{O{:}P{:}I}{ret(V)}}        {opres(O{:}P{:}I, Vs++[V])} .
+\begin{array}{r@{}c@{}lcl}
+  \Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteResult{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}.
+\\\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{eps}}{\Treturn{\Tvar{V}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tret{\Tvar{V}}}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Treturn{\Tatom{void}}}}}.
+\\\Pfact{\Tstep{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Thear{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tvar{V}}}}{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{Vs}}}}.
+\\\Pfact{\Tstep{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{Vs}}}{\Thear{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tret{\Tvar{V}}}}{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}.
+\\\Prule{\Tstep{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{eps}}}{\Thear{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tatom{nodata}}}}{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{eps}}}}{\Tasyncresult{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}}.
 \end{array}
 \]
 
 
 \subsection{Spawning and terminating}
 
-\[
-\begin{array}{r@{}c@{}l}
-  \Tstep{rinst(A, nil, [], return(\_V))}{\Tsay{A}{term}}{[]}    .
-\\\Tstep{runnable(A, K, T, Act, N)}{\Thear{A}{term}}{runnable(A, K, T, Act, N-1)}.
-\end{array}
-\]
-
-Note the "time left" state has to be zero for these rules to fire.
+Note the "time left" state has to be zero for some of these rules to fire.
 
 \[
-\begin{array}{r@{}c@{}l}
-  \Tstep{runnable(A, K, 0, pending, N)}{\Tsay{A}{new}}{\begin{array}{l}
-                                                        [ runnable(A, K, T, idle, N+1)
-                                                      \\, rinst(A, nil, [], ap(K,void)) ]
-                                                     \end{array}}
-  \Pcontline{\begin{array}{l}
-               \Pif
-             \\(N == 0 ; canBeInvokedConcurrently(A)),
-             \\minimumStartInterval(A, T)
-             \\.
-             \end{array}}
-\\\Tstep{runnable(A, K, 0, serving([C|Cs],[V|Vs]), N)}{\Tsay{A}{new}}{[ runnable(A, K, T, serving(Cs,Vs), N+1)
-                                                                   , rinst(A, C, [], ap(K,V)) ]}
-  \Pcontline{\begin{array}{l}
-               \Pif
-             \\(N == 0 ; canBeInvokedConcurrently(A)),
-             \\minimumStartInterval(A, T)
-             \\.
-             \end{array}}
+\begin{array}{r@{}c@{}lcl}
+  \Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Treturn{\_}}}{\Tsay{\Tvar{A}}{\Tatom{term}}}{\Tatom{null}}}.
+\\\Pfact{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tatom{term}}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tminus{\Tvar{N}}{1}}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tatom{pending}}{0}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{idle}}{1}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tatom{void}}}}}}{\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}.}
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tatom{pending}}{\Tvar{N}}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{idle}}{\Tplus{\Tvar{N}}{1}}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tatom{void}}}}}}{\TcanBeInvokedConcurrently{\Tvar{A}},\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}.}
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tserving{\Tcons{\Tvar{C}}{\Tvar{Cs}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{0}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{1}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}}{\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}.}
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tserving{\Tcons{\Tvar{C}}{\Tvar{Cs}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Tvar{N}}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tplus{\Tvar{N}}{1}}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}}{\TcanBeInvokedConcurrently{\Tvar{A}},\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}.}
 \end{array}
 \]
 
 \subsection{Passing time}
 
 
-\[
-\begin{array}{r@{}c@{}lcl}
-  \Tstep{timer(A, 0)             }{\Tsay{A}{tick}} {timer(A, T)}                   & \Pif&    events(A, timing(T))    .
-\\\Tstep{runnable(A, K, T, \_, N)}{\Thear{A}{tick}}{runnable(A, K, T, pending, N)} .
-\end{array}
-\]
-
-
 The ``time left'' state \(V\) is always decreasing in \(\delta(T)\) steps, and never negative.
 
 \[
 \begin{array}{r@{}c@{}lcl}
-  \Tstep{timer(A, V)              }{\delta(T)  }{timer(A, V-T)              } &\Pif&    V >= T.
-\\\Tstep{runnable(A, K, V, Act, N)}{\delta(T)  }{runnable(A, K, V-T, Act, N)} &\Pif&    V >= T.
-\\\Tstep{runnable(A, K, 0, Act, N)}{\delta(\_T)}{runnable(A, K, 0, Act, N)  }.
-\\\Tstep{rinst(A, C, XS, Code)    }{\delta(\_T)}{rinst(A, C, XS, Code)      }.
-\\\Tstep{excl(A, V)               }{\delta(\_T)}{excl(A, V)                 }.
-\\\Tstep{irv(A, V)                }{\delta(\_T)}{irv(A, V)                  }.
-\\\Tstep{qelem(A, N, Vs)          }{\delta(\_T)}{qelem(A, N, Vs)            }.
-\\\Tstep{delem(A, U, V)           }{\delta(\_T)}{delem(A, U, V)             }.
-\\\Tstep{opres(A, Vs)             }{\delta(\_T)}{opres(A, Vs)               }.
+  \Prule{\Tstep{\Ttimer{\Tvar{A}}{0}}{\Tsay{\Tvar{A}}{\Tatom{tick}}}{\Ttimer{\Tvar{A}}{\Tvar{T}}}}{\Tevents{\Tvar{A}}{\Ttiming{\Tvar{T}}}}.
+\\\Pfact{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tatom{tick}}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}.
+\\\Prule{\Tstep{\Ttimer{\Tvar{A}}{\Tvar{V}}}{\Tdelta{\Tvar{T}}}{\Ttimer{\Tvar{A}}{\Tminus{\Tvar{V}}{\Tvar{T}}}}}{\Tlesseq{\Tvar{T}}{\Tvar{V}}}.
+\\\Prule{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{V}}{\Tvar{Act}}{\Tvar{N}}}{\Tdelta{\Tvar{T}}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tminus{\Tvar{V}}{\Tvar{T}}}{\Tvar{Act}}{\Tvar{N}}}}{\Tlesseq{\Tvar{T}}{\Tvar{V}}}.
+\\\Pfact{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tvar{Act}}{\Tvar{N}}}{\Tdelta{\_}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tvar{Act}}{\Tvar{N}}}}.
+\\\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tvar{XS}}{\Tvar{Code}}}{\Tdelta{\_}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tvar{XS}}{\Tvar{Code}}}}.
+\\\Pfact{\Tstep{\Texcl{\Tvar{A}}{\Tvar{V}}}{\Tdelta{\_}}{\Texcl{\Tvar{A}}{\Tvar{V}}}}.
+\\\Pfact{\Tstep{\Tirv{\Tvar{A}}{\Tvar{V}}}{\Tdelta{\_}}{\Tirv{\Tvar{A}}{\Tvar{V}}}}.
+\\\Pfact{\Tstep{\Tqelem{\Tvar{A}}{\Tvar{N}}{\Tvar{Vs}}}{\Tdelta{\_}}{\Tqelem{\Tvar{A}}{\Tvar{N}}{\Tvar{Vs}}}}.
+\\\Pfact{\Tstep{\Tdelem{\Tvar{A}}{\Tvar{U}}{\Tvar{V}}}{\Tdelta{\_}}{\Tdelem{\Tvar{A}}{\Tvar{U}}{\Tvar{V}}}}.
+\\\Pfact{\Tstep{\Topres{\Tvar{A}}{\Tvar{Vs}}}{\Tdelta{\_}}{\Topres{\Tvar{A}}{\Tvar{Vs}}}}.
 \end{array}
 \]
 
 \subsection{Ignoring broadcasts}
 
-TODO: continue converting.
-
-\begin{verbatim}
-ignore(\_AL, rinst(\_B,\_C,\_Xs,\_K))   .
-ignore(\_AL, timer(\_B,\_T))             .
-
-ignore((A,\_L), runnable(B, \_K, \_T, \_Act, \_N))   \Pif A \== B.
-ignore((A,\_L), excl(B,\_V))                         \Pif A \== B.
-ignore((A,\_L), irv(B,\_V))                          \Pif A \== B.
-ignore((A,\_L), qelem(B,\_N,\_Vs))                   \Pif A \== B, \+ A\Rightarrow{}B.
-ignore((A,\_L), delem(B,\_U,\_V))                    \Pif A \== B, \+ A\Rightarrow{}B.
-ignore((A,\_L), opres(B,\_Vs))                       \Pif A \== B, \+ A\Rightarrow{}B.
-\end{verbatim}
-
-
-\subsection{Helper predicate: flattening and evaluating reduction results}
-
-\begin{verbatim}
-flateval([],              Q, Q)  \Pif !  .
-flateval([ M | P ],       Q, R)  \Pif !, flateval(P, Q, R1),  flateval(M, R1, R)  .
-flateval(rinst(A,C,Xs,M), Q, [ rinst(A,C,Xs,N) | Q ])  \Pif !, eval(M, N)   .
-flateval(M,               Q, [ M               | Q ]).
-\end{verbatim}
-
-Experiment with "treelike" process soup
-\begin{verbatim}
-treeeval([],              [])         \Pif !  .
-treeeval([ M | P ],       [M2 | P2])  \Pif !, treeeval(M, M2), treeeval(P, P2).
-treeeval(rinst(A,C,Xs,M), [ rinst(A,C,Xs,N) | \_Q ])  \Pif !, eval(M, N)   .
-treeeval(M,               [ M               | \_Q ]).
-\end{verbatim}
-
-\subsection{Helper predicate: evaluating terms}
-
-\begin{verbatim}
-eval(V, V)              \Pif    var(V), !    .
-eval(ap(T,V), ap(T,V))  \Pif    var(T), !    .
-eval(ap(F,E), R)        \Pif    eval(F, fn(X,T)), !,    eval(E, V),    X = V,    eval(T, R)    .
-eval(ap(T,\_V), R)       \Pif !, eval(T, R)   .
-eval(fn(X,T), fn(X,T))  \Pif ! .
-eval(if(E,A,\_B), R)     \Pif    E,    !, eval(A, R)    .
-eval(if(E,\_A,B), R)     \Pif    \+ E, !, eval(B, R)    .
-eval((A,B), (A1,B1))    \Pif !, eval(A, A1),     eval(B, B1)    .
-eval([A|B], [A1|B1])    \Pif !, eval(A, A1),     eval(B, B1)    .
-eval((A{:}B), (A1:B1))    \Pif !, eval(A, A1),     eval(B, B1)    .
-eval(E, R)              \Pif    E =.. [H|As], funWithArgsToEvaluate(H), !, eval(As, Bs), R =.. [H|Bs].
-eval(V, V)              \Pif    atom(V), !  .
-eval(E, R)              \Pif    R is E      .
-
-funWithArgsToEvaluate(H)\Pif name(H,N), (append("rte_",_,N) ; N = "return").
-\end{verbatim}
+\[
+\begin{array}{r@{}c@{}lcl}
+\\\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tvar{Xs}}{\Tvar{K}}}{\Thear{\_}{\_}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tvar{Xs}}{\Tvar{K}}}}.
+\\\Pfact{\Tstep{\Ttimer{\Tvar{B}}{\Tvar{T}}}{\Thear{\_}{\_}}{\Ttimer{\Tvar{B}}{\Tvar{T}}}}.
+\\\Prule{\Tstep{\Trunnable{\Tvar{B}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\_}}{\Trunnable{\Tvar{B}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}}{\Pnegate{\Tequal{\Tvar{A}}{\Tvar{B}}}}.
+\\\Prule{\Tstep{\Texcl{\Tvar{B}}{\Tvar{V}}}{\Thear{\Tvar{A}}{\_}}{\Texcl{\Tvar{B}}{\Tvar{V}}}}{\Pnegate{\Tequal{\Tvar{A}}{\Tvar{B}}}}.
+\\\Prule{\Tstep{\Tirv{\Tvar{B}}{\Tvar{V}}}{\Thear{\Tvar{A}}{\_}}{\Tirv{\Tvar{B}}{\Tvar{V}}}}{\Pnegate{\Tequal{\Tvar{A}}{\Tvar{B}}}}.
+\\\Prule{\Tstep{\Tqelem{\Tvar{B}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\_}}{\Tqelem{\Tvar{B}}{\Tvar{N}}{\Tvar{Vs}}}}{\Pnegate{\Tequal{\Tvar{A}}{\Tvar{B}}},\Pnegate{\Tconnect{\Tvar{A}}{\Tvar{B}}}}.
+\\\Prule{\Tstep{\Tdelem{\Tvar{B}}{\Tvar{U}}{\Tvar{V}}}{\Thear{\Tvar{A}}{\_}}{\Tdelem{\Tvar{B}}{\Tvar{U}}{\Tvar{V}}}}{\Pnegate{\Tequal{\Tvar{A}}{\Tvar{B}}},\Pnegate{\Tconnect{\Tvar{A}}{\Tvar{B}}}}.
+\\\Prule{\Tstep{\Topres{\Tvar{B}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\_}}{\Topres{\Tvar{B}}{\Tvar{Vs}}}}{\Pnegate{\Tequal{\Tvar{A}}{\Tvar{B}}},\Pnegate{\Tconnect{\Tvar{A}}{\Tvar{B}}}}.
+\\\end{array}
+\]

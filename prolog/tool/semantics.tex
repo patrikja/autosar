@@ -33,68 +33,71 @@
 \]
 
 \[
-\begin{array}{r@{}c@{}l}
-\\\Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tvar{V}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}}.
-\\\Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tatom{nodata}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}}.
-\end{array}
-\]
-
-\[
 \begin{array}{r@{}c@{}lcl}
+  \Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tvar{V}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}}.
+\\\Pfact{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trcv{\Tatom{nodata}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tatom{eps}}}}.
 \\\Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\Tvar{V}}{\Tatom{ok}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tless{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
 \\\Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{limit}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tequal{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
 \\\Prule{\Tstep{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tvar{Vs}}}{\Thear{\Tvar{A}}{\Tsnd{\Tvar{V}}{\Tatom{limit}}}}{\Tqelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{N}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tless{\Tlength{\Tvar{Vs}}}{\Tvar{N}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
 \end{array}
 \]
 
-%**TODO: continue
 
 \[
 \begin{array}{r@{}c@{}lcl}
-\\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteRead{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trd{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}.
+  \PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tsnd{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
+\end{array}
+\]
+
+\[
+\begin{array}{r@{}c@{}lcl}
+  \Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteRead{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trd{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}.
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteWrite{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Twr{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tatom{ok}}}}}.
 \\\Pfact{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\_}{\Tvar{V}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Trd{\Tvar{V}}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{false}}{\Tvar{V}}}}.
 \\\Prule{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\_}{\_}}{\Thear{\Tvar{A}}{\Twr{\Tvar{V}}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{true}}{\Tvar{V}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Twr{\_}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Twr{\_}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\TdataReceived{\Te{\Tvar{E}}{\Tvar{P}}}}.}
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteIsUpdated{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tup{\Tvar{U}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{U}}}}}.
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteInvalidate{\Te{\Tvar{E}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{inv}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tatom{ok}}}}}.
 \\\Pfact{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{U}}{\Tvar{V}}}{\Thear{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tup{\Tvar{U}}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{U}}{\Tvar{V}}}}.
 \\\Prule{\Tstep{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\_U}{\_}}{\Thear{\Tvar{A}}{\Tatom{inv}}}{\Tdelem{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{true}}{\Tatom{invalid}}}}{\Tconnect{\Tvar{A}}{\Tep{\Tvar{E}}{\Tvar{P}}{\Tvar{I}}}}.
 \end{array}
 \]
+
 \[
 \begin{array}{r@{}c@{}lcl}
-\\\Prule{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteResult{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{K}}}}}{\TserverCallPoint{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tsync{\To{\Tvar{O}}{\Tvar{P}}}}}.
-\\\Prule{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{Res}}}}}{\TserverCallPoint{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tasync{\To{\Tvar{O}}{\Tvar{P}}}}}.
+  \PruleLong{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteResult{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{K}}}}}{\TserverCallPoint{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tsync{\To{\Tvar{O}}{\Tvar{P}}}}}.
+\\\PruleLong{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{Res}}}}}{\TserverCallPoint{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tasync{\To{\Tvar{O}}{\Tvar{P}}}}}.
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteCall{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcall{\Tvar{V}}{\Tatom{limit}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{Res}}}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tseq{\Tvar{Cs}}{\Tvar{A}}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\ToperationInvoked{\To{\Tvar{O}}{\Tvar{P}}}},\Pnegate{\Tmember{\Tvar{A}}{\Tvar{Cs}}}}.
-\\\Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tcall{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\ToperationInvoked{\To{\Tvar{O}}{\Tvar{P}}}},\Tmember{\Tvar{A}}{\Tvar{Cs}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tcall{\Tvar{V}}{\Tatom{ok}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tseq{\Tvar{Cs}}{\Tvar{A}}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\ToperationInvoked{\To{\Tvar{O}}{\Tvar{P}}}},\Pnegate{\Tmember{\Tvar{A}}{\Tvar{Cs}}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tcall{\_}{\Tatom{limit}}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tvar{N}}}}{\Tconnect{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}},\Tevents{\Tr{\Tvar{R}}{\Tvar{I}}}{\ToperationInvoked{\To{\Tvar{O}}{\Tvar{P}}}},\Tmember{\Tvar{A}}{\Tvar{Cs}}}.
 \end{array}
 \]
+
 \[
 \begin{array}{r@{}c@{}lcl}
-\\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteResult{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}.
+  \Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\TrteResult{\To{\Tvar{O}}{\Tvar{P}}}{\Tvar{K}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{XS}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}.
 \\\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{eps}}{\Treturn{\Tvar{V}}}}{\Tsay{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tret{\Tvar{V}}}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Treturn{\Tatom{void}}}}}.
 \\\Pfact{\Tstep{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Thear{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tvar{V}}}}{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{Vs}}}}.
 \\\Pfact{\Tstep{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tvar{Vs}}}{\Thear{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tret{\Tvar{V}}}}{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tseq{\Tvar{Vs}}{\Tvar{V}}}}}.
 \\\Prule{\Tstep{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{eps}}}{\Thear{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tres{\Tatom{nodata}}}}{\Topres{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}{\Tatom{eps}}}}{\Tasyncresult{\Top{\Tvar{O}}{\Tvar{P}}{\Tvar{I}}}}.
 \end{array}
 \]
+
 \[
 \begin{array}{r@{}c@{}lcl}
-\\\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Treturn{\_}}}{\Tsay{\Tvar{A}}{\Tatom{term}}}{\Tatom{null}}}.
+  \Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Treturn{\_}}}{\Tsay{\Tvar{A}}{\Tatom{term}}}{\Tatom{null}}}.
 \\\Pfact{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tatom{term}}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tvar{Act}}{\Tminus{\Tvar{N}}{1}}}}.
-\\\Prule{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tatom{pending}}{0}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\Tpar{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{idle}}{1}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tatom{void}}}}}}{\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
-\\\Prule{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tatom{pending}}{\Tvar{N}}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\Tpar{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{idle}}{\Tplus{\Tvar{N}}{1}}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tatom{void}}}}}}{\TcanBeInvokedConcurrently{\Tvar{A}},\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
-\\\Prule{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tserving{\Tcons{\Tvar{C}}{\Tvar{Cs}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{0}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\Tpar{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{1}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}}{\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
-\\\Prule{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tserving{\Tcons{\Tvar{C}}{\Tvar{Cs}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Tvar{N}}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\Tpar{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tplus{\Tvar{N}}{1}}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}}{\TcanBeInvokedConcurrently{\Tvar{A}},\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tatom{pending}}{0}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{idle}}{1}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tatom{void}}}}}}{\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tatom{pending}}{\Tvar{N}}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{idle}}{\Tplus{\Tvar{N}}{1}}}{\Trinst{\Tvar{A}}{\Tatom{nil}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tatom{void}}}}}}{\TcanBeInvokedConcurrently{\Tvar{A}},\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tserving{\Tcons{\Tvar{C}}{\Tvar{Cs}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{0}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{1}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}}{\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
+\\\PruleLong{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{0}{\Tserving{\Tcons{\Tvar{C}}{\Tvar{Cs}}}{\Tcons{\Tvar{V}}{\Tvar{Vs}}}}{\Tvar{N}}}{\Tsay{\Tvar{A}}{\Tatom{new}}}{\TparLong{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tserving{\Tvar{Cs}}{\Tvar{Vs}}}{\Tplus{\Tvar{N}}{1}}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tatom{eps}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}}{\TcanBeInvokedConcurrently{\Tvar{A}},\TminimumStartInterval{\Tvar{A}}{\Tvar{T}}}.
 \end{array}
 \]
+
 \[
 \begin{array}{r@{}c@{}lcl}
-\\\Prule{\Tstep{\Ttimer{\Tvar{A}}{0}}{\Tsay{\Tvar{A}}{\Tatom{tick}}}{\Ttimer{\Tvar{A}}{\Tvar{T}}}}{\Tevents{\Tvar{A}}{\Ttiming{\Tvar{T}}}}.
+  \Prule{\Tstep{\Ttimer{\Tvar{A}}{0}}{\Tsay{\Tvar{A}}{\Tatom{tick}}}{\Ttimer{\Tvar{A}}{\Tvar{T}}}}{\Tevents{\Tvar{A}}{\Ttiming{\Tvar{T}}}}.
 \\\Pfact{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tatom{tick}}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{T}}{\Tatom{pending}}{\Tvar{N}}}}.
 \\\Prule{\Tstep{\Ttimer{\Tvar{A}}{\Tvar{V}}}{\Tdelta{\Tvar{T}}}{\Ttimer{\Tvar{A}}{\Tminus{\Tvar{V}}{\Tvar{T}}}}}{\Tlesseq{\Tvar{T}}{\Tvar{V}}}.
 \\\Prule{\Tstep{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tvar{V}}{\Tvar{Act}}{\Tvar{N}}}{\Tdelta{\Tvar{T}}}{\Trunnable{\Tvar{A}}{\Tvar{K}}{\Tminus{\Tvar{V}}{\Tvar{T}}}{\Tvar{Act}}{\Tvar{N}}}}{\Tlesseq{\Tvar{T}}{\Tvar{V}}}.
@@ -107,6 +110,7 @@
 \\\Pfact{\Tstep{\Topres{\Tvar{A}}{\Tvar{Vs}}}{\Tdelta{\_}}{\Topres{\Tvar{A}}{\Tvar{Vs}}}}.
 \end{array}
 \]
+
 \[
 \begin{array}{r@{}c@{}lcl}
 \\\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tvar{Xs}}{\Tvar{K}}}{\Thear{\_}{\_}}{\Trinst{\Tvar{A}}{\Tvar{C}}{\Tvar{Xs}}{\Tvar{K}}}}.

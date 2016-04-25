@@ -50,10 +50,10 @@
 
 \newcommand{\Return}    [1]{\text{return}(#1)}
 
-\newcommand{\red} [1]{\xrightarrow{#1}}
-\newcommand{\say} [2]{#1 ! #2}
+\newcommand{\red} [1]{\,\xrightarrow{#1}\,}
+\newcommand{\say} [2]{\ensuremath{#1 ! #2}}
 %\newcommand{\say}  [2]{#1\mathrel{\,!\,}#2}
-\newcommand{\hear}[2]{#1 ? #2}
+\newcommand{\hear}[2]{\ensuremath{#1 ? #2}}
 
 % ----------------------------------------------------------------
 
@@ -93,18 +93,22 @@
 \newcommand{\Tstep}      [3]{\ensuremath{#1 &\red{#2}& #3}}
 \newcommand{\Tsay}          {\say}
 \newcommand{\Thear}         {\hear}
-\newcommand{\Tdelta}     [1]{\delta(#1)}
+\newcommand{\Tdelta}     [1]{\ensuremath{\delta(#1)}}
 
 % ----------------
 
 \newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \newcommand{\Prule}[2]{#1 &\Pif& #2}
+\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
+\newcommand{\PruleLong}[2]{#1 \Pcontline{\Pif #2.}}
 \newcommand{\Pfact}[1]{#1}
 \newcommand{\Pnegate}[1]{\neg(#1)}
 \newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
 
+\newcommand{\Opar}{\ensuremath{\mathbin{\,|\,}}}
+\newcommand{\Tpar}    [2]{#1 \Opar #2}
+\newcommand{\TparLong}[2]{\begin{array}{l} #1 \\ \Opar #2 \end{array}}
 
-\newcommand{\Tpar}  [2]{#1 \mathbin{\,|\,} #2}
 %\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
 %\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
 %\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
@@ -124,7 +128,7 @@
 \newcommand{\Tasyncresult}                 [1]{\mathrm{async\_result}(#1)}
 \newcommand{\Tasync}                       [1]{\mathrm{async}(#1)}
 %\newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
-\newcommand{\Tconnect}                     [2]{(#1 \Rightarrow #2)}
+\newcommand{\Tconnect}                     [2]{\ensuremath{(#1 \Rightarrow #2)}}
 \newcommand{\Tevents}                      [2]{\mathrm{events}(#1,#2)}
 
 % static properties
