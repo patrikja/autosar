@@ -262,11 +262,11 @@ where $T$ is the period of the event.
 
 Some further static model information will also be referenced by the transition rules. We refer to the \emph{connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
 $$
-	\adr{E:$U_1$:$I_1$} \Rightarrow \adr{E:$U_2$:$I_2$} \;\;\text{for all elements $E$ of port $U_2$}
+	\Tconnect{\adr{E:$U_1$:$I_1$}}{\adr{E:$U_2$:$I_2$}} \;\;\text{for all elements $E$ of port $U_2$}
 $$
 if there is a connector in the model from provided sender-receiver port $U_1$ of component $I_1$ to required port $U_2$ of component $I_2$; and
 $$
-	\adr{O:$U_1$:$I_1$} \Rightarrow \adr{O:$U_2$:$I_2$} \;\;\text{for all operations $O$ of port $U_1$}
+	\Tconnect{\adr{O:$U_1$:$I_1$}}{\adr{O:$U_2$:$I_2$}} \;\;\text{for all operations $O$ of port $U_1$}
 $$
 if there is a connector in the model from required client-server port $U_1$ of component $I_1$ to provided port $U_2$ of component $I_2$.
 

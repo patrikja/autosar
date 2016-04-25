@@ -108,13 +108,13 @@
 %\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
 %\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
 %\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
-\newcommand{\Tr}    [2]{#1{.}#2}
-\newcommand{\Tx}    [2]{#1{.}#2}
-\newcommand{\Ts}    [2]{#1{.}#2}
-\newcommand{\Te}    [2]{#1{.}#2}
-\newcommand{\To}    [2]{#1{.}#2}
-\newcommand{\Tep}   [3]{#1{.}#2{.}#3}
-\newcommand{\Top}   [3]{#1{.}#2{.}#3}
+\newcommand{\Tr}    [2]{\adr{#1{:}#2}}
+\newcommand{\Tx}    [2]{\adr{#1{:}#2}}
+\newcommand{\Ts}    [2]{\adr{#1{:}#2}}
+\newcommand{\Te}    [2]{\adr{#1{:}#2}}
+\newcommand{\To}    [2]{\adr{#1{:}#2}}
+\newcommand{\Tep}   [3]{\adr{#1{:}#2{:}#3}}
+\newcommand{\Top}   [3]{\adr{#1{:}#2{:}#3}}
 
 %\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
 \newcommand{\Tcons}         [2]{#1{:}#2}
@@ -123,7 +123,8 @@
 
 \newcommand{\Tasyncresult}                 [1]{\mathrm{async\_result}(#1)}
 \newcommand{\Tasync}                       [1]{\mathrm{async}(#1)}
-\newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
+%\newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
+\newcommand{\Tconnect}                     [2]{(#1 \Rightarrow #2)}
 \newcommand{\Tevents}                      [2]{\mathrm{events}(#1,#2)}
 
 % static properties
