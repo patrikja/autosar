@@ -253,6 +253,7 @@ instance ComSpec (ValvePort Required) where
     type ComSpecFor (ValvePort Required) = InitValue (Bool,Bool)
     comSpec p (InitValue (rv,pv)) = do
         comSpec (relief p) (InitValue rv)
+        comSpec (pressure p) (InitValue pv)
 
 instance Port ValvePort where
         providedPort = do

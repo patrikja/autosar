@@ -164,6 +164,7 @@ data Proc                   = forall c .
                             | QElem     Address Int [Value]
                             | DElem     Address Bool (StdRet Value)
                             | Op        Address [Value]
+                            | Input     Address Value
 
 type Conn                   = (Address, Address)
 
@@ -567,6 +568,7 @@ maySay (RInst a c ex code)                     = maySay' (view code)
                                                      Just b  -> RET  b v
                                                      Nothing -> TERM a
         maySay' (Printlog i v      :>>= cont)  = maySay' (view (cont ()))
+maySay (Input a v)                             = WR a v
 maySay _                                       = VETO   -- most processes can't say anything
 
 
@@ -594,6 +596,7 @@ say label     (RInst a c ex code)                       = say' label (view code)
         say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toValue ()))]
         say' (TERM _)       (Return _)                  = []
         say' label          (Printlog i v :>>= cont)    = say' label (view (cont ()))
+say (WR _ _)  (Input _ _)                               = []
 
 
 mayLog (RInst a c ex code)                              = mayLog' (view code)
