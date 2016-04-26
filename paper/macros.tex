@@ -6,6 +6,7 @@
 
 %----------------
 \newcommand{\V}[1]{\text{\it #1}}
+%{ Not used in semantics.tex
 \newcommand{\Code} {\V{Code}}
 \newcommand{\Cont} {\V{Cont}}
 \newcommand{\State}{\V{State}}
@@ -14,14 +15,17 @@
 \newcommand{\Xs}   {\V{Xs}}
 \newcommand{\Vs}   {\V{Vs}}
 \newcommand{\Cs}   {\V{Cs}}
+%}
 
 \newcommand{\kw}[1]{\textbf{#1}}
+%{ not used in semantics.tex
 \newcommand{\void}    {\kw{void}}
 \newcommand{\nil}     {\kw{nil}}
 \newcommand{\true}    {\kw{true}}
 \newcommand{\false}   {\kw{false}}
 \newcommand{\idle}    {\kw{idle}}
 \newcommand{\pending} {\kw{pending}}
+%}
 \newcommand{\serving}[2]{\kw{serving}(#1,#2)}
 
 \newcommand{\runnable}[5]{\kw{runnable}(#1,#2,#3,#4,#5)}
@@ -33,6 +37,7 @@
 \newcommand{\opres}   [2]{\kw{opres}(#1,#2)}
 \newcommand{\timer}   [2]{\kw{timer}(#1,#2)}
 
+%TODO: start with lower case
 \newcommand{\rte}[1]{\text{#1}}
 %\newcommand{\rte}[1]{\text{rte\_#1}}
 \newcommand{\Enter}     [2]{\rte{Enter}(#1,#2)}
@@ -74,7 +79,7 @@
 \newcommand{\Ttimer}        {\timer}
 
 %\newcommand{\Trte}[1]{\mathrm{rte\_#1}}
-\newcommand{\Trte}[2]{\mathrm{#1}#2}
+%\newcommand{\Trte}[2]{\mathrm{#1}#2}
 \newcommand{\TrteEnter}     {\Enter}
 \newcommand{\TrteExit}      {\Exit}
 \newcommand{\TrteIrvWrite}  {\IrvWrite}
@@ -97,50 +102,65 @@
 
 % ----------------
 
-\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
+%\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
+\newcommand{\Pif}{\text{if}}
+
 \newcommand{\Prule}[2]{#1 &\Pif& #2}
-\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
-\newcommand{\PruleLong}[2]{#1 \Pcontline{\Pif #2.}}
-\newcommand{\Pfact}[1]{#1}
+%\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
+\newcommand{\Pcontline}[1]{\\ #1}
+\newcommand{\PruleLong}[2]{#1 \Pcontline{&\Pif & #2.}}
+\newcommand{\Pfact}[1]{#1.}
 \newcommand{\Pnegate}[1]{\neg(#1)}
-\newcommand{\Pignore}[1]{\ensuremath{\mathit{ignore}#1}}
 
 \newcommand{\Opar}{\ensuremath{\mathbin{\,|\,}}}
 \newcommand{\Tpar}    [2]{#1 \Opar #2}
-\newcommand{\TparLong}[2]{\begin{array}{l} #1 \\ \Opar #2 \end{array}}
+\newcommand{\TparLong}[2]{\begin{array}{@{}l} ~~#1 \\ \Opar #2 \end{array}}
 
 %\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
 %\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
 %\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
-\newcommand{\Tr}    [2]{\adr{#1{:}#2}}
-\newcommand{\Tx}    [2]{\adr{#1{:}#2}}
-\newcommand{\Ts}    [2]{\adr{#1{:}#2}}
-\newcommand{\Te}    [2]{\adr{#1{:}#2}}
-\newcommand{\To}    [2]{\adr{#1{:}#2}}
-\newcommand{\Tep}   [3]{\adr{#1{:}#2{:}#3}}
-\newcommand{\Top}   [3]{\adr{#1{:}#2{:}#3}}
+\newcommand{\Tr}    [2]{\adr{#2.#1}}
+\newcommand{\Tx}    [2]{\adr{#2.#1}}
+\newcommand{\Ts}    [2]{\adr{#2.#1}}
+\newcommand{\Te}    [2]{\adr{#2.#1}}
+\newcommand{\To}    [2]{\adr{#2.#1}}
+\newcommand{\Tep}   [3]{\adr{#3.#2.#1}}
+\newcommand{\Top}   [3]{\adr{#3.#2.#1}}
 
 %\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
 \newcommand{\Tcons}         [2]{#1{:}#2}
-\newcommand{\Tap}           [2]{#1@#2}
-\newcommand{\Tseq}          [2]{#1{\plusplus}#2}
+\newcommand{\Tap}           [2]{#1(#2)}
+%\newcommand{\Tseq}          [2]{#1\mathbin{\plusplus}#2}
+\newcommand{\Tseq}          [2]{#1{:}#2} %TODO: operator symbol for snoc?
 
-\newcommand{\Tasyncresult}                 [1]{\mathrm{async\_result}(#1)}
-\newcommand{\Tasync}                       [1]{\mathrm{async}(#1)}
-%\newcommand{\Tconnect}                     [2]{\mathrm{connect}(#1,#2)}
-\newcommand{\Tconnect}                     [2]{\ensuremath{(#1 \Rightarrow #2)}}
-\newcommand{\Tevents}                      [2]{\mathrm{events}(#1,#2)}
+\newcommand{\Tasyncresult}  [1]{\mathrm{async\_result}(#1)}
+\newcommand{\Tasync}        [1]{\mathrm{async}(#1)}
+\newcommand{\Tsync}         [1]{\mathrm{sync}(#1)}
+%\newcommand{\Tconnect}      [2]{\mathrm{connect}(#1,#2)}
+\newcommand{\Tconnect}      [2]{\ensuremath{#1 \Rightarrow #2}}
+\newcommand{\Tevents}       [2]{\mathrm{events}(#1,#2)}
 
-% static properties
+%%% static properties
 \newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)} %**TODO: shorter name?
 \newcommand{\TminimumStartInterval}        [2]{\mathrm{minimumStartInterval}(#1,#2)}  %**TODO: shorter name?
 \newcommand{\TdataReceived}                [1]{\mathrm{dataReceived}(#1)}
 
-% operators
-\newcommand{\Tless}                        [2]{#1<#2}
-\newcommand{\Tlesseq}                      [2]{#1 \leq #2}
+\newcommand{\ToperationInvoked}[1]{\mathrm{operationInvoked}(#1)}
 
-% payload
+\newcommand{\TserverCallPoint}[2]{\mathrm{serverCallPoint}(#1,#2)}
+\newcommand{\Ttiming}       [1]{\mathrm{timing}(#1)}
+
+
+%%% operators
+\newcommand{\Tless}         [2]{#1<#2}
+\newcommand{\Tlesseq}       [2]{#1 \leq #2}
+\newcommand{\Tminus}        [2]{{#1}-{#2}}
+\newcommand{\Tplus}         [2]{{#1}+{#2}}
+\newcommand{\Tequal}        [2]{{#1}={#2}}
+\newcommand{\Tmember}       [2]{\mathrm{member}(#1,#2)}
+\newcommand{\Tlength}       [1]{\mathrm{length}(#1)}
+
+%%% payload
 \newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
 \newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
 \newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
@@ -151,16 +171,3 @@
 \newcommand{\Tres}          [1]{\mathrm{res}(#1)}
 \newcommand{\Tret}          [1]{\mathrm{ret}(#1)}
 \newcommand{\Tup}           [1]{\mathrm{up}(#1)}
-
-\newcommand{\Tminus}        [2]{{#1}-{#2}}
-\newcommand{\Tplus}         [2]{{#1}+{#2}}
-\newcommand{\Tequal}        [2]{{#1}={#2}}
-
-\newcommand{\Tlength}       [1]{\mathrm{length}(#1)}
-\newcommand{\Tmember}       [2]{\mathrm{member}(#1,#2)}
-
-\newcommand{\ToperationInvoked}[1]{\mathrm{operationInvoked}(#1)}
-
-\newcommand{\TserverCallPoint}[2]{\mathrm{serverCallPoint}(#1,#2)}
-\newcommand{\Tsync}         [1]{\mathrm{sync}(#1)}
-\newcommand{\Ttiming}       [1]{\mathrm{timing}(#1)}

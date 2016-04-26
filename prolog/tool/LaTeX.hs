@@ -122,8 +122,8 @@ instance Print Clause where
                            endRule])
     Directive predicates -> prPrec i 0 (concatD [doc (showString ":-"), prt 0 predicates])
   prtList _ [] = (concatD [])
-  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ".\n\\\\"), prt 0 xs])
-    -- TODO perhaps include the . and newline in the \Prule and \Pfact commands?
+  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString "\n\\\\"), prt 0 xs])
+  -- TODO: perhaps generate a macro for the "cons" in the list of clauses
 
 instance Print Predicate where
   prt i e = case e of
