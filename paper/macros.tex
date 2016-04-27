@@ -1,4 +1,9 @@
 \newcommand{\adr}[1]{\emph{#1}}
+\newcommand{\adrr}[2]{\Tr{\Tvar{#1}}{\Tvar{#2}}}
+\newcommand{\adrep}[3]{\Tep{\Tvar{#1}}{\Tvar{#2}}{\Tvar{#3}}}
+\newcommand{\adrop}[3]{\Top{\Tvar{#1}}{\Tvar{#2}}{\Tvar{#3}}}
+\newcommand{\adrs}[2]{\Ts{\Tvar{#1}}{\Tvar{#2}}}
+\newcommand{\adrx}[2]{\Tx{\Tvar{#1}}{\Tvar{#2}}}
 \newcommand{\sep}{\hspace{2ex}|\hspace{2ex}}
 
 \newcommand{\ent}{\text{\small ent}}
@@ -131,6 +136,7 @@
 \newcommand{\Tcons}         [2]{#1{:}#2}
 \newcommand{\Tap}           [2]{#1(#2)}
 %\newcommand{\Tseq}          [2]{#1\mathbin{\plusplus}#2}
+\newcommand{\Tsnoc}{\Tseq}
 \newcommand{\Tseq}          [2]{#1{:}#2} %TODO: operator symbol for snoc?
 
 \newcommand{\Tasyncresult}  [1]{\mathrm{async\_result}(#1)}
