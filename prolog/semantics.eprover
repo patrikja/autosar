@@ -27,13 +27,17 @@
 % OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 %%%%% Combining reductions
+startgroup(CombRed).
 
 step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, say(A,L),  P_2 ), step( Q_1, hear(A,L), Q_2 ).
 step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, say(A,L),  Q_2 ).
 step( par(P_1,Q_1), hear(A,L), par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, hear(A,L), Q_2 ).
 step( par(P_1,Q_1), delta(T),  par(P_2,Q_2) ) :- step( P_1, delta(T),  P_2 ), step( Q_1, delta(T),  Q_2 ).
 
+endgroup(CombRed).
+
 %%%%% Exclusive areas
+startgroup(ExclusiveAreas).
 
 % Strict stack-based locking enforced: reduction gets stuck otherwise
 %   (TODO: comment about flagging error on attempted "bad" rte_Exit?)
@@ -44,6 +48,8 @@ step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),exit),      
 step( excl(x(X,I), free),                                hear(x(X,I),enter),            excl(x(X,I), taken)                    ).
 step( excl(x(X,I), taken),                               hear(x(X,I),exit),             excl(x(X,I), free)                     ).
 
+endgroup(ExclusiveAreas).
+
 %%%%% Inter-runnable variables
 
 step( rinst(r(R,I), C, Xs, rte_IrvRead(S,K)),            say(s(S,I),irvr(V)),           rinst(r(R,I), C, Xs, ap(K,V))          ).
@@ -53,6 +59,7 @@ step( irv(s(S,I), V),                                    hear(s(S,I),irvr(V)),  
 step( irv(s(S,I), _),                                    hear(s(S,I),irvw(V)),          irv(s(S,I), V)                         ).
 
 %%%%% Sending/receiving
+
 
 step( rinst(r(R,I), C, Xs, rte_Receive(e(E,P),K)),       say(ep(E,P,I),rcv(V)),          rinst(r(R,I), C, Xs, ap(K,V))         ).
 step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,Res)),      rinst(r(R,I), C, Xs, ap(K,Res))       ).
@@ -78,6 +85,7 @@ step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),  
 
 %%%%% Reading/writing (unbuffered versions of rcv and snd)
 
+
 step( rinst(r(R,I), C, Xs, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, Xs, ap(K,V))         ).
 step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,ok))        ).
 
@@ -98,6 +106,7 @@ step( delem(ep(E,P,I), _U, _),                           hear(A,inv),           
 
 %%%%% Calling a server
 
+
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))                      ) :-
     member(sync(o(O,P)),serverCallPoint(r(R,I))).
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, ap(K,Res))                                 ) :-
@@ -115,6 +124,7 @@ step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),      
 
 %%%%% Obtaining a server result
 
+
 step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, Xs, ap(K,V))                                   ).
 step( rinst(A, op(O,P,I), eps, return(V)),          say(op(O,P,I),ret(V)),          rinst(A, nil, eps, return(void))                                ).
 
@@ -124,6 +134,7 @@ step( opres(op(O,P,I), eps),                        hear(op(O,P,I),res(no_data))
     async_result(op(O,P,I)).
 
 %%%%% Spawning and terminating
+
 
 step( rinst(A, nil, eps, return(_)),                          say(A,term),    null                                                                  ).
 step( runnable(A, K, T, Act, N),                              hear(A,term),   runnable(A, K, T, Act, minus(N,1))                                    ).
@@ -161,6 +172,7 @@ step( opres(A, Vs),                delta(_),       opres(A, Vs)                 
 
 
 %%%%% Ignoring broadcasts
+
 
 step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)                ).
 step( timer(B, T),                 hear(_,_),      timer(B, T)                       ).
