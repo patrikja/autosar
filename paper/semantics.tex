@@ -1,9 +1,19 @@
+{
+\renewcommand{\Prule}[2]{#1 &~~\Pif~~& #2}
+\renewcommand{\Tstep}[3]{\ensuremath{#1 \red{#2} #3}}
+\[
+\begin{array}{l@{}c@{}l}
+\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
+\\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
+\\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
+\\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tdelta{\Tvar{T}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Tdelta{\Tvar{T}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Tdelta{\Tvar{T}}}{\Tvar{Q_2}}}
+\\\end{array}
+\]
+}
+
+
 \[
 \begin{array}{r@{}c@{}llllll}
-\Prule{\Tstep{\Tpar{\Tvar{P1}}{\Tvar{Q1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P2}}{\Tvar{Q2}}}}{\Tstep{\Tvar{P1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{P2}},\Tstep{\Tvar{Q1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q2}}}
-\\\Prule{\Tstep{\Tpar{\Tvar{P1}}{\Tvar{Q1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P2}}{\Tvar{Q2}}}}{\Tstep{\Tvar{P1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{P2}},\Tstep{\Tvar{Q1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q2}}}
-\\\Prule{\Tstep{\Tpar{\Tvar{P1}}{\Tvar{Q1}}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P2}}{\Tvar{Q2}}}}{\Tstep{\Tvar{P1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{P2}},\Tstep{\Tvar{Q1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q2}}}
-\\\Prule{\Tstep{\Tpar{\Tvar{P1}}{\Tvar{Q1}}}{\Tdelta{\Tvar{T}}}{\Tpar{\Tvar{P2}}{\Tvar{Q2}}}}{\Tstep{\Tvar{P1}}{\Tdelta{\Tvar{T}}}{\Tvar{P2}},\Tstep{\Tvar{Q1}}{\Tdelta{\Tvar{T}}}{\Tvar{Q2}}}
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\TrteEnter{\Tvar{X}}{\Tvar{K}}}}{\Tsay{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tenter}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tcons{\Tvar{X}}{\Tvar{Xs}}}{\Tap{\Tvar{K}}{\Tok}}}}
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tcons{\Tvar{X}}{\Tvar{Xs}}}{\TrteExit{\Tvar{X}}{\Tvar{K}}}}{\Tsay{\Tx{\Tvar{X}}{\Tvar{I}}}{\Texit}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\Tap{\Tvar{K}}{\Tok}}}}
 \\\Pfact{\Tstep{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tfree}}{\Thear{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tenter}}{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Ttaken}}}
