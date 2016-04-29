@@ -1,13 +1,5 @@
-\newcommand{\adr}[1]{\emph{#1}}
-%\newcommand{\adrr}[2]{\Tr{\Tvar{#1}}{\Tvar{#2}}}
-\newcommand{\adrep}[3]{\Tep{\Tvar{#1}}{\Tvar{#2}}{\Tvar{#3}}}
-\newcommand{\adrop}[3]{\Top{\Tvar{#1}}{\Tvar{#2}}{\Tvar{#3}}}
-\newcommand{\adrs}[2]{\Ts{\Tvar{#1}}{\Tvar{#2}}}
-\newcommand{\adrx}[2]{\Tx{\Tvar{#1}}{\Tvar{#2}}}
 \newcommand{\sep}{\hspace{2ex}|\hspace{2ex}}
 
-\newcommand{\ent}{\text{\small ent}}
-\newcommand{\ex} {\text{\small ex}}
 
 %----------------
 \newcommand{\V}[1]{\textit{\lowercase{#1}}}
@@ -146,13 +138,13 @@
 %\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
 %\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
 %\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
-\newcommand{\Tr}    [2]{\adr{#2.#1}}
-\newcommand{\Tx}    [2]{\adr{#2.#1}}
-\newcommand{\Ts}    [2]{\adr{#2.#1}}
-\newcommand{\Te}    [2]{\adr{#2.#1}}
-\newcommand{\To}    [2]{\adr{#2.#1}}
-\newcommand{\Tep}   [3]{\adr{#3.#2.#1}}
-\newcommand{\Top}   [3]{\adr{#3.#2.#1}}
+\newcommand{\Tr}    [2]{\emph{#2.#1}}
+\newcommand{\Tx}    [2]{\emph{#2.#1}}
+\newcommand{\Ts}    [2]{\emph{#2.#1}}
+\newcommand{\Te}    [2]{\emph{#2.#1}}
+\newcommand{\To}    [2]{\emph{#2.#1}}
+\newcommand{\Tep}   [3]{\emph{#3.#2.#1}}
+\newcommand{\Top}   [3]{\emph{#3.#2.#1}}
 
 %\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
 \newcommand{\Tcons}         [2]{#1:#2}
@@ -166,7 +158,7 @@
 \newcommand{\Tsync}         [1]{\mathrm{sync}(#1)}
 %\newcommand{\Tconnect}      [2]{\mathrm{connect}(#1,#2)}
 \newcommand{\Tconnect}      [2]{\ensuremath{#1 \Rightarrow #2}}
-\newcommand{\Tevents}       [2]{\mathrm{events}(#1,#2)}
+\newcommand{\Tevents}       [1]{\mathrm{events}(#1)}
 
 %%% static properties
 \newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)} %**TODO: shorter name?

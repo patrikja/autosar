@@ -71,10 +71,10 @@ step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),  
 
 step( runnable(r(R,I), K, T, _, N),                      hear(A,snd(_,ok)),              runnable(r(R,I), K, T, pending, N)    ) :-
     connect(A,ep(E,P,I)),
-    events(r(R,I),dataReceived(e(E,P))).
+    member(dataReceived(e(E,P)),events(r(R,I))).
 step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),           runnable(r(R,I), K, T, Act, N)        ) :-   % ???
     connect(A,ep(E,P,I)),
-    events(r(R,I),dataReceived(e(E,P))).
+    member(dataReceived(e(E,P)),events(r(R,I))).
 
 %%%%% Reading/writing (unbuffered versions of rcv and snd)
 
@@ -87,7 +87,7 @@ step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),         
 
 step( runnable(r(R,I), K, T, _, N),                      hear(A,wr(_)),                  runnable(r(R,I), K, T, pending, N)    ) :-
     connect(A,ep(E,P,I)),
-    events(r(R,I),dataReceived(e(E,P))).
+    member(dataReceived(e(E,P)),events(r(R,I))).
 
 step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
 step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,ok))        ).
@@ -106,11 +106,11 @@ step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit))
 
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
     connect(A,op(O,P,I)),
-    events(r(R,I),operationInvoked(o(O,P))),
+    member(operationInvoked(o(O,P)),events(r(R,I))),
     ~member(A,Cs).
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),          runnable(r(R,I), K, T, serving(Cs,Vs), N)                       ) :-
     connect(A,op(O,P,I)),
-    events(r(R,I),operationInvoked(o(O,P))),
+    member(operationInvoked(o(O,P)),events(r(R,I))),
     member(A,Cs).
 
 %%%%% Obtaining a server result
@@ -145,7 +145,7 @@ step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     pa
 
 %%%%% Passing time
 
-step( timer(A, 0),                 say(A,tick),    timer(A, T)                        ) :-    events(A,timing(T)).
+step( timer(A, 0),                 say(A,tick),    timer(A, T)                        ) :-    member(events(A),timing(T)).
 step( runnable(A, K, T, _, N),     hear(A,tick),   runnable(A, K, T, pending, N)      ).
 
 % The "time left" state V is always decreasing in delta(T) steps, and never negative.

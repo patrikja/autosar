@@ -57,7 +57,7 @@ TODO: add fig:model
 
 The formal approach we have chosen is that of a typical process calculus \cite{TODO}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
-Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{R}{I}$ means runnable $R$ of component $I$ and $\Te{E}{P}{I}$ means element $E$ of port $P$ within component $I$. We use the following meta-variable conventions:
+Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{R}{I}$ means runnable $R$ of component $I$ and $\Tep{E}{P}{I}$ means element $E$ of port $P$ within component $I$. We use the following meta-variable conventions:
 
 %TODO: port name convention change from U to P? (see ../prolog/semantics.eprover)
 %
@@ -72,7 +72,7 @@ Components and ports do not carry any dynamic state besides the state of their c
 	X	& \in		& \text{Exclusive area names} \\
 	\\
 	A	& \in		& \text{Addresses} \\
-	A	& ::=		& \Tr{R}{I}   \sep   \Te{E}{P}{I}   \sep \To{O}{P}{I}   \sep   \Ts{S}{I}   \sep   \Tx{X}{I}   \\
+	A	& ::=		& \Tr{R}{I}   \sep   \Tep{E}{P}{I}   \sep \Top{O}{P}{I}   \sep   \Ts{S}{I}   \sep   \Tx{X}{I}   \\
 \end{array}
 \]
 %
@@ -88,11 +88,11 @@ An instance of runnable $R$ of component $I$, currently executing $\Code$ and ow
 Exclusive area $X$ of component $I$, with boolean occupation state $B$.
 \item $\irv{\Ts{S}{I}}{V}$ \newline
 Inter-runnable variable $S$ of component $I$, currently holding value $V$.
-\item $\delem{\Te{E}{U}{I}}{B}{V}$ \newline
+\item $\delem{\Tep{E}{U}{I}}{B}{V}$ \newline
 Non-queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
-\item $\qelem{\Te{E}{U}{I}}{\Vs}{TODO}$ \newline
+\item $\qelem{\Tep{E}{U}{I}}{\Vs}{TODO}$ \newline
 Queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value sequence $\Vs$.
-\item $\opres{\To{O}{U}{I}}{\Vs}$ \newline
+\item $\opres{\Top{O}{U}{I}}{\Vs}$ \newline
 Client-server operation $O$ in port $U$ of component $I$, currently holding result value sequence $\Vs$.
 \item $\timer{\Tr{R}{I}}{T}$ \newline  %TODO: timer has only 2 args in the semantics so {T_p} is not described
 Countdown timer state for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
@@ -238,20 +238,20 @@ where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is 
 \item For each data element $E$ of each required port $U$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\qelem{\Te{E}{U}{I}}{\epsilon}{TODO}
+	\qelem{\Tep{E}{U}{I}}{\epsilon}{TODO}
 \end{array}
 $$
 if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued}; otherwise, a term
 $$
 \begin{array}{c}
-	\delem{\Te{E}{U}{I}}{\false}{\text{nodata}}
+	\delem{\Tep{E}{U}{I}}{\false}{\text{nodata}}
 \end{array}
 $$
 
 \item For each operation $O$ of each required port $U$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\opres{\Te{O}{U}{I}}{\epsilon}
+	\opres{\Tep{O}{U}{I}}{\epsilon}
 \end{array}
 $$
 
@@ -281,33 +281,9 @@ We expect the \emph{implementation} of a runnable to be available as a continuat
 %TODO: Patrik got here 2016-04-27 in a reading + macro conversion round
 \subsection{Exclusive areas}
 
-\begin{gather*}
-	\rinst{\adr{R:I}}{C}{\Xs}{\Enter{X}{\Cont}}  \red{\say{X:I}{\ent}}  \\
-		\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Cont(\void)} \\
-	\\
-	\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Exit{X}{\Cont}}  \red{\say{X:I}{\ex}}  \\
-		\rinst{\adr{R:I}}{C}{\Xs}{\Cont(\void)} \\
-	\\
-	\excl{\adr{X:I}}{\false} \red{\hear{X:I}{\ent}} \excl{\adr{X:I}}{\true} \\
-	\\
-	\excl{\adr{X:I}}{\true} \red{\hear{X:I}{\ex}} \excl{\adr{X:I}}{\false} \\
-	\\
-\end{gather*}
 
 \subsection{Inter-runnable variables}
 
-\begin{gather*}
-	\rinst{\adr{R:I}}{C}{\Xs}{\IrvWrite{X}{\Cont}}  \red{\say{X:I}{\ent}}  \\
-		\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Cont(\void)} \\
-	\\
-	\rinst{\adr{R:I}}{C}{\adr{X:Xs}}{\Exit{X}{\Cont}}  \red{\say{X:I}{\ex}}  \\
-		\rinst{\adr{R:I}}{C}{\Xs}{\Cont(\void)} \\
-	\\
-	\excl{\adr{X:I}}{\false} \red{\hear{X:I}{\ent}} \excl{\adr{X:I}}{\true} \\
-	\\
-	\excl{\adr{X:I}}{\true} \red{\hear{X:I}{\ex}} \excl{\adr{X:I}}{\false} \\
-	\\
-\end{gather*}
 
 
 TODO: links from rules and choices made here to the AUTOSAR spec
