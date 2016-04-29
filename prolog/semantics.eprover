@@ -28,10 +28,10 @@
 
 %%%%% Combining reductions
 
-step( par(P1,Q1), say(A,L),  par(P2,Q2) ) :- step( P1, say(A,L),  P2 ), step( Q1, hear(A,L), Q2 ).
-step( par(P1,Q1), say(A,L),  par(P2,Q2) ) :- step( P1, hear(A,L), P2 ), step( Q1, say(A,L),  Q2 ).
-step( par(P1,Q1), hear(A,L), par(P2,Q2) ) :- step( P1, hear(A,L), P2 ), step( Q1, hear(A,L), Q2 ).
-step( par(P1,Q1), delta(T),  par(P2,Q2) ) :- step( P1, delta(T),  P2 ), step( Q1, delta(T),  Q2 ).
+step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, say(A,L),  P_2 ), step( Q_1, hear(A,L), Q_2 ).
+step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, say(A,L),  Q_2 ).
+step( par(P_1,Q_1), hear(A,L), par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, hear(A,L), Q_2 ).
+step( par(P_1,Q_1), delta(T),  par(P_2,Q_2) ) :- step( P_1, delta(T),  P_2 ), step( Q_1, delta(T),  Q_2 ).
 
 %%%%% Exclusive areas
 
