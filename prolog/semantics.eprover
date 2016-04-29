@@ -47,7 +47,7 @@ step( excl(x(X,I), taken),                               hear(x(X,I),exit),     
 %%%%% Inter-runnable variables
 
 step( rinst(r(R,I), C, Xs, rte_IrvRead(S,K)),            say(s(S,I),irvr(V)),           rinst(r(R,I), C, Xs, ap(K,V))          ).
-step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,K)),           say(s(S,I),irvw(_V)),          rinst(r(R,I), C, Xs, ap(K,ok))         ).
+step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,V,K)),         say(s(S,I),irvw(V)),           rinst(r(R,I), C, Xs, ap(K,ok))         ).
 
 step( irv(s(S,I), V),                                    hear(s(S,I),irvr(V)),          irv(s(S,I), V)                         ).
 step( irv(s(S,I), _),                                    hear(s(S,I),irvw(V)),          irv(s(S,I), V)                         ).
@@ -78,8 +78,8 @@ step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),  
 
 %%%%% Reading/writing (unbuffered versions of rcv and snd)
 
-step( rinst(r(R,I), C, XS, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, XS, ap(K,V))         ).
-step( rinst(r(R,I), C, XS, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, XS, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, Xs, ap(K,V))         ).
+step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,ok))        ).
 
 step( delem(ep(E,P,I), _, V),                            hear(ep(E,P,I),rd(V)),          delem(ep(E,P,I), false, V)            ).
 step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),                  delem(ep(E,P,I), true, V)             ) :-
@@ -89,8 +89,8 @@ step( runnable(r(R,I), K, T, _, N),                      hear(A,wr(_)),         
     connect(A,ep(E,P,I)),
     events(r(R,I),dataReceived(e(E,P))).
 
-step( rinst(r(R,I), C, XS, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, XS, ap(K,U))         ).
-step( rinst(r(R,I), C, XS, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, XS, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
+step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,ok))        ).
 
 step( delem(ep(E,P,I), U, V),                            hear(ep(E,P,I),up(U)),          delem(ep(E,P,I), U, V)                ).
 step( delem(ep(E,P,I), _U, _),                           hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-
@@ -98,11 +98,11 @@ step( delem(ep(E,P,I), _U, _),                           hear(A,inv),           
 
 %%%%% Calling a server
 
-step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, rte_Result(o(O,P),K))                      ) :-
+step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))                      ) :-
     serverCallPoint(r(R,I),sync(o(O,P))).
-step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, XS, ap(K,Res))                                 ) :-
+step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, ap(K,Res))                                 ) :-
     serverCallPoint(r(R,I),async(o(O,P))).
-step( rinst(r(R,I), C, XS, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, XS, ap(K,Res))                                 ).
+step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, Xs, ap(K,Res))                                 ).
 
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
     connect(A,op(O,P,I)),
@@ -115,7 +115,7 @@ step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),      
 
 %%%%% Obtaining a server result
 
-step( rinst(r(R,I), C, XS, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, XS, ap(K,V))                                   ).
+step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, Xs, ap(K,V))                                   ).
 step( rinst(A, op(O,P,I), eps, return(V)),          say(op(O,P,I),ret(V)),          rinst(A, nil, eps, return(void))                                ).
 
 step( opres(op(O,P,I), cons(V,Vs)),                 hear(op(O,P,I),res(V)),         opres(op(O,P,I), Vs)                                            ).
@@ -152,7 +152,7 @@ step( runnable(A, K, T, _, N),     hear(A,tick),   runnable(A, K, T, pending, N)
 step( timer(A, V),                 delta(T),       timer(A, minus(V,T))               ) :-   lesseq(T,V).
 step( runnable(A, K, V, Act, N),   delta(T),       runnable(A, K, minus(V,T), Act, N) ) :-   lesseq(T,V).
 step( runnable(A, K, 0, Act, N),   delta(_),       runnable(A, K, 0, Act, N)          ).
-step( rinst(A, C, XS, Code),       delta(_),       rinst(A, C, XS, Code)              ).
+step( rinst(A, C, Xs, Code),       delta(_),       rinst(A, C, Xs, Code)              ).
 step( excl(A, V),                  delta(_),       excl(A, V)                         ).
 step( irv(A, V),                   delta(_),       irv(A, V)                          ).
 step( qelem(A, N, Vs),             delta(_),       qelem(A, N, Vs)                    ).

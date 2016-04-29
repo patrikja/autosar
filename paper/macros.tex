@@ -1,5 +1,5 @@
 \newcommand{\adr}[1]{\emph{#1}}
-\newcommand{\adrr}[2]{\Tr{\Tvar{#1}}{\Tvar{#2}}}
+%\newcommand{\adrr}[2]{\Tr{\Tvar{#1}}{\Tvar{#2}}}
 \newcommand{\adrep}[3]{\Tep{\Tvar{#1}}{\Tvar{#2}}{\Tvar{#3}}}
 \newcommand{\adrop}[3]{\Top{\Tvar{#1}}{\Tvar{#2}}{\Tvar{#3}}}
 \newcommand{\adrs}[2]{\Ts{\Tvar{#1}}{\Tvar{#2}}}
@@ -10,7 +10,7 @@
 \newcommand{\ex} {\text{\small ex}}
 
 %----------------
-\newcommand{\V}[1]{\text{\it #1}}
+\newcommand{\V}[1]{\textit{\lowercase{#1}}}
 %{ Not used in semantics.tex
 \newcommand{\Code} {\V{Code}}
 \newcommand{\Cont} {\V{Cont}}
@@ -45,34 +45,37 @@
 %TODO: start with lower case
 \newcommand{\rte}[1]{\text{#1}}
 %\newcommand{\rte}[1]{\text{rte\_#1}}
-\newcommand{\Enter}     [2]{\rte{Enter}(#1,#2)}
-\newcommand{\Exit}      [2]{\rte{Exit}(#1,#2)}
-\newcommand{\IrvWrite}  [2]{\rte{IrvWrite}(#1,#2)}
-\newcommand{\IrvRead}   [2]{\rte{IrvRead}(#1,#2)}
-\newcommand{\Send}      [3]{\rte{Send}(#1,#2,#3)}
-\newcommand{\Receive}   [2]{\rte{Receive}(#1,#2)}
-\newcommand{\Write}     [3]{\rte{Write}(#1,#2,#3)}
-\newcommand{\Read}      [2]{\rte{Read}(#1,#2)}
-\newcommand{\Invalidate}[2]{\rte{Invalidate}(#1,#2)}
-\newcommand{\IsUpdated} [2]{\rte{IsUpdated}(#1,#2)}
-\newcommand{\Call}      [3]{\rte{Call}(#1,#2,#3)}
-\newcommand{\Result}    [2]{\rte{Result}(#1,#2)}
+\newcommand{\Enter}     [2]{\rte{enter}(#1,#2)}
+\newcommand{\Exit}      [2]{\rte{exit}(#1,#2)}
+\newcommand{\IrvWrite}  [3]{\rte{irvWrite}(#1,#2,#3)}
+\newcommand{\IrvRead}   [2]{\rte{irvRead}(#1,#2)}
+\newcommand{\Send}      [3]{\rte{send}(#1,#2,#3)}
+\newcommand{\Receive}   [2]{\rte{receive}(#1,#2)}
+\newcommand{\Write}     [3]{\rte{write}(#1,#2,#3)}
+\newcommand{\Read}      [2]{\rte{read}(#1,#2)}
+\newcommand{\Invalidate}[2]{\rte{invalidate}(#1,#2)}
+\newcommand{\IsUpdated} [2]{\rte{isUpdated}(#1,#2)}
+\newcommand{\Call}      [3]{\rte{call}(#1,#2,#3)}
+\newcommand{\Result}    [2]{\rte{result}(#1,#2)}
 
 \newcommand{\Return}    [1]{\text{return}(#1)}
 
 \newcommand{\red} [1]{\,\xrightarrow{#1}\,}
-\newcommand{\say} [2]{\ensuremath{#1 ! #2}}
+\newcommand{\say} [2]{\ensuremath{#1 \,!\, #2}}
 %\newcommand{\say}  [2]{#1\mathrel{\,!\,}#2}
-\newcommand{\hear}[2]{\ensuremath{#1 ? #2}}
+\newcommand{\hear}[2]{\ensuremath{#1 \,?\, #2}}
 
 % ----------------------------------------------------------------
 
 \newcommand{\plusplus}{\mathbin{+\!\!+}}
 
 \newcommand{\Tvar}  [1]{\V{#1}}
-\newcommand{\Tatom} [1]{\kw{#1}}
+\newcommand{\Tatom} [1]{\mathrm{#1}}
 
-\newcommand{\Tserving}{\serving}
+\newcommand{\Tserving}      {\serving}
+\newcommand{\Tpending}      {\kw{pending}}
+\newcommand{\Tidle}         {\kw{idle}}
+
 
 \newcommand{\Trunnable}     {\runnable}
 \newcommand{\Trinst}        {\rinst}
@@ -105,15 +108,34 @@
 \newcommand{\Thear}         {\hear}
 \newcommand{\Tdelta}     [1]{\ensuremath{\delta(#1)}}
 
+\newcommand{\Tok}           {\Tatom{ok}}
+\newcommand{\Tfree}         {\Tatom{free}}
+\newcommand{\Ttaken}        {\Tatom{taken}}
+\newcommand{\Teps}          {\epsilon}
+\newcommand{\Tnodata}       {\Tatom{nodata}}
+\newcommand{\Tlimit}        {\Tatom{limit}}
+\newcommand{\Tfalse}        {\Tatom{false}}
+\newcommand{\Ttrue}         {\Tatom{true}}
+\newcommand{\Tinvalid}      {\Tatom{invalid}}
+\newcommand{\Tnil}          {\kw{nil}}
+\newcommand{\Tvoid}         {\Tatom{void}}
+\newcommand{\Tenter}        {\Tatom{enter}}
+\newcommand{\Texit}         {\Tatom{exit}}
+\newcommand{\Tinv}          {\Tatom{inv}}
+\newcommand{\Tterm}         {\Tatom{term}}
+\newcommand{\Tnull}         {\Tatom{null}}
+\newcommand{\Tnew}          {\Tatom{new}}
+\newcommand{\Ttick}         {\Tatom{tick}}
+
 % ----------------
 
 %\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \newcommand{\Pif}{\text{if}}
 
-\newcommand{\Prule}[2]{#1 &\Pif& #2}
+\newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2}
 %\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
 \newcommand{\Pcontline}[1]{\\ #1}
-\newcommand{\PruleLong}[2]{#1 \Pcontline{&\Pif & #2.}}
+\newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2.}}
 \newcommand{\Pfact}[1]{#1.}
 \newcommand{\Pnegate}[1]{\neg(#1)}
 
@@ -133,7 +155,7 @@
 \newcommand{\Top}   [3]{\adr{#3.#2.#1}}
 
 %\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
-\newcommand{\Tcons}         [2]{#1{:}#2}
+\newcommand{\Tcons}         [2]{#1:#2}
 \newcommand{\Tap}           [2]{#1(#2)}
 %\newcommand{\Tseq}          [2]{#1\mathbin{\plusplus}#2}
 \newcommand{\Tsnoc}{\Tseq}
@@ -163,13 +185,13 @@
 \newcommand{\Tminus}        [2]{{#1}-{#2}}
 \newcommand{\Tplus}         [2]{{#1}+{#2}}
 \newcommand{\Tequal}        [2]{{#1}={#2}}
-\newcommand{\Tmember}       [2]{\mathrm{member}(#1,#2)}
-\newcommand{\Tlength}       [1]{\mathrm{length}(#1)}
+\newcommand{\Tmember}       [2]{#1 \in #2}
+\newcommand{\Tlength}       [1]{|#1|}
 
 %%% payload
 \newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
 \newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
-\newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
+\newcommand{\Tirvr}         [1]{\mathrm{irvr}(\!#1)}
 \newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
 \newcommand{\Trcv}          [1]{\mathrm{rcv}(#1)}
 \newcommand{\Trd}           [1]{\mathrm{rd}(#1)}

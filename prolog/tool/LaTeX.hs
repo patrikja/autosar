@@ -99,7 +99,7 @@ docS :: String -> Doc
 docS = doc . showString
 
 beginSemantics, endSemantics :: Doc
-beginSemantics = docS "\\[\n\\begin{array}{r@{}c@{}l}\n"
+beginSemantics = docS "\\[\n\\begin{array}{r@{}c@{}llllll}\n"
 endSemantics   = docS "\\end{array}\n\\]"
 
 beginFact, endFact :: Doc
@@ -141,7 +141,7 @@ instance Print Term where
                           , prt 0 terms
                           , docS "}"
                           ])
-    TAtom   atom  -> prPrec i 0 (concatD [docS "\\Tatom{", prt 0 atom, docS "}"])
+    TAtom   atom  -> prPrec i 0 (concatD [docS "\\T", prt 0 atom])
     VarT    var   -> prPrec i 0 (concatD [prt 0 var])
     TInt    n     -> prPrec i 0 (concatD [prt 0 n])
     TParen  term  -> prPrec i 0 (concatD [doc (showString "("), prt 0 term, doc (showString ")")])
