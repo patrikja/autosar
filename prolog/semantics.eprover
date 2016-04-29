@@ -99,9 +99,9 @@ step( delem(ep(E,P,I), _U, _),                           hear(A,inv),           
 %%%%% Calling a server
 
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))                      ) :-
-    serverCallPoint(r(R,I),sync(o(O,P))).
+    member(sync(o(O,P)),serverCallPoint(r(R,I))).
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, ap(K,Res))                                 ) :-
-    serverCallPoint(r(R,I),async(o(O,P))).
+    member(async(o(O,P)),serverCallPoint(r(R,I))).
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, Xs, ap(K,Res))                                 ).
 
 step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
