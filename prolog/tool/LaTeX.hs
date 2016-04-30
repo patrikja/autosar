@@ -111,8 +111,13 @@ beginRule = docS "\\Prule{"
 midRule   = docS "}{"
 endRule   = docS "}"
 
+beginGroup a = concatD [docS "\\newcommand{\\", docS a, docS "}{%"]
+endGroup   a = docS "}"
+
 instance Print Clause where
   prt i e = case e of
+    Fact (TPred (Complex (Atm (LIdent "begingroup")) [VarT (V (UIdent a))])) -> prPrec i 0 (beginGroup a)
+    Fact (TPred (Complex (Atm (LIdent "endgroup"))   [VarT (V (UIdent a))])) -> prPrec i 0 (endGroup a)
     Fact predicate -> prPrec i 0 (concatD [beginFact, prt 0 predicate, endFact])
     Rule predicate predicates ->
       prPrec i 0 (concatD [beginRule,

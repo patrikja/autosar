@@ -27,7 +27,7 @@
 % OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 %%%%% Combining reductions
-startgroup(CombRed).
+begingroup(CombRed).
 
 step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, say(A,L),  P_2 ), step( Q_1, hear(A,L), Q_2 ).
 step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, say(A,L),  Q_2 ).
@@ -37,7 +37,7 @@ step( par(P_1,Q_1), delta(T),  par(P_2,Q_2) ) :- step( P_1, delta(T),  P_2 ), st
 endgroup(CombRed).
 
 %%%%% Exclusive areas
-startgroup(ExclusiveAreas).
+begingroup(ExclusiveAreas).
 
 % Strict stack-based locking enforced: reduction gets stuck otherwise
 %   (TODO: comment about flagging error on attempted "bad" rte_Exit?)

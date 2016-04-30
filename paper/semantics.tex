@@ -1,13 +1,20 @@
-\[
-\begin{array}{r@{}c@{}llllll}
-\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
+\newcommand{\CombRed}{%
+\\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
 \\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Tsay{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
 \\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Thear{\Tvar{A}}{\Tvar{L}}}{\Tvar{Q_2}}}
 \\\Prule{\Tstep{\Tpar{\Tvar{P_1}}{\Tvar{Q_1}}}{\Tdelta{\Tvar{T}}}{\Tpar{\Tvar{P_2}}{\Tvar{Q_2}}}}{\Tstep{\Tvar{P_1}}{\Tdelta{\Tvar{T}}}{\Tvar{P_2}},\Tstep{\Tvar{Q_1}}{\Tdelta{\Tvar{T}}}{\Tvar{Q_2}}}
+\\}
+\newcommand{\ExclusiveAreas}{%
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\TrteEnter{\Tvar{X}}{\Tvar{K}}}}{\Tsay{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tenter}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tcons{\Tvar{X}}{\Tvar{Xs}}}{\Tap{\Tvar{K}}{\Tok}}}}
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tcons{\Tvar{X}}{\Tvar{Xs}}}{\TrteExit{\Tvar{X}}{\Tvar{K}}}}{\Tsay{\Tx{\Tvar{X}}{\Tvar{I}}}{\Texit}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\Tap{\Tvar{K}}{\Tok}}}}
 \\\Pfact{\Tstep{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tfree}}{\Thear{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tenter}}{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Ttaken}}}
 \\\Pfact{\Tstep{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Ttaken}}{\Thear{\Tx{\Tvar{X}}{\Tvar{I}}}{\Texit}}{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tfree}}}
+\\}
+
+\[ \begin{array}{r@{}c@{}llllll} \CombRed              \end{array} \]
+\[ \begin{array}{r@{}c@{}llllll} \ExclusiveAreas       \end{array} \]
+\[
+\begin{array}{r@{}c@{}llllll}
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\TrteIrvRead{\Tvar{S}}{\Tvar{K}}}}{\Tsay{\Ts{\Tvar{S}}{\Tvar{I}}}{\Tirvr{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\Tap{\Tvar{K}}{\Tvar{V}}}}}
 \\\Pfact{\Tstep{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\TrteIrvWrite{\Tvar{S}}{\Tvar{V}}{\Tvar{K}}}}{\Tsay{\Ts{\Tvar{S}}{\Tvar{I}}}{\Tirvw{\Tvar{V}}}}{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\Tap{\Tvar{K}}{\Tok}}}}
 \\\Pfact{\Tstep{\Tirv{\Ts{\Tvar{S}}{\Tvar{I}}}{\Tvar{V}}}{\Thear{\Ts{\Tvar{S}}{\Tvar{I}}}{\Tirvr{\Tvar{V}}}}{\Tirv{\Ts{\Tvar{S}}{\Tvar{I}}}{\Tvar{V}}}}
