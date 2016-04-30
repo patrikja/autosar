@@ -333,6 +333,33 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \label{sec:Prolog}
 
 \input{semantics.tex}
-%\input{../prolog/tool/semantics.tex}
+{\renewcommand{\Prule}[2]{#1 & \Pif & #2\\}
+
+\[ \begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}  \CombRed  \end{array} \]
+}
+\subsection{Exclusive areas}
+\[ \begin{array}{r@{}c@{}l}      \ExclusiveAreas          \end{array} \]
+\subsection{Inter-runnable variables}
+\[ \begin{array}{r@{}c@{}l}      \InterrunnableVariables  \end{array} \]
+\subsection{Sending/receiving}
+\[ \begin{array}{r@{}c@{}l}      \SendingReceiving        \end{array} \]
+%TODO: RuleLong?
+\subsection{Reading/writing (unbuffered versions of rcv and snd)}
+\[ \begin{array}{r@{}c@{}lcl}    \ReadingWriting          \end{array} \]
+\subsection{Calling a server}
+\[ \begin{array}{r@{}c@{}lcl}    \CallServer              \end{array} \]
+\subsection{Obtaining a server result}
+\[ \begin{array}{r@{}c@{}lcl}    \ServerResult            \end{array} \]
+\subsection{Spawning and terminating}
+\[ \begin{array}{r@{}c@{}lcl}    \SpawnTerminate          \end{array} \]
+\subsection{Passing time}
+\[ \begin{array}{r@{}c@{}lcl}    \PassingTime             \end{array} \]
+\subsection{Ignoring broadcasts}
+\[ \begin{array}{r@{}c@{}lcl}    \IgnoreBroadcast         \end{array} \]
 
 \end{document}
+
+%\[
+%\begin{array}{r@{}c@{}llllll}
+
+%\input{../prolog/tool/semantics.tex}

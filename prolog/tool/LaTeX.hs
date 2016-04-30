@@ -99,8 +99,8 @@ docS :: String -> Doc
 docS = doc . showString
 
 beginSemantics, endSemantics :: Doc
-beginSemantics = docS "\\[\n\\begin{array}{r@{}c@{}llllll}\n"
-endSemantics   = docS "\\end{array}\n\\]"
+beginSemantics = docS "" -- "\\[\n\\begin{array}{r@{}c@{}llllll}\n"
+endSemantics   = docS "" -- "\\end{array}\n\\]"
 
 beginFact, endFact :: Doc
 beginFact = docS "\\Pfact{"
@@ -127,7 +127,7 @@ instance Print Clause where
                            endRule])
     Directive predicates -> prPrec i 0 (concatD [doc (showString ":-"), prt 0 predicates])
   prtList _ [] = (concatD [])
-  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString "\n\\\\"), prt 0 xs])
+  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString "\n"), prt 0 xs])
   -- TODO: perhaps generate a macro for the "cons" in the list of clauses
 
 instance Print Predicate where
