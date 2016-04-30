@@ -1,6 +1,9 @@
 # GHC = ghc-7.6.3
 GHC = ghc
 
+../../paper/semantics.tex: ../semantics.eprover
+	runhaskell LaTeX.hs $< > $@
+
 testEprover: compileEprover
 	Eprover/Test ../semantics.eprover > parsed_semantics
 
