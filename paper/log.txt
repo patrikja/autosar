@@ -1,7 +1,6 @@
-2016-04-01:
+2016-04-30:
 
-  TODO: re-translate the semantics to LaTeX: now from ../prolog/semantics.eprover
-
+  Done: re-translate the semantics to LaTeX: now from ../prolog/semantics.eprover
 
 2015-12-16:
 
@@ -12,11 +11,9 @@
   TODO: grow the simplified example until it covers the full semantics
   TODO: run some tests on (simple) "traces" from the simulator
 
-
 2015-09-07: Telcon PaJa + JoNo
 
   Identify a suitable datatype (in Haskell)
-
 
 2015-08-02: Starting to "prettify" the semantics by hand
 

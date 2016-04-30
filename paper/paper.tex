@@ -98,15 +98,15 @@ Client-server operation $O$ in port $U$ of component $I$, currently holding resu
 Countdown timer state for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
 \end{itemize}
 
-In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\void$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\void$ otherwise. An activation state $\Act$ either toggles between $\idle$ and $\pending$, or it has the special shape $\serving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
+In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\serving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
 $$
 \begin{array}{rcll}
 	V	& \in		& \text{Values} \\
 	N	& \in		& \text{Natural numbers} \\
 	B	& \in		& \text{Boolean values} \\
 	T	& \in		& \text{Time values} \\
-	C	& ::=		& \To{O}{U}{I} \sep \void \\
-	\Act	& ::=		& \idle \sep \pending \sep \serving{\Cs}{\Vs} \\
+	C	& ::=		& \To{O}{U}{I} \sep \Tvoid \\
+	\Act	& ::=		& \Tidle \sep \Tpending \sep \serving{\Cs}{\Vs} \\
 \end{array}
 $$
 We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
@@ -217,13 +217,13 @@ $$
 	\runnable{\Tr{R}{I}}{TODO}{0.0}{\Act}{0}
 \end{array}
 $$
-where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\pending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\idle$.
+where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
 % SWS_Rte_03524 (SWS_Rte_03526?) forbids mixing OperationInvokedEvents with other events for the same runnable
 
 \item For each exclusive area $X$ of each atomic component $I$, a term
 $$
 \begin{array}{c}
-	\excl{\Tx{X}{I}}{\false}
+	\excl{\Tx{X}{I}}{\Tfalse}
 \end{array}
 $$
 
@@ -233,7 +233,7 @@ $$
 	\irv{\Ts{S}{I}}{V}
 \end{array}
 $$
-where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\void$.
+where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\Tvoid$.
 
 \item For each data element $E$ of each required port $U$ of each atomic component $I$, a term
 $$
@@ -244,7 +244,7 @@ $$
 if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued}; otherwise, a term
 $$
 \begin{array}{c}
-	\delem{\Tep{E}{U}{I}}{\false}{\text{nodata}}
+	\delem{\Tep{E}{U}{I}}{\Tfalse}{\text{nodata}}
 \end{array}
 $$
 
@@ -276,7 +276,7 @@ $$
 $$
 if there is a connector in the model from required client-server port $U_1$ of component $I_1$ to provided port $U_2$ of component $I_2$.
 
-We expect the \emph{implementation} of a runnable to be available as a continuation $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these function by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments and results will be replaced by the unit value $\void$.
+We expect the \emph{implementation} of a runnable to be available as a continuation $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these function by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments and results will be replaced by the unit value $\Tvoid$.
 
 %TODO: Patrik got here 2016-04-27 in a reading + macro conversion round
 \subsection{Exclusive areas}
