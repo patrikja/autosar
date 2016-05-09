@@ -16,14 +16,6 @@
 %}
 
 \newcommand{\kw}[1]{\textbf{#1}}
-%{ not used in semantics.tex
-\newcommand{\void}    {\kw{void}}
-\newcommand{\nil}     {\kw{nil}}
-\newcommand{\true}    {\kw{true}}
-\newcommand{\false}   {\kw{false}}
-\newcommand{\idle}    {\kw{idle}}
-\newcommand{\pending} {\kw{pending}}
-%}
 \newcommand{\serving}[2]{\kw{serving}(#1,#2)}
 
 \newcommand{\runnable}[5]{\kw{runnable}(#1,#2,#3,#4,#5)}
@@ -63,7 +55,7 @@
 \newcommand{\plusplus}{\mathbin{+\!\!+}}
 
 \newcommand{\Tvar}  [1]{\V{#1}}
-\newcommand{\Tatom} [1]{\mathrm{#1}}
+\newcommand{\Tatom} [1]{\text{#1}}
 
 \newcommand{\Tserving}      {\serving}
 \newcommand{\Tpending}      {\kw{pending}}
@@ -125,11 +117,11 @@
 %\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \newcommand{\Pif}{\text{if}}
 
-\newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2}
+\newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2\\}
 %\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
 \newcommand{\Pcontline}[1]{\\ #1}
-\newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2.}}
-\newcommand{\Pfact}[1]{#1.}
+\newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2.}\\}
+\newcommand{\Pfact}[1]{#1.\\}
 \newcommand{\Pnegate}[1]{\neg(#1)}
 
 \newcommand{\Opar}{\ensuremath{\mathbin{\,|\,}}}
@@ -152,7 +144,7 @@
 \newcommand{\Tap}           [2]{#1(#2)}
 %\newcommand{\Tseq}          [2]{#1\mathbin{\plusplus}#2}
 \newcommand{\Tsnoc}{\Tseq}
-\newcommand{\Tseq}          [2]{#1{:}#2} %TODO: operator symbol for snoc?
+\newcommand{\Tseq}          [2]{#1{:}#2}
 
 \newcommand{\Tasyncresult}  [1]{\mathrm{async\_result}(#1)}
 \newcommand{\Tasync}        [1]{\mathrm{async}(#1)}
@@ -162,8 +154,8 @@
 \newcommand{\Tevents}       [1]{\mathrm{events}(#1)}
 
 %%% static properties
-\newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)} %**TODO: shorter name?
-\newcommand{\TminimumStartInterval}        [2]{\mathrm{minimumStartInterval}(#1,#2)}  %**TODO: shorter name?
+\newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)}
+\newcommand{\TminimumStartInterval}        [2]{\mathrm{minimumStartInterval}(#1,#2)}
 \newcommand{\TdataReceived}                [1]{\mathrm{dataReceived}(#1)}
 
 \newcommand{\ToperationInvoked}[1]{\mathrm{operationInvoked}(#1)}
