@@ -59,20 +59,19 @@ The formal approach we have chosen is that of a typical process calculus \cite{T
 
 Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{R}{I}$ means runnable $R$ of component $I$ and $\Tep{E}{P}{I}$ means element $E$ of port $P$ within component $I$. We use the following meta-variable conventions:
 
-%TODO: port name convention change from U to P? (see ../prolog/semantics.eprover)
 %
 \[
 \begin{array}{rcll}
-	I	& \in		& \text{Component names} \\
-	R	& \in		& \text{Runnable names} \\
-	U	& \in		& \text{Port names} \\
-	E	& \in		& \text{Sender-receiver element names} \\
-	O	& \in		& \text{Client-server operation names} \\
-	S	& \in		& \text{Inter-runnable variable names} \\
-	X	& \in		& \text{Exclusive area names} \\
-	\\
-	A	& \in		& \text{Addresses} \\
-	A	& ::=		& \Tr{R}{I}   \sep   \Tep{E}{P}{I}   \sep \Top{O}{P}{I}   \sep   \Ts{S}{I}   \sep   \Tx{X}{I}   \\
+  I & \in & \text{Component names} \\
+  R & \in & \text{Runnable names} \\
+  P & \in & \text{Port names} \\
+  E & \in & \text{Sender-receiver element names} \\
+  O & \in & \text{Client-server operation names} \\
+  S & \in & \text{Inter-runnable variable names} \\
+  X & \in & \text{Exclusive area names} \\
+\\
+  A & \in & \text{Addresses} \\
+  A & ::= & \Tr{R}{I}   \sep   \Tep{E}{P}{I}   \sep \Top{O}{P}{I}   \sep   \Ts{S}{I}   \sep   \Tx{X}{I}   \\
 \end{array}
 \]
 %
@@ -88,53 +87,53 @@ An instance of runnable $R$ of component $I$, currently executing $\Code$ and ow
 Exclusive area $X$ of component $I$, with boolean occupation state $B$.
 \item $\irv{\Ts{S}{I}}{V}$ \newline
 Inter-runnable variable $S$ of component $I$, currently holding value $V$.
-\item $\delem{\Tep{E}{U}{I}}{B}{V}$ \newline
-Non-queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
-\item $\qelem{\Tep{E}{U}{I}}{\Vs}{TODO}$ \newline
-Queued sender-receiver data element $E$ in port $U$ of component $I$, currently holding value sequence $\Vs$.
-\item $\opres{\Top{O}{U}{I}}{\Vs}$ \newline
-Client-server operation $O$ in port $U$ of component $I$, currently holding result value sequence $\Vs$.
+\item $\delem{\Tep{E}{P}{I}}{B}{V}$ \newline
+Non-queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
+\item $\qelem{\Tep{E}{P}{I}}{\Vs}{TODO}$ \newline
+Queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value sequence $\Vs$.
+\item $\opres{\Top{O}{P}{I}}{\Vs}$ \newline
+Client-server operation $O$ in port $P$ of component $I$, currently holding result value sequence $\Vs$.
 \item $\timer{\Tr{R}{I}}{T}$ \newline  %TODO: timer has only 2 args in the semantics so {T_p} is not described
 Countdown timer state for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
 \end{itemize}
 
 In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\serving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
-$$
+\[
 \begin{array}{rcll}
 	V	& \in		& \text{Values} \\
 	N	& \in		& \text{Natural numbers} \\
 	B	& \in		& \text{Boolean values} \\
 	T	& \in		& \text{Time values} \\
-	C	& ::=		& \To{O}{U}{I} \sep \Tvoid \\
+	C	& ::=		& \Top{O}{P}{I} \sep \Tvoid \\
 	\Act	& ::=		& \Tidle \sep \Tpending \sep \serving{\Cs}{\Vs} \\
 \end{array}
-$$
+\]
 We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
 
 The code part of a runnable instance should technically be a representation of the C or Matlab function that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in every detail, a more abstract notion of executable code will be required. To this end, we have chosen to ignore all details of internal computations, and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. Because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style to allow any data-dependencies to be expressed.
 %TODO: several LaTeX commands here are used with more arguments than in the semantics below
-$$
+\[
 \begin{array}{lll}
 	\Code	& ::=	& \Enter{X}{\Cont}			\\
 			& |	& \Exit{X}{\Cont}			\\
 			& |	& \IrvWrite{S}{V}{\Cont}		\\
 			& |	& \IrvRead{S}{\Cont}			\\
-			& |	& \Send{E}{U}{V}{\Cont}		\\
-			& |	& \Receive{E}{U}{\Cont}		\\
-			& |	& \Write{E}{U}{V}{\Cont}		\\
-			& |	& \Read{E}{U}{\Cont}		\\
-			& |	& \Invalidate{E}{U}{\Cont}		\\
-			& |	& \IsUpdated{E}{U}{\Cont}		\\
-			& |	& \Call{O}{U}{V}{\Cont}		\\
-			& |	& \Result{O}{U}{\Cont}		\\
+			& |	& \Send{E}{P}{V}{\Cont}		\\
+			& |	& \Receive{E}{P}{\Cont}		\\
+			& |	& \Write{E}{P}{V}{\Cont}		\\
+			& |	& \Read{E}{P}{\Cont}		\\
+			& |	& \Invalidate{E}{P}{\Cont}		\\
+			& |	& \IsUpdated{E}{P}{\Cont}		\\
+			& |	& \Call{O}{P}{V}{\Cont}		\\
+			& |	& \Result{O}{P}{\Cont}		\\
 			& |	& \Return{V}				\\
 	\\
 	\Cont	& \in	& V \rightarrow \Code		\\
 \end{array}
-$$
+\]
 
 Together with an operator for composing process terms in parallel, the process grammar for our AUTOSAR calculus becomes
-$$
+\[
 \begin{array}{rcll}
 	P,Q 	& ::= &
 		\runnable{A}{K}{T}{\Act}{N}	\\
@@ -155,12 +154,12 @@ $$
 		& | &
 		P|Q					\\
 \end{array}
-$$
+\]
 
 
 
 
-TODO: links from syntax and concepts introduced here to the AUTSAR spec
+TODO: links from syntax and concepts introduced here to the AUTOSAR spec
 
 TODO: details on limitations: what's not covered by the calculus
 
@@ -212,73 +211,72 @@ The initial process $P_0$ is determined fully by the AUTOSAR model under study, 
 \begin{enumerate}
 
 \item For each runnable $R$ of each component $I$, a term
-$$
+\[
 \begin{array}{c}
 	\runnable{\Tr{R}{I}}{TODO}{0.0}{\Act}{0}
 \end{array}
-$$
+\]
 where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
 % SWS_Rte_03524 (SWS_Rte_03526?) forbids mixing OperationInvokedEvents with other events for the same runnable
 
 \item For each exclusive area $X$ of each atomic component $I$, a term
-$$
+\[
 \begin{array}{c}
 	\excl{\Tx{X}{I}}{\Tfalse}
 \end{array}
-$$
+\]
 
 \item For each inter-runnable variable $S$ of each atomic component $I$, a term
-$$
+\[
 \begin{array}{c}
 	\irv{\Ts{S}{I}}{V}
 \end{array}
-$$
+\]
 where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\Tvoid$.
 
-\item For each data element $E$ of each required port $U$ of each atomic component $I$, a term
-$$
+\item For each data element $E$ of each required port $P$ of each atomic component $I$, a term
+\[
 \begin{array}{c}
-	\qelem{\Tep{E}{U}{I}}{\epsilon}{TODO}
+	\qelem{\Tep{E}{P}{I}}{\epsilon}{TODO}
 \end{array}
-$$
+\]
 if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued}; otherwise, a term
-$$
+\[
 \begin{array}{c}
-	\delem{\Tep{E}{U}{I}}{\Tfalse}{\text{nodata}}
+	\delem{\Tep{E}{P}{I}}{\Tfalse}{\text{nodata}}
 \end{array}
-$$
+\]
 
-\item For each operation $O$ of each required port $U$ of each atomic component $I$, a term
-$$
+\item For each operation $O$ of each required port $P$ of each atomic component $I$, a term
+\[
 \begin{array}{c}
-	\opres{\Tep{O}{U}{I}}{\epsilon}
+	\opres{\Tep{O}{P}{I}}{\epsilon}
 \end{array}
-$$
+\]
 
 \item For each \emph{TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
-$$
+\[
 \begin{array}{c}
 	\timer{\Tr{R}{I}}{0.0}
 \end{array}
-$$
+\]
 % where $T$ is the period of the event.
 %TODO: Does this mean all timed runnables will want to act _immediately_ (at the same time)? No init delay?
 
 \end{enumerate}
 
 Some further static model information will also be referenced by the transition rules. We refer to the \emph{connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
-$$
-	\Tconnect{\Tep{E}{$U_1$}{$I_1$}}{\Tep{E}{$U_2$}{$I_2$}} \;\;\text{for all elements $E$ of port $U_2$}
-$$
-if there is a connector in the model from provided sender-receiver port $U_1$ of component $I_1$ to required port $U_2$ of component $I_2$; and
-$$
-	\Tconnect{\Top{O}{$U_1$}{$I_1$}}{\Top{O}{$U_2$}{$I_2$}} \;\;\text{for all operations $O$ of port $U_1$}
-$$
-if there is a connector in the model from required client-server port $U_1$ of component $I_1$ to provided port $U_2$ of component $I_2$.
+\[
+	\Tconnect{\Tep{E}{$P_1$}{$I_1$}}{\Tep{E}{$P_2$}{$I_2$}} \;\;\text{for all elements $E$ of port $P_2$}
+\]
+if there is a connector in the model from provided sender-receiver port $P_1$ of component $I_1$ to required port $P_2$ of component $I_2$; and
+\[
+	\Tconnect{\Top{O}{$P_1$}{$I_1$}}{\Top{O}{$P_2$}{$I_2$}} \;\;\text{for all operations $O$ of port $P_1$}
+\]
+if there is a connector in the model from required client-server port $P_1$ of component $I_1$ to provided port $P_2$ of component $I_2$.
 
 We expect the \emph{implementation} of a runnable to be available as a continuation $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these function by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments and results will be replaced by the unit value $\Tvoid$.
 
-%TODO: Patrik got here 2016-04-27 in a reading + macro conversion round
 \subsection{Exclusive areas}
 
 
@@ -358,8 +356,3 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \[ \begin{array}{r@{}c@{}lcl}    \IgnoreBroadcast         \end{array} \]
 
 \end{document}
-
-%\[
-%\begin{array}{r@{}c@{}llllll}
-
-%\input{../prolog/tool/semantics.tex}
