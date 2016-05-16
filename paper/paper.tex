@@ -111,21 +111,21 @@ In the untyped setting of this report, a value $V$ can be any data item computed
 We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
 
 The code part of a runnable instance should technically be a representation of the C or Matlab function that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in every detail, a more abstract notion of executable code will be required. To this end, we have chosen to ignore all details of internal computations, and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. Because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style to allow any data-dependencies to be expressed.
-%TODO: several LaTeX commands here are used with more arguments than in the semantics below
+%
 \[
 \begin{array}{lll}
   \Code & ::= & \Enter{X}{\Cont}                \\
         & |   & \Exit{X}{\Cont}                 \\
         & |   & \IrvWrite{S}{V}{\Cont}          \\
         & |   & \IrvRead{S}{\Cont}              \\
-        & |   & \Send{E}{P}{V}{\Cont}           \\
-        & |   & \Receive{E}{P}{\Cont}           \\
-        & |   & \Write{E}{P}{V}{\Cont}          \\
-        & |   & \Read{E}{P}{\Cont}              \\
-        & |   & \Invalidate{E}{P}{\Cont}        \\
-        & |   & \IsUpdated{E}{P}{\Cont}         \\
-        & |   & \Call{O}{P}{V}{\Cont}           \\
-        & |   & \Result{O}{P}{\Cont}            \\
+        & |   & \Send{\Te{E}{P}}{V}{\Cont}      \\
+        & |   & \Receive{\Te{E}{P}}{\Cont}      \\
+        & |   & \Write{\Te{E}{P}}{V}{\Cont}     \\
+        & |   & \Read{\Te{E}{P}}{\Cont}         \\
+        & |   & \Invalidate{\Te{E}{P}}{\Cont}   \\
+        & |   & \IsUpdated{\Te{E}{P}}{\Cont}    \\
+        & |   & \Call{\To{O}{P}}{V}{\Cont}      \\
+        & |   & \Result{\To{O}{P}}{\Cont}       \\
         & |   & \Return{V}                      \\
 \\
   \Cont & \in & V \rightarrow \Code             \\
