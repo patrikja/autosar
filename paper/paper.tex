@@ -100,12 +100,12 @@ Countdown timer state for runnable $R$ of component $I$ with $T$ seconds left of
 In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\Tserving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
 \[
 \begin{array}{rcll}
-	V	& \in		& \text{Values} \\
-	N	& \in		& \text{Natural numbers} \\
-	B	& \in		& \text{Boolean values} \\
-	T	& \in		& \text{Time values} \\
-	C	& ::=		& \Top{O}{P}{I} \sep \Tvoid \\
-	\Act	& ::=		& \Tidle \sep \Tpending \sep \Tserving{\Cs}{\Vs} \\
+  V    & \in & \text{Values} \\
+  N    & \in & \text{Natural numbers} \\
+  B    & \in & \text{Boolean values} \\
+  T    & \in & \text{Time values} \\
+  C    & ::= & \Top{O}{P}{I} \sep \Tvoid \\
+  \Act & ::= & \Tidle \sep \Tpending \sep \Tserving{\Cs}{\Vs} \\
 \end{array}
 \]
 We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
@@ -114,50 +114,38 @@ The code part of a runnable instance should technically be a representation of t
 %TODO: several LaTeX commands here are used with more arguments than in the semantics below
 \[
 \begin{array}{lll}
-	\Code	& ::=	& \Enter{X}{\Cont}			\\
-			& |	& \Exit{X}{\Cont}			\\
-			& |	& \IrvWrite{S}{V}{\Cont}		\\
-			& |	& \IrvRead{S}{\Cont}			\\
-			& |	& \Send{E}{P}{V}{\Cont}		\\
-			& |	& \Receive{E}{P}{\Cont}		\\
-			& |	& \Write{E}{P}{V}{\Cont}		\\
-			& |	& \Read{E}{P}{\Cont}		\\
-			& |	& \Invalidate{E}{P}{\Cont}		\\
-			& |	& \IsUpdated{E}{P}{\Cont}		\\
-			& |	& \Call{O}{P}{V}{\Cont}		\\
-			& |	& \Result{O}{P}{\Cont}		\\
-			& |	& \Return{V}				\\
-	\\
-	\Cont	& \in	& V \rightarrow \Code		\\
+  \Code & ::= & \Enter{X}{\Cont}                \\
+        & |   & \Exit{X}{\Cont}                 \\
+        & |   & \IrvWrite{S}{V}{\Cont}          \\
+        & |   & \IrvRead{S}{\Cont}              \\
+        & |   & \Send{E}{P}{V}{\Cont}           \\
+        & |   & \Receive{E}{P}{\Cont}           \\
+        & |   & \Write{E}{P}{V}{\Cont}          \\
+        & |   & \Read{E}{P}{\Cont}              \\
+        & |   & \Invalidate{E}{P}{\Cont}        \\
+        & |   & \IsUpdated{E}{P}{\Cont}         \\
+        & |   & \Call{O}{P}{V}{\Cont}           \\
+        & |   & \Result{O}{P}{\Cont}            \\
+        & |   & \Return{V}                      \\
+\\
+  \Cont & \in & V \rightarrow \Code             \\
 \end{array}
 \]
 
 Together with an operator for composing process terms in parallel, the process grammar for our AUTOSAR calculus becomes
 \[
 \begin{array}{rcll}
-	P,Q 	& ::= &
-		\Trunnable{A}{K}{T}{\Act}{N}	\\
-		& | &
-		\Trinst{A}{C}{\Xs}{\Code}	\\
-		& | &
-		\Texcl{A}{B}			\\
-		& | &
-		\Tirv{A}{V}				\\
-		& | &
-		\Tdelem{A}{B}{V}			\\
-		& | &
-		\Tqelem{A}{N}{\Vs}			\\
-		& | &
-		\Topres{A}{\Vs}			\\
-		& | &
-		\Ttimer{A}{T}		\\
-		& | &
-		P|Q					\\
+  P,Q   & ::= & \Trunnable{A}{K}{T}{\Act}{N}    \\
+        & |   & \Trinst{A}{C}{\Xs}{\Code}       \\
+        & |   & \Texcl{A}{B}                    \\
+        & |   & \Tirv{A}{V}                     \\
+        & |   & \Tdelem{A}{B}{V}                \\
+        & |   & \Tqelem{A}{N}{\Vs}              \\
+        & |   & \Topres{A}{\Vs}                 \\
+        & |   & \Ttimer{A}{T}                   \\
+        & |   & P|Q                             \\
 \end{array}
 \]
-
-
-
 
 TODO: links from syntax and concepts introduced here to the AUTOSAR spec
 
@@ -169,13 +157,13 @@ TODO: details on limitations: what's not covered by the calculus
 Our semantic approach defines the meaning of an AUTOSAR system as the possible chains of state changes that can be applied to the system's initial state; or equivalently, as the set of \emph{traces} that can be generated from the corresponding process term $P_0$. A trace is a possibly infinite sequence of transitions
 \[
 \begin{array}{c}
-	P_0 \red{L_1} P_1 \red{L_2} P_2 \red{L_3} \cdots
+  P_0 \red{L_1} P_1 \red{L_2} P_2 \red{L_3} \cdots
 \end{array}
 \]
 where each step
 \[
 \begin{array}{c}
-	P_{i-1} \red{L_i} P_i
+  P_{i-1} \red{L_i} P_i
 \end{array}
 \]
 states that the system state captured as process term $P_{i-1}$ can evolve into state $P_i$ by means of a single transition labelled $L_i$.
@@ -184,25 +172,25 @@ states that the system state captured as process term $P_{i-1}$ can evolve into 
 The label $L$ of a transition can be of two kinds, indicating that the affected process term either "says" or "hears" something during the transition. A label also always consists of an address $A$ paired with some additional detail $D$, as captured in the following label grammar:
 \[
 \begin{array}{rcll}
-	L	& ::=		& A!D		& \hspace{4em}\text{Say $A$ and $D$} \\
-		&	|	& A?D		& \hspace{4em}\text{Hear $A$ and $D$} \\
+  L     & ::= & A!D & \hspace{4em}\text{Say  $A$ and $D$} \\
+        & |   & A?D & \hspace{4em}\text{Hear $A$ and $D$} \\
 \end{array}
 \]
 The possible forms of the extra label information $D$ will be introduced as the different transition rules are defined.
 
 Two processes $P$ and $Q$ can make transitions in parallel if they agree on what is being said or heard. Just as the saying/hearing intuition suggests, at most one of the processes can have the saying role in such an agreement. The following set of inference rules capture this intuition formally.
 \begin{mathpar}
-	\inferrule
-		{P \red{A!D} P' \\ Q \red{A?D} Q'}
-		{P | Q \red{A!D} P' | Q'}
-	\and
-	\inferrule
-		{P \red{A?D} P' \\ Q \red{A!D} Q'}
-		{P | Q \red{A!D} P' | Q'}
-	\and
-	\inferrule
-		{P \red{A?D} P' \\ Q \red{A?D} Q'}
-		{P | Q \red{A?D} P' | Q'}
+  \inferrule
+    {P \red{A!D} P' \\ Q \red{A?D} Q'}
+    {P | Q \red{A!D} P' | Q'}
+\and
+  \inferrule
+    {P \red{A?D} P' \\ Q \red{A!D} Q'}
+    {P | Q \red{A!D} P' | Q'}
+\and
+  \inferrule
+    {P \red{A?D} P' \\ Q \red{A?D} Q'}
+    {P | Q \red{A?D} P' | Q'}
 \end{mathpar}
 
 The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behavior serves us well, because in general, what one AUTOSAR runnable does may have impact on many -- if not all -- parts of the executing system. It is however important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over a parallel system is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
@@ -213,7 +201,7 @@ The initial process $P_0$ is determined fully by the AUTOSAR model under study, 
 \item For each runnable $R$ of each component $I$ with continuation (code) $K$, a term
 \[
 \begin{array}{c}
-	\Trunnable{\Tr{R}{I}}{K}{0.0}{\Act}{0}
+  \Trunnable{\Tr{R}{I}}{K}{0.0}{\Act}{0}
 \end{array}
 \]
 where $\Act$ is $\Tserving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
@@ -222,14 +210,14 @@ where $\Act$ is $\Tserving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{
 \item For each exclusive area $X$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\Texcl{\Tx{X}{I}}{\Tfalse}
+  \Texcl{\Tx{X}{I}}{\Tfalse}
 \end{array}
 \]
 
 \item For each inter-runnable variable $S$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\Tirv{\Ts{S}{I}}{V}
+  \Tirv{\Ts{S}{I}}{V}
 \end{array}
 \]
 where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\Tvoid$.
@@ -237,41 +225,41 @@ where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is 
 \item For each data element $E$ of each required port $P$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\Tqelem{\Tep{E}{P}{I}}{N}{\epsilon}
+  \Tqelem{\Tep{E}{P}{I}}{N}{\epsilon}
 \end{array}
 \]
 if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued} (with capacity $N$); otherwise, a term
 \[
 \begin{array}{c}
-	\Tdelem{\Tep{E}{P}{I}}{\Tfalse}{\text{nodata}}
+  \Tdelem{\Tep{E}{P}{I}}{\Tfalse}{\text{nodata}}
 \end{array}
 \]
 
 \item For each operation $O$ of each required port $P$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\Topres{\Tep{O}{P}{I}}{\epsilon}
+  \Topres{\Tep{O}{P}{I}}{\epsilon}
 \end{array}
 \]
 
 \item For each \emph{TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\Ttimer{\Tr{R}{I}}{0.0}
+  \Ttimer{\Tr{R}{I}}{0.0}
 \end{array}
 \]
 % where $T$ is the period of the event.
-%TODO: Does this mean all timed runnables will want to act _immediately_ (at the same time)? No init delay?
+%TODO: This means that all timed runnables want to act _immediately_ (at the same time - with no init delay).
 
 \end{enumerate}
 
 Some further static model information will also be referenced by the transition rules. We refer to the \emph{connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
 \[
-	\Tconnect{\Tep{E}{$P_1$}{$I_1$}}{\Tep{E}{$P_2$}{$I_2$}} \;\;\text{for all elements $E$ of port $P_2$}
+  \Tconnect{\Tep{E}{$P_1$}{$I_1$}}{\Tep{E}{$P_2$}{$I_2$}} \;\;\text{for all elements $E$ of port $P_2$}
 \]
 if there is a connector in the model from provided sender-receiver port $P_1$ of component $I_1$ to required port $P_2$ of component $I_2$; and
 \[
-	\Tconnect{\Top{O}{$P_1$}{$I_1$}}{\Top{O}{$P_2$}{$I_2$}} \;\;\text{for all operations $O$ of port $P_1$}
+  \Tconnect{\Top{O}{$P_1$}{$I_1$}}{\Top{O}{$P_2$}{$I_2$}} \;\;\text{for all operations $O$ of port $P_1$}
 \]
 if there is a connector in the model from required client-server port $P_1$ of component $I_1$ to provided port $P_2$ of component $I_2$.
 
