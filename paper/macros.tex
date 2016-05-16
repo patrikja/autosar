@@ -6,7 +6,7 @@
 \newcommand{\V}[1]{\ensuremath{\lowercase{#1}}}
 %{ Not used in semantics.tex
 \newcommand{\Code} {\V{Code}}
-\newcommand{\Cont} {\V{Cont}}
+\newcommand{\Cont} {\V{Cont}}  %TODO: Sometimes just K is used - check for consistency.
 \newcommand{\State}{\V{State}}
 \newcommand{\Act}  {\V{Act}}
 \newcommand{\Upd}  {\V{Upd}}
@@ -16,16 +16,16 @@
 %}
 
 \newcommand{\kw}[1]{\textbf{#1}}
-\newcommand{\serving}[2]{\kw{serving}(#1,#2)}
+\newcommand{\Tserving} [2]{\kw{serving}(#1,#2)}
 
-\newcommand{\runnable}[5]{\kw{runnable}(#1,#2,#3,#4,#5)}
-\newcommand{\rinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
-\newcommand{\excl}    [2]{\kw{excl}(#1,#2)}
-\newcommand{\irv}     [2]{\kw{irv}(#1,#2)}
-\newcommand{\qelem}   [3]{\kw{qelem}(#1,#2,#3)}
-\newcommand{\delem}   [3]{\kw{delem}(#1,#2,#3)}
-\newcommand{\opres}   [2]{\kw{opres}(#1,#2)}
-\newcommand{\timer}   [2]{\kw{timer}(#1,#2)}
+\newcommand{\Trunnable}[5]{\kw{runnable}(#1,#2,#3,#4,#5)}
+\newcommand{\Trinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
+\newcommand{\Texcl}    [2]{\kw{excl}(#1,#2)}
+\newcommand{\Tirv}     [2]{\kw{irv}(#1,#2)}
+\newcommand{\Tdelem}   [3]{\kw{delem}(#1,#2,#3)}
+\newcommand{\Tqelem}   [3]{\kw{qelem}(#1,#2,#3)}
+\newcommand{\Topres}   [2]{\kw{opres}(#1,#2)}
+\newcommand{\Ttimer}   [2]{\kw{timer}(#1,#2)}
 
 %TODO: start with lower case
 \newcommand{\rte}[1]{\text{#1}}
@@ -57,19 +57,10 @@
 \newcommand{\Tvar}  [1]{\V{#1}}
 \newcommand{\Tatom} [1]{\text{#1}}
 
-\newcommand{\Tserving}      {\serving}
 \newcommand{\Tpending}      {\kw{pending}}
 \newcommand{\Tidle}         {\kw{idle}}
 
 
-\newcommand{\Trunnable}     {\runnable}
-\newcommand{\Trinst}        {\rinst}
-\newcommand{\Texcl}         {\excl}
-\newcommand{\Tirv}          {\irv}
-\newcommand{\Tqelem}        {\qelem}
-\newcommand{\Tdelem}        {\delem}
-\newcommand{\Topres}        {\opres}
-\newcommand{\Ttimer}        {\timer}
 
 %\newcommand{\Trte}[1]{\mathrm{rte\_#1}}
 %\newcommand{\Trte}[2]{\mathrm{#1}#2}

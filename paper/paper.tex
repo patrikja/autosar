@@ -79,25 +79,25 @@ Since AUTOSAR components can be arbitrarily nested, the component names $I$ can 
 
 The process terms of our calculus are as follows:
 \begin{itemize}
-\item $\runnable{\Tr{R}{I}}{TODOK}{T}{\Act}{N}$  \newline
-Common state for runnable $R$ of component $I$, showing $N$ current instances, $T$ seconds left until next possible instantiation, and activation state $\Act$.
-\item $\rinst{\Tr{R}{I}}{C}{\Xs}{\Code}$ \newline
+\item $\Trunnable{\Tr{R}{I}}{K}{T}{\Act}{N}$  \newline
+Common state for runnable $R$ of component $I$ with continuation $K$, showing $N$ current instances, $T$ seconds left until next possible instantiation, and activation state $\Act$.
+\item $\Trinst{\Tr{R}{I}}{C}{\Xs}{\Code}$ \newline
 An instance of runnable $R$ of component $I$, currently executing $\Code$ and owning the exclusive areas $\Xs$, possibly running on behalf of client $C$.
-\item $\excl{\Tx{X}{I}}{B}$ \newline
+\item $\Texcl{\Tx{X}{I}}{B}$ \newline
 Exclusive area $X$ of component $I$, with boolean occupation state $B$.
-\item $\irv{\Ts{S}{I}}{V}$ \newline
+\item $\Tirv{\Ts{S}{I}}{V}$ \newline
 Inter-runnable variable $S$ of component $I$, currently holding value $V$.
-\item $\delem{\Tep{E}{P}{I}}{B}{V}$ \newline
+\item $\Tdelem{\Tep{E}{P}{I}}{B}{V}$ \newline
 Non-queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
-\item $\qelem{\Tep{E}{P}{I}}{\Vs}{TODO}$ \newline
-Queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value sequence $\Vs$.
-\item $\opres{\Top{O}{P}{I}}{\Vs}$ \newline
+\item $\Tqelem{\Tep{E}{P}{I}}{N}{\Vs}$ \newline
+Queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value sequence $\Vs$. TODO Maximum queue capacity? $N$.
+\item $\Topres{\Top{O}{P}{I}}{\Vs}$ \newline
 Client-server operation $O$ in port $P$ of component $I$, currently holding result value sequence $\Vs$.
-\item $\timer{\Tr{R}{I}}{T}$ \newline  %TODO: timer has only 2 args in the semantics so {T_p} is not described
+\item $\Ttimer{\Tr{R}{I}}{T}$ \newline  %TODO: timer has only 2 args in the semantics so {T_p} is not described
 Countdown timer state for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
 \end{itemize}
 
-In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\serving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
+In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\Tserving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
 \[
 \begin{array}{rcll}
 	V	& \in		& \text{Values} \\
@@ -105,7 +105,7 @@ In the untyped setting of this report, a value $V$ can be any data item computed
 	B	& \in		& \text{Boolean values} \\
 	T	& \in		& \text{Time values} \\
 	C	& ::=		& \Top{O}{P}{I} \sep \Tvoid \\
-	\Act	& ::=		& \Tidle \sep \Tpending \sep \serving{\Cs}{\Vs} \\
+	\Act	& ::=		& \Tidle \sep \Tpending \sep \Tserving{\Cs}{\Vs} \\
 \end{array}
 \]
 We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
@@ -136,21 +136,21 @@ Together with an operator for composing process terms in parallel, the process g
 \[
 \begin{array}{rcll}
 	P,Q 	& ::= &
-		\runnable{A}{K}{T}{\Act}{N}	\\
+		\Trunnable{A}{K}{T}{\Act}{N}	\\
 		& | &
-		\rinst{A}{C}{\Xs}{\Code}	\\
+		\Trinst{A}{C}{\Xs}{\Code}	\\
 		& | &
-		\excl{A}{B}			\\
+		\Texcl{A}{B}			\\
 		& | &
-		\irv{A}{V}				\\
+		\Tirv{A}{V}				\\
 		& | &
-		\delem{A}{B}{V}			\\
+		\Tdelem{A}{B}{V}			\\
 		& | &
-		\qelem{A}{\Vs}{TODO}			\\
+		\Tqelem{A}{N}{\Vs}			\\
 		& | &
-		\opres{A}{\Vs}			\\
+		\Topres{A}{\Vs}			\\
 		& | &
-		\timer{A}{T}		\\
+		\Ttimer{A}{T}		\\
 		& | &
 		P|Q					\\
 \end{array}
@@ -210,26 +210,26 @@ The effect of these agreement rules closely resembles the idea of a \emph{broadc
 The initial process $P_0$ is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
 \begin{enumerate}
 
-\item For each runnable $R$ of each component $I$, a term
+\item For each runnable $R$ of each component $I$ with continuation (code) $K$, a term
 \[
 \begin{array}{c}
-	\runnable{\Tr{R}{I}}{TODO}{0.0}{\Act}{0}
+	\Trunnable{\Tr{R}{I}}{K}{0.0}{\Act}{0}
 \end{array}
 \]
-where $\Act$ is $\serving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
+where $\Act$ is $\Tserving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
 % SWS_Rte_03524 (SWS_Rte_03526?) forbids mixing OperationInvokedEvents with other events for the same runnable
 
 \item For each exclusive area $X$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\excl{\Tx{X}{I}}{\Tfalse}
+	\Texcl{\Tx{X}{I}}{\Tfalse}
 \end{array}
 \]
 
 \item For each inter-runnable variable $S$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\irv{\Ts{S}{I}}{V}
+	\Tirv{\Ts{S}{I}}{V}
 \end{array}
 \]
 where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\Tvoid$.
@@ -237,27 +237,27 @@ where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is 
 \item For each data element $E$ of each required port $P$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\qelem{\Tep{E}{P}{I}}{\epsilon}{TODO}
+	\Tqelem{\Tep{E}{P}{I}}{N}{\epsilon}
 \end{array}
 \]
-if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued}; otherwise, a term
+if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued} (with capacity $N$); otherwise, a term
 \[
 \begin{array}{c}
-	\delem{\Tep{E}{P}{I}}{\Tfalse}{\text{nodata}}
+	\Tdelem{\Tep{E}{P}{I}}{\Tfalse}{\text{nodata}}
 \end{array}
 \]
 
 \item For each operation $O$ of each required port $P$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\opres{\Tep{O}{P}{I}}{\epsilon}
+	\Topres{\Tep{O}{P}{I}}{\epsilon}
 \end{array}
 \]
 
 \item For each \emph{TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-	\timer{\Tr{R}{I}}{0.0}
+	\Ttimer{\Tr{R}{I}}{0.0}
 \end{array}
 \]
 % where $T$ is the period of the event.
