@@ -27,25 +27,45 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE TypeFamilies               #-}
 
-module NewARSim (module NewARSim, Typeable, Data, mkStdGen, StdGen, module Dynamics) where
+module NewARSim
+  ( module NewARSim
+  , Typeable
+  , Data
+  , mkStdGen
+  , StdGen
+  ) where
 
-import Control.Monad.Operational
-import Control.Monad.Identity hiding (void)
-import Control.Monad.State hiding (void)
-import Data.List
-import qualified Data.Map as Map
-import Data.Maybe
-import Dynamics
-import System.Random
+import           Control.Monad.Catch
+import           Control.Monad.Operational
+import           Control.Monad.Identity     hiding (void)
+import           Control.Monad.State        hiding (void)
+import           Data.Char                         (ord, chr)
+import           Data.List
+import           Data.Map                          (Map)
+import qualified Data.Map                        as Map
+import           Data.Maybe
+import qualified Data.Vector.Storable            as SV
+import           Data.Vector.Storable              ((!), (//))
+import qualified Data.Vector.Storable.Mutable    as MSV
+import           Dynamics
+import           Foreign.C
+import           Foreign.Marshal            hiding (void)
+import           Foreign.Ptr
+import           Foreign.Storable
+import           System.Environment
+import           System.Exit
+import           System.IO.Error
+import           System.Random
+import           System.Posix
 import qualified Unsafe.Coerce
 
 
@@ -279,7 +299,7 @@ instance Data a => ComSpec (DataElement Unqueued a Provided) where
     type ComSpecFor (DataElement Unqueued a Provided) = InitValue a
     comSpec (DE a) (InitValue x) = do
         newInit a (toValue x)
-        
+
 instance Data a => ComSpec (DataElement Unqueued a Required) where
     type ComSpecFor (DataElement Unqueued a Required) = InitValue a
     comSpec (DE a) (InitValue x) = do
@@ -287,7 +307,7 @@ instance Data a => ComSpec (DataElement Unqueued a Required) where
       where
         f (DElem b s _) | a==b  = DElem b s (Ok (toValue x))
         f p                     = p
-        
+
 
 instance Data a => Port (DataElement Unqueued a) where
     connect (DE a) (DE b) = newConnection (a,b)
@@ -440,7 +460,6 @@ serverRunnable inv ops code = do a <- newAddress
 
 fromDyn                     :: Data a => Value -> a
 fromDyn                     = value'
-
 
 -- TODO: add Reading/Writing classes instead of Addressed?
 probeRead                   :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
@@ -728,6 +747,9 @@ traceProbes = simProbes . fst
 traceLogs :: Trace -> Logs
 traceLogs = concat . map transLogs . traceTrans
 
+-------------------------------------------------------------------------------
+-- * Stand-alone simulation
+-------------------------------------------------------------------------------
 
 simulation                  :: Monad m => Scheduler m -> AUTOSAR a -> m (a,Trace)
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
@@ -803,7 +825,7 @@ limitTrans t (a,trs) = (a,take t trs)
 limitTime :: Time -> Trace -> Trace
 limitTime t (a,trs) = (a,limitTimeTrs t trs) where
   limitTimeTrs t _ | t < 0                 = []
-  limitTimeTrs t (del@(Trans{transLabel = DELTA d}):trs) = del:limitTimeTrs (t-d) trs
+  limitTimeTrs t (del@Trans{transLabel = DELTA d}:trs) = del:limitTimeTrs (t-d) trs
   limitTimeTrs t []                        = []
   limitTimeTrs t (x:xs)                    = x : limitTimeTrs t xs
 
@@ -813,7 +835,7 @@ printLogs trace = do
     return trace
 
 debug :: Trace -> IO ()
-debug = mapM_ print . traceLabels where
+debug = mapM_ print . traceLabels
 
 
 
@@ -852,6 +874,430 @@ probes' pids t = concat $ go 0 0.0 (traceTrans t)
 internal :: Data a => [Measure Value] -> [Measure a]
 internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValue m))]
 
+-------------------------------------------------------------------------------
+-- * Simulation with external connections
+-------------------------------------------------------------------------------
+
+-- * Communications protocol.
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Transmission during simulation for one round of communications are performed
+-- according to:
+--
+-- 1) Receive 1 byte from sender. If this byte is 0, we're ok, otherwise,
+--    the sender has requested a halt.
+-- 2) Unless the sender has requested a halt, receive a double from the sender
+--    (i.e. 8 bytes on a 64-bit machine). This is the current sample time.
+-- 3) Receive @n@ bytes from the sender, building the vector of inputs, agreed
+--    upon before the start of the simulation with 'handshake'.
+-- 4) Process data. If successful, send 1 byte to the sender according to the
+--    same protocol as in (1), followed by @n@ bytes of new data. If
+--    unsuccessful, send 1 non-zero byte.
+--
+
+data Status = OK | DIE
+  deriving Show
+
+-- | Write a status on the file descriptor.
+writeStatus :: MonadIO m => Status -> Fd -> m ()
+writeStatus status fd = liftIO $
+  do bc <- fdWrite fd $ return $ chr $
+             case status of
+               OK  -> 0
+               DIE -> 1
+     when (bc /= 1) $ fail $
+       "writeStatus: tried to write 1 byte, but succeeded with " ++ show bc
+
+-- | Read a status from the input file descriptor.
+readStatus :: MonadIO m => Fd -> m Status
+readStatus fd = liftIO $
+  do (s, bc) <- fdRead fd 1
+     when (bc /= 1) $ fail $
+       "readStatus: expected 1 byte, got " ++ show bc
+     return $
+       case ord (head s) of
+         0 -> OK
+         _ -> DIE
+
+-- | Transfer information about desired port widths.
+handshake :: (Fd, Fd) -> (Int, Int) -> IO ()
+handshake (fdIn, fdOut) (w1, w2) =
+  do status <- readStatus fdIn
+     case status of
+      OK ->
+        do bc1 <- fdWrite fdOut [chr w1]
+           bc2 <- fdWrite fdOut [chr w2]
+           when (bc1 + bc2 /= 2) $ fail $
+             "handshake: tried sending 2 bytes, sent " ++ show (bc1 + bc2)
+           return ()
+      _ -> fail "Error when performing handshake."
+
+-- * The `FromExternal` and `ToExternal` typeclasses.
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Typeclasses for marking DataElements as external connections.
+
+-- | A type class for marking values of type @a@ carrying an address for export
+-- as input /from/ Simulink.
+class FromExternal a where
+  fromExternal :: a -> [Address]
+
+instance FromExternal a => FromExternal [a] where
+  fromExternal = concatMap fromExternal
+
+instance (FromExternal a, FromExternal b) => FromExternal (a, b) where
+  fromExternal (a, b) = fromExternal a ++ fromExternal b
+
+-- | A type class for marking values of type @a@ carrying an address for export
+-- as output /to/ Simulink.
+class ToExternal a where
+  toExternal :: a -> [Address]
+
+instance ToExternal a => ToExternal [a] where
+  toExternal = concatMap toExternal
+
+instance (ToExternal a, ToExternal b) => ToExternal (a, b) where
+  toExternal (a, b) = toExternal a ++ toExternal b
+
+instance FromExternal (DataElement q a r c) where
+  fromExternal de = [address de]
+
+instance ToExternal (DataElement q a r c) where
+  toExternal de = [address de]
+
+-- * Marshalling data.
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Some helper functions for communicating data as bytes over named pipes.
+
+sizeOfDouble :: Int
+sizeOfDouble = sizeOf (undefined :: Double)
+
+mkCDouble :: Double -> CDouble
+mkCDouble = CDouble
+
+mkCDoubleEnum :: Enum a => a -> CDouble
+mkCDoubleEnum = mkCDouble . fromIntegral . fromEnum
+
+fromCDouble :: CDouble -> Double
+fromCDouble (CDouble d) = d
+
+-- | @'sendCDouble' x fd@ sends the double @x@ to the file descriptor @fd@.
+sendCDouble :: MonadIO m => CDouble -> Fd -> m ()
+sendCDouble x fd = liftIO $
+  with x $ \ptr ->
+    let bufPtr = castPtr ptr
+    in do fdWriteBuf fd bufPtr (fromIntegral sizeOfDouble)
+          return ()
+
+-- | @'receiveCDouble' fd@ reads a double from the file descriptor @fd@.
+receiveCDouble :: MonadIO m => Fd -> m CDouble
+receiveCDouble fd = liftIO $
+  allocaBytes sizeOfDouble $ \ptr ->
+    let bufPtr = castPtr ptr
+    in do fdReadBuf fd bufPtr (fromIntegral sizeOfDouble)
+          peek ptr
+
+-- | @'sendVector' sv fd@ sends the vector @sv@ to the file descriptor @fd@.
+sendVector :: MonadIO m => SV.Vector CDouble -> Fd -> m ()
+sendVector sv fd = liftIO $
+  do mv <- SV.thaw sv
+     MSV.unsafeWith mv $ \ptr ->
+       let busWidth = fromIntegral (sizeOfDouble * SV.length sv)
+           busPtr   = castPtr ptr
+       in do bc <- fdWriteBuf fd busPtr busWidth
+             unless (fromIntegral bc == busWidth) $
+               fail $ "sendVector: tried sending " ++ show busWidth ++
+                      " bytes but succeeded with " ++ show bc ++ " bytes."
+
+-- | @'receiveVector' fd width@ reads @width@ doubles from the file descriptor
+-- @fd@ and returns a storable vector.
+receiveVector :: MonadIO m => Fd -> Int -> m (SV.Vector CDouble)
+receiveVector fd width = liftIO $
+  do mv <- MSV.new width
+     MSV.unsafeWith mv $ \ptr ->
+       let busWidth = fromIntegral (sizeOfDouble * width)
+           busPtr   = castPtr ptr
+       in do bc <- fdReadBuf fd busPtr busWidth
+             unless (fromIntegral bc == busWidth) $
+               fail $ "receiveVector: expected " ++ show busWidth ++ " bytes" ++
+                      " but read " ++ show bc ++ " bytes."
+     SV.freeze mv
+
+-- * Process/vector conversions.
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Facilities for converting between external data (as storable vectors) and
+-- internal data (i.e. DElem/Input processes).
+
+-- | This might be unnecessary and should probably be avoided.
+copyVector :: SV.Vector CDouble -> StateT RandState IO (SV.Vector CDouble)
+copyVector vec = liftIO $ SV.freeze =<< SV.thaw vec
+
+-- | Convert a list of processes to a vector for marshalling.
+procsToVector :: [Proc]              -- ^ List of /all/ processes in the model.
+              -> SV.Vector CDouble   -- ^ Copy of previous output bus
+              -> Map Address Int     -- ^ Address to vector index
+              -> SV.Vector CDouble
+procsToVector ps prev idx = prev // es
+  where
+    es = map toElem $ filter isOkData ps
+
+    isOkData (DElem a _ (Ok x)) = Map.member a idx
+    isOkData _                  = False
+
+    toElem   (DElem a _ (Ok x)) = (fromJust $ Map.lookup a idx, castValue x)
+
+-- | Cast some members of the Value type to CDouble.
+castValue :: Value -> CDouble
+castValue x =
+  let v1      = value x :: Maybe Bool
+      v2      = value x :: Maybe Integer
+      v3      = value x :: Maybe Double
+      failure = error "Supported types for export are Bool, Integer and Double."
+  in maybe (maybe (maybe failure mkCDoubleEnum v1)
+                                 mkCDoubleEnum v2)
+                                 mkCDoubleEnum v3
+
+-- | Convert a vector to a list of processes.
+vectorToProcs :: SV.Vector CDouble
+              -> SV.Vector CDouble
+              -> Map Int Address
+              -> [Proc]
+vectorToProcs vec prev idx = map toProc $ filter diff es
+  where
+    es = zip [0..] $ SV.toList vec
+
+    diff (i, x)
+      | (prev ! i) /= x = True
+      | otherwise       = False
+
+    toProc (i, x) = Input addr val
+      where
+        addr = fromJust $ Map.lookup i idx
+        val  = toValue $ fromCDouble x
+
+-- * Simulator with external connections.
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- A variant of the 'simulate' which exports some addresses for communication
+-- over named pipes.
+--
+-- Provides some basic facilites for running the simulator inside the IO monad,
+-- such as a IO state.
+
+data RandState = RandState
+  { gen     :: StdGen
+  , prevIn  :: SV.Vector CDouble
+  , prevOut :: SV.Vector CDouble
+  , addrIn  :: Map Int Address
+  , addrOut :: Map Address Int
+  }
+
+rstate0 :: StdGen -> RandState
+rstate0 g = RandState
+  { gen     = g
+  , prevIn  = SV.empty
+  , prevOut = SV.empty
+  , addrIn  = Map.empty
+  , addrOut = Map.empty
+  }
+
+-- | Forcing the @randomSched@ scheduler to live in IO.
+ioRandomSched :: Scheduler (StateT RandState IO)
+ioRandomSched alts =
+ do (n, g) <- (next . gen) <$> get
+    modify (\st -> st { gen = g})
+    let (label, logs, procs) = alts !! (n `mod` length alts)
+    return (Trans n label logs procs)
+
+-- | Initialize the simulator with an initial state and run it. This provides
+-- the same basic functionality as 'simulation'.
+simulationExt :: (Fd, Fd)                      -- ^ (Input, Output)
+              -> AUTOSAR a                     -- ^ AUTOSAR system.
+              -> [(Int, Address)]              -- ^ ...
+              -> [(Address, Int)]              -- ^ ...
+              -> StateT RandState IO (a, Trace)
+simulationExt fds sys idx_in idx_out =
+  do -- Initialize state.
+     modify $ \st ->
+       st { prevIn  = SV.replicate (length idx_in) (1/0)
+          , prevOut = SV.replicate (length idx_in) 0.0
+          , addrIn  = Map.fromList idx_in
+          , addrOut = Map.fromList idx_out
+          }
+
+     let procs1        = procs state1
+         (res, state1) = initialize sys
+         a `conn` b    = (a, b) `elem` conns state1
+
+     trs <- simulateExt fds ioRandomSched conn procs1
+     return (res, (state1, trs))
+
+-- | Internal simulator function. Blocks until we receive input from the
+-- input file descriptor, which drives the simulation forward.
+simulateExt :: (Fd, Fd)                          -- ^ (Input, Output)
+         -> Scheduler (StateT RandState IO)
+         -> ConnRel
+         -> [Proc]
+         -> StateT RandState IO [Transition]
+simulateExt (fdInput, fdOutput) sched conn procs =
+  do status <- readStatus fdInput
+     case status of
+       OK ->
+         do time <- receiveCDouble fdInput
+            vec <- receiveVector fdInput . SV.length =<< gets prevIn
+
+            RandState { prevIn = prev1, addrIn = addr_in } <- get
+            let extProcs = vectorToProcs vec prev1 addr_in
+                newProcs = extProcs ++ procs
+
+            -- Re-set the previous input to the current input. Not sure if
+            -- we have to /copy/ these vectors (they are storable) or if GHC
+            -- figures it out for us (i.e. will they just reassign the pointer?)
+            newPrevIn <- copyVector vec
+            modify $ \st -> st { prevIn = newPrevIn }
+
+            progress <- simulate1Ext sched conn newProcs []
+            case progress of
+              Nothing ->
+                do liftIO $ putStrLn "  Ran out of alternatives."
+                   writeStatus DIE fdOutput
+                   return []
+
+              Just (dt, procs1, ts) ->
+                do RandState { addrOut = addr_out, prevOut = prev2 } <- get
+
+                   -- Set a new time to ask for and produce an output vector.
+                   let next      = time + mkCDouble dt
+                       output    = procsToVector procs1 prev2 addr_out
+
+                   -- Re-set the previous output to the current output.
+                   newPrevOut <- copyVector output
+                   modify $ \st -> st { prevOut = newPrevOut }
+
+                   -- Signal OK and then data.
+                   writeStatus OK fdOutput
+                   sendCDouble next fdOutput
+                   sendVector output fdOutput
+
+                   (ts++) <$> simulateExt (fdInput, fdOutput) sched conn procs1
+
+       -- In case this happened we did not receive OK and we should die.
+       DIE ->
+         do liftIO $ putStrLn "Sender requested halt, stopping."
+            return []
+
+
+
+-- | @simulate1Ext@ progresses the simulation as long as possible without
+-- advancing time. When @maximumProgress@ returns a @DELTA@ labeled
+-- transition, @simulate1Ext@ returns @Just (time, procs, transitions)@. If the
+-- simulator runs out of alternatives, @Nothing@ is returned.
+simulate1Ext :: Scheduler (StateT RandState IO)
+             -> ConnRel
+             -> [Proc]
+             -> [Transition]
+             -> StateT RandState IO (Maybe (Time, [Proc], [Transition]))
+simulate1Ext sched conn procs acc
+  | null alts = return Nothing
+  | otherwise =
+    do trans@Trans{ transProcs = procs1 } <- maximumProgress sched alts
+       case transLabel trans of
+         DELTA dt -> return $ Just (dt, procs1, trans:acc)
+         _        -> simulate1Ext sched conn procs1 (trans:acc)
+  where
+    alts = step conn procs
+
+-- * Simulation entry-points.
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Provides entry-points for both the internal and external simulator functions.
+--
+-- Given some AUTOSAR system @sys :: AUTOSAR a@ exporting some data structure
+-- containing references to the data elements we wish to connect to external
+-- software, an entry point can be created using
+--
+-- > main :: IO ()
+-- > main = simulateUsingExternal sys
+--
+-- Or likewise, we could run an internal simulation (provided the system is
+-- self-contained). This example limits execution at @5.0@ seconds, using the
+-- random scheduler for scheduling and calls @makePlot@ on the resulting trace.
+--
+-- > main :: IO ()
+-- > main = simulateStandalone 5.0 makePlot (RandomSched (mkStdGen 111)) sys
+
+-- | Use this function to create a runnable @main@ for the simulator software
+-- when running the simulator standalone.
+simulateStandalone :: Time             -- ^ Time limit
+                   -> (Trace -> IO a)  -- ^ Trace processing function
+                   -> SchedChoice      -- ^ Scheduler choice
+                   -> AUTOSAR a        -- ^ AUTOSAR system
+                   -> IO a
+simulateStandalone time f sched = f . limitTime time . execSim sched
+
+-- | Use this function to create a runnable @main@ for the simulator software
+-- when connecting with external software, i.e. Simulink.
+simulateUsingExternal :: (ToExternal a, FromExternal a) => AUTOSAR a -> IO ()
+simulateUsingExternal sys = exceptionHandler $
+  do args <- getArgs
+     case args of
+      [inFifo, outFifo] -> runWithFIFOs inFifo outFifo sys
+      _ ->
+        do putStrLn $ "Wrong number of arguments. Proceeding with default " ++
+                      "FIFOs."
+           runWithFIFOs "/tmp/infifo" "/tmp/outfifo" sys
+
+
+-- | The external simulation entry-point. Given two file descriptors for
+-- input/output FIFOs we can start the simulation of the AUTOSAR program.
+entrypoint :: (FromExternal a, ToExternal a)
+           => AUTOSAR a                      -- ^ AUTOSAR program.
+           -> (Fd, Fd)                       -- ^ (Input, Output)
+           -> IO ()
+entrypoint system fds =
+  do
+     -- Fix the system, initialize to get information about AUTOSAR components
+     -- so that we can pick up port adresses and all other information we need.
+     let (res, _)   = initialize system
+         addr_in    = fromExternal  res
+         addr_out   = toExternal res
+         inwidth    = length addr_in
+         outwidth   = length addr_out
+
+         -- These maps need to go with the simulator as static information
+         idx_in  = zip [0..] addr_in
+         idx_out = zip addr_out [0..]
+
+     -- Perform the handshake
+     handshake fds (inwidth, outwidth)
+
+     -- Get the simulator started. This is a blocking action that might throw
+     -- exceptions. These should be handled so that we can message back to C
+     -- that we're done over here.
+     runStateT (simulationExt fds system idx_in idx_out)
+               (rstate0 (mkStdGen 111))
+     return ()
+
+-- | Run simulation of the system using the provided file descriptors as
+-- FIFOs.
+runWithFIFOs :: (ToExternal a, FromExternal a)
+             => FilePath
+             -> FilePath
+             -> AUTOSAR a
+             -> IO ()
+runWithFIFOs inFifo outFifo sys =
+  do -- These will produce exceptions that should be handled
+     -- if FIFOs not present. Preferably we exit with exitFailure.
+     putStrLn $ "Using FIFO " ++ inFifo ++ " for input, " ++ outFifo ++
+                " for output."
+     fdInput  <- openFd inFifo  ReadOnly Nothing defaultFileFlags
+     fdOutput <- openFd outFifo WriteOnly Nothing defaultFileFlags
+     entrypoint sys (fdInput, fdOutput)
+
+-- Exception handling for 'simulateUsingExternal'.
+exceptionHandler :: IO () -> IO ()
+exceptionHandler = catchPure . catchEOF
+  where
+    catchEOF m = catchIf isEOFError m $ \_ ->
+      putStrLn "Sender closed pipes, halting simulation."
+    catchPure m = catchAll m $ \e ->
+      putStrLn $ "Caught user error: " ++ show e
 
 
 -- Code below this point is a bit outdated.
@@ -865,10 +1311,10 @@ probeAll :: Data a => Trace -> [(ProbeID,Measurement a)]
 probeAll t = [(s,m') |(s,m) <- probeAll' t, let m' = internal' m, not (null m') ]
 
 internal' :: Data a => Measurement Value -> Measurement a
-internal' ms = [(t,a)|(t,v) <- ms, Just a <- return (value v)]
+internal' ms = [(t,a) | (t,v) <- ms, Just a <- return (value v)]
 
-probeAll'               :: Trace -> [(ProbeID,Measurement Value)]
-probeAll' (state,trs)   = Map.toList $ Map.fromListWith (flip (++)) $ collected
+probeAll'                   :: Trace -> [(ProbeID,Measurement Value)]
+probeAll' (state,trs)   = Map.toList $ Map.fromListWith (flip (++)) collected
   where collected       = collect (simProbes state) 0.0 0 trs ++ collectLogs 0.0 0 trs
 
 
@@ -886,3 +1332,5 @@ collectLogs t n (Trans{transLabel = DELTA d}:trs)
                             = collectLogs (t+d) (n+1) trs
 collectLogs t n (Trans{transLogs = logs}:trs)
                             = [ (i,[((n,t),v)]) | (i,v) <- logs ] ++ collectLogs t (n+1) trs
+
+
