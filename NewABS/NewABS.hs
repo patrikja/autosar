@@ -30,8 +30,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverlappingInstances #-}
 module Main where
 
 import NewARSim
@@ -247,6 +247,7 @@ type Valve = Bool
 data ValvePort r c = ValvePort {
         relief   :: DataElement Unqueued Valve r c,
         pressure :: DataElement Unqueued Valve r c }
+
 type ValveP r = ValvePort r Closed
 
 instance ComSpec (ValvePort Required) where
@@ -470,51 +471,17 @@ main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
 
 
 
-instance ToExternal WheelPorts where
-    toExternal (WheelPorts _ _ v)   = toExternal v
-
-instance FromExternal WheelPorts where
-    fromExternal (WheelPorts v a _) = fromExternal v ++ fromExternal a
+instance ToExternal [WheelPorts] where
+    toExternal ports    = toExternal (map valve_out ports)
 
 instance ToExternal (ValvePort r c) where
   toExternal (ValvePort re pr) = toExternal re ++ toExternal pr
+
+instance FromExternal [WheelPorts] where
+    fromExternal ports  = fromExternal (map velo_in ports) ++ fromExternal (map accel_in ports)
 
 
 main2 = simulateUsingExternal abs_system
 
 
-
-
--- | Data exported to MATLAB.
-data Exports = Exports 
-  { valves  :: [ValveP                  Required]
-  , velos   :: [DataElem Unqueued Velo  Provided]
-  , accels  :: [DataElem Unqueued Accel Provided] 
-  }
-
-instance ToExternal Exports where
-  toExternal (Exports v _ _) = toExternal v
-
-instance FromExternal Exports where
-  fromExternal (Exports _ vs as) = fromExternal vs ++ fromExternal as
-
--------------------------------------------------------------------------
--- A test setup consists of the ABS implementation and the simulated car
--- cyclically connected into a closed system.
---------------------------------------------------------------------------
-
-export_test :: AUTOSAR Exports
-export_test = 
-  do w_ports <- abs_system
-     velos   <- replicateM 4 providedPort
-     accels  <- replicateM 4 providedPort
-     valves  <- replicateM 4 requiredPort
-     connectEach velos  (map velo_in  w_ports)
-     connectEach accels (map accel_in w_ports)
-     connectEach (map valve_out w_ports) valves
-     return $ Exports valves velos accels
-
-main3 = simulateUsingExternal export_test
-
-
-main = main3
+main = main2

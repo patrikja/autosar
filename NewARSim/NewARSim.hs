@@ -138,7 +138,6 @@ type    DataElem q a r                  = DataElement q a r Closed
 newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
 type    ClientServerOp a b r            = ClientServerOperation a b r Closed
 
-
 data Queued         -- Parameter q above
 data Unqueued
 
@@ -185,6 +184,7 @@ data Proc                   = forall c .
                             | DElem     Address Bool (StdRet Value)
                             | Op        Address [Value]
                             | Input     Address Value
+                            | Output    Address Value
 
 type Conn                   = (Address, Address)
 
@@ -706,6 +706,7 @@ hear conn (TICK a)      (Run b t _ n s)       | a==b            = Run b t Pendin
 hear conn (DELTA d)     (Run b 0.0 act n s)                     = Run b 0.0 act n s
 hear conn (DELTA d)     (Run b t act n s)                       = Run b (t-d) act n s
 hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) t0
+hear conn (WR a v)      (Output b _)       | a `conn` b         = Output b v
 hear conn label         proc                                    = proc
 
 
@@ -755,7 +756,7 @@ simulation                  :: Monad m => Scheduler m -> AUTOSAR a -> m (a,Trace
 simulation sched sys        = do trs <- simulate sched conn (procs state1)
                                  return (res, (state1,trs))
   where (res,state1)        = initialize sys
-        a `conn` b          = (a,b) `elem` conns state1
+        a `conn` b          = (a,b) `elem` conns state1 || a==b
 
 simulate                    :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m [Transition]
 simulate sched conn procs   = do next <- simulate1 sched conn procs
@@ -764,12 +765,6 @@ simulate sched conn procs   = do next <- simulate1 sched conn procs
                                          return []
                                      Just trans@Trans{transProcs = procs1} ->
                                          liftM (trans:) $ simulate sched conn procs1
-
-simulate0                   :: Monad m => Scheduler m -> AUTOSAR a -> m (a,Trace)
-simulate0 sched sys         = do trs <- simulate sched conn (procs state1)
-                                 return (res, (state1,trs))
-  where (res,state1)        = initialize sys
-        a `conn` b          = (a,b) `elem` conns state1
 
 simulate1                   :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
 simulate1 sched conn procs
@@ -1024,7 +1019,7 @@ receiveVector fd width = liftIO $
 -- * Process/vector conversions.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Facilities for converting between external data (as storable vectors) and
--- internal data (i.e. DElem/Input processes).
+-- internal data (i.e. Input/Output processes).
 
 -- | This might be unnecessary and should probably be avoided.
 copyVector :: SV.Vector CDouble -> StateT RandState IO (SV.Vector CDouble)
@@ -1037,12 +1032,7 @@ procsToVector :: [Proc]              -- ^ List of /all/ processes in the model.
               -> SV.Vector CDouble
 procsToVector ps prev idx = prev // es
   where
-    es = map toElem $ filter isOkData ps
-
-    isOkData (DElem a _ (Ok x)) = Map.member a idx
-    isOkData _                  = False
-
-    toElem   (DElem a _ (Ok x)) = (fromJust $ Map.lookup a idx, castValue x)
+    es = [ (fromJust $ Map.lookup a idx, castValue v) | Output a v <- ps ]
 
 -- | Cast some members of the Value type to CDouble.
 castValue :: Value -> CDouble
@@ -1124,9 +1114,10 @@ simulationExt fds sys idx_in idx_out =
 
      let procs1        = procs state1
          (res, state1) = initialize sys
-         a `conn` b    = (a, b) `elem` conns state1
+         a `conn` b    = (a, b) `elem` conns state1 || a==b
 
-     trs <- simulateExt fds ioRandomSched conn procs1
+         outs = [ Output a (toValue (0.0::Double)) | (a,i) <- idx_out ]
+     trs <- simulateExt fds ioRandomSched conn (procs1 ++ outs)
      return (res, (state1, trs))
 
 -- | Internal simulator function. Blocks until we receive input from the
