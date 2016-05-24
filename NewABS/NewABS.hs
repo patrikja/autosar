@@ -465,10 +465,56 @@ scale ("pressure 2", m) = ("pressure 2", map (fmap scaleValve) m)
   where scaleValve      = (+4.0) . fromIntegral . fromEnum
 
 main1 :: IO Bool
-main1 = printLogs trace >> makePlot trace
-  where trace = limitTime 5.0 $ execSim (RandomSched (mkStdGen 111)) test
-
-
-main :: IO Bool
-main = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
+main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
   where output trace = printLogs trace >> makePlot trace
+
+
+
+instance ToExternal WheelPorts where
+    toExternal (WheelPorts _ _ v)   = toExternal v
+
+instance FromExternal WheelPorts where
+    fromExternal (WheelPorts v a _) = fromExternal v ++ fromExternal a
+
+instance ToExternal (ValvePort r c) where
+  toExternal (ValvePort re pr) = toExternal re ++ toExternal pr
+
+
+main2 = simulateUsingExternal abs_system
+
+
+
+
+-- | Data exported to MATLAB.
+data Exports = Exports 
+  { valves  :: [ValveP                  Required]
+  , velos   :: [DataElem Unqueued Velo  Provided]
+  , accels  :: [DataElem Unqueued Accel Provided] 
+  }
+
+instance ToExternal Exports where
+  toExternal (Exports v _ _) = toExternal v
+
+instance FromExternal Exports where
+  fromExternal (Exports _ vs as) = fromExternal vs ++ fromExternal as
+
+-------------------------------------------------------------------------
+-- A test setup consists of the ABS implementation and the simulated car
+-- cyclically connected into a closed system.
+--------------------------------------------------------------------------
+
+export_test :: AUTOSAR Exports
+export_test = 
+  do w_ports <- abs_system
+     velos   <- replicateM 4 providedPort
+     accels  <- replicateM 4 providedPort
+     valves  <- replicateM 4 requiredPort
+     connectEach velos  (map velo_in  w_ports)
+     connectEach accels (map accel_in w_ports)
+     connectEach (map valve_out w_ports) valves
+     return $ Exports valves velos accels
+
+main3 = simulateUsingExternal export_test
+
+
+main = main3
