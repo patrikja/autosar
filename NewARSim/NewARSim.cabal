@@ -24,31 +24,23 @@ library
     FlexibleContexts
     FlexibleInstances
     GADTs
+    GeneralizedNewtypeDeriving
     MultiParamTypeClasses
     FunctionalDependencies
     RankNTypes
     ExistentialQuantification
 
   build-depends:
-    base >=4.6 && <4.9,
-    operational,
-    easyplot,
-    mtl,
+    base == 4.*,
     containers,
+    easyplot,
+    exceptions,
+    mtl,
+    operational,
     random,
-    syb
+    syb,
+    vector,
+    unix
 
   default-language:    Haskell2010
 
-test-suite NewABS
-  type: exitcode-stdio-1.0
-
-  hs-source-dirs: .
-
-  main-is: NewABS.hs
-
-  default-language:    Haskell2010
-
-  build-depends:
-    base,
-    NewARSim
