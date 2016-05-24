@@ -247,7 +247,7 @@ type Valve = Bool
 data ValvePort r c = ValvePort {
         relief   :: DataElement Unqueued Valve r c,
         pressure :: DataElement Unqueued Valve r c }
-type ValveP r = ValvePort r ()
+type ValveP r = ValvePort r Closed
 
 instance ComSpec (ValvePort Required) where
     type ComSpecFor (ValvePort Required) = InitValue (Bool,Bool)
@@ -470,4 +470,5 @@ main1 = printLogs trace >> makePlot trace
 
 
 main :: IO Bool
-main = main1
+main = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
+  where output trace = printLogs trace >> makePlot trace

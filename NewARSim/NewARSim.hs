@@ -133,10 +133,10 @@ data StdRet a               = Ok a
                             deriving Show
 
 newtype DataElement q a r c             = DE Address      -- Async channel of "a" data
-type    DataElem q a r                  = DataElement q a r ()
+type    DataElem q a r                  = DataElement q a r Closed
 
 newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
-type    ClientServerOp a b r            = ClientServerOperation a b r ()
+type    ClientServerOp a b r            = ClientServerOperation a b r Closed
 
 
 data Queued         -- Parameter q above
@@ -276,9 +276,9 @@ initialize sys              = (a, st { procs = map (apInit (conns st) (initvals 
 
 
 class Port p where
-    connect  :: p Provided () -> p Required () -> AUTOSAR ()
-    delegateP :: [p Provided ()] -> AUTOSAR (p Provided ())
-    delegateR :: [p Required ()] -> AUTOSAR (p Required ())
+    connect  :: p Provided Closed -> p Required Closed -> AUTOSAR ()
+    delegateP :: [p Provided Closed] -> AUTOSAR (p Provided Closed)
+    delegateR :: [p Required Closed] -> AUTOSAR (p Required Closed)
     providedPort  :: Atomic c (p Provided c)
     requiredPort  :: Atomic c (p Required c)
 
@@ -287,7 +287,7 @@ class ComSpec p where
     comSpec :: p c -> ComSpecFor p -> Atomic c ()
 
 class Delegate p r where
-    delegate :: Port p => [p r ()] -> AUTOSAR (p r ())
+    delegate :: Port p => [p r Closed] -> AUTOSAR (p r Closed)
 
 instance Delegate p Provided where
     delegate = delegateP
@@ -371,7 +371,7 @@ instance Port (ClientServerOperation a b) where
                       return (OP a)
 
 
-connectEach :: Port p => [p Provided ()] -> [p Required ()] -> AUTOSAR ()
+connectEach :: Port p => [p Provided Closed] -> [p Required Closed] -> AUTOSAR ()
 connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
 
 
@@ -389,8 +389,8 @@ instance Addressed (ClientServerOperation a b r c) where
 
 
 type family Seal a where
-    Seal (k Required c)             = k Required ()
-    Seal (k Provided c)             = k Provided ()
+    Seal (k Required c)             = k Required Closed
+    Seal (k Provided c)             = k Provided Closed
     Seal (k a b c d e f g h)        = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e) (Seal f) (Seal g) (Seal h)
     Seal (k a b c d e f g)          = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e) (Seal f) (Seal g)
     Seal (k a b c d e f)            = k (Seal a) (Seal b) (Seal c) (Seal d) (Seal e) (Seal f)
@@ -1227,7 +1227,7 @@ simulate1Ext sched conn procs acc
 simulateStandalone :: Time             -- ^ Time limit
                    -> (Trace -> IO a)  -- ^ Trace processing function
                    -> SchedChoice      -- ^ Scheduler choice
-                   -> AUTOSAR a        -- ^ AUTOSAR system
+                   -> AUTOSAR b        -- ^ AUTOSAR system
                    -> IO a
 simulateStandalone time f sched = f . limitTime time . execSim sched
 
