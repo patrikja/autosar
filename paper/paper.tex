@@ -4,6 +4,7 @@
 \usepackage[a4paper,margin=1.4cm]{geometry}
 \usepackage[fleqn]{amsmath}
 \usepackage{mathpartir}
+\usepackage{ amssymb }
 % \usepackage{minted}
 \title{A semantics of core AUTOSAR}
 \author{Johan Nordlander \and Patrik Jansson}
@@ -55,6 +56,8 @@ TODO: add fig:model
 \section{Syntax and preliminaries}
 \label{sec:Calc}
 
+%TODO: replace varibles with \V{Variable} (to make sure the style matches the semantic rules in the appendix - lower case variables, for example)
+
 The formal approach we have chosen is that of a typical process calculus \cite{TODO}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
 Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{R}{I}$ means runnable $R$ of component $I$ and $\Tep{E}{P}{I}$ means element $E$ of port $P$ within component $I$. We use the following meta-variable conventions:
@@ -90,11 +93,11 @@ Inter-runnable variable $S$ of component $I$, currently holding value $V$.
 \item $\Tdelem{\Tep{E}{P}{I}}{B}{V}$ \newline
 Non-queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
 \item $\Tqelem{\Tep{E}{P}{I}}{N}{\Vs}$ \newline
-Queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value sequence $\Vs$. TODO Maximum queue capacity? $N$.
+Queued sender-receiver data element $E$ in port $P$ of component $I$ with maximum capacity $N$, currently holding value sequence $\Vs$.
 \item $\Topres{\Top{O}{P}{I}}{\Vs}$ \newline
 Client-server operation $O$ in port $P$ of component $I$, currently holding result value sequence $\Vs$.
-\item $\Ttimer{\Tr{R}{I}}{T}$ \newline  %TODO: timer has only 2 args in the semantics so {T_p} is not described
-Countdown timer state for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
+\item $\Ttimer{\Tr{R}{I}}{\V{T_p}}{T}$ \newline
+Countdown timer with period \V{T_p} for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
 \end{itemize}
 
 In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\Tserving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
@@ -151,6 +154,8 @@ TODO: links from syntax and concepts introduced here to the AUTOSAR spec
 
 TODO: details on limitations: what's not covered by the calculus
 
+TODO: replace | with \Opar
+
 \section{Semantics}
 \label{sec:Sem}
 
@@ -182,7 +187,7 @@ Two processes $P$ and $Q$ can make transitions in parallel if they agree on what
 \begin{mathpar}
   \inferrule
     {P \red{A!D} P' \\ Q \red{A?D} Q'}
-    {P | Q \red{A!D} P' | Q'}
+    {\Tpar{P}{Q} \red{A!D} \Tpar{P'}{Q'}}
 \and
   \inferrule
     {P \red{A?D} P' \\ Q \red{A!D} Q'}
@@ -245,10 +250,10 @@ if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued} (with capac
 \item For each \emph{TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
 \[
 \begin{array}{c}
-  \Ttimer{\Tr{R}{I}}{0.0}
+  \Ttimer{\Tr{R}{I}}{\V{T_p}}{0.0}
 \end{array}
 \]
-% where $T$ is the period of the event.
+where \V{T_p} is the period of the event.
 %TODO: This means that all timed runnables want to act _immediately_ (at the same time - with no init delay).
 
 \end{enumerate}
@@ -272,7 +277,7 @@ We expect the \emph{implementation} of a runnable to be available as a continuat
 
 
 
-TODO: links from rules and choices made here to the AUTOSAR spec
+TODO: some links from rules and choices made here to the AUTOSAR spec
 
 \section{Examples}
 \label{sec:Examples}
@@ -315,13 +320,17 @@ Return to the limitation - what is the next step (which can be lifted more easil
 
 \onecolumn
 \appendix
-\section{Prolog code}
+\section{Semantic rules}
 \label{sec:Prolog}
 
 \input{semantics.tex}
-{\renewcommand{\Prule}[2]{#1 & \Pif & #2\\}
+{
+\renewcommand{\Prule}[2]{#1 & \Pif & #2\\}
+%\renewcommand{\Pcomma}{,\quad}
+\renewcommand{\Pcomma}{\quad\text{and}\quad}
 
-\[ \begin{array}{r@{}c@{}lcr@{}c@{}lr@{}c@{}l}  \CombRed  \end{array} \]
+%TODO: fix the alignment of p2, q1
+\[ \begin{array}{r@{}c@{}lcr@{}c@{}l@{}r@{}c@{}l}  \CombRed  \end{array} \]
 }
 \subsection{Exclusive areas}
 \[ \begin{array}{r@{}c@{}l}      \ExclusiveAreas          \end{array} \]
@@ -337,6 +346,7 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \subsection{Obtaining a server result}
 \[ \begin{array}{r@{}c@{}lcl}    \ServerResult            \end{array} \]
 \subsection{Spawning and terminating}
+%TODO: make the parallell composition more visible
 \[ \begin{array}{r@{}c@{}lcl}    \SpawnTerminate          \end{array} \]
 \subsection{Passing time}
 \[ \begin{array}{r@{}c@{}lcl}    \PassingTime             \end{array} \]
