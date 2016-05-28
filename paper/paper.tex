@@ -56,97 +56,95 @@ TODO: add fig:model
 \section{Syntax and preliminaries}
 \label{sec:Calc}
 
-%TODO: replace varibles with \V{Variable} (to make sure the style matches the semantic rules in the appendix - lower case variables, for example)
-
 The formal approach we have chosen is that of a typical process calculus \cite{TODO}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
-Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{R}{I}$ means runnable $R$ of component $I$ and $\Tep{E}{P}{I}$ means element $E$ of port $P$ within component $I$. We use the following meta-variable conventions:
+Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{\V{R}}{\V{I}}$ means runnable \V{R} of component \V{I} and $\Tep{\V{E}}{\V{P}}{\V{I}}$ means element \V{E} of port \V{P} within component \V{I}. We use the following meta-variable conventions:
 
 %
 \[
 \begin{array}{rcll}
-  I & \in & \text{Component names} \\
-  R & \in & \text{Runnable names} \\
-  P & \in & \text{Port names} \\
-  E & \in & \text{Sender-receiver element names} \\
-  O & \in & \text{Client-server operation names} \\
-  S & \in & \text{Inter-runnable variable names} \\
-  X & \in & \text{Exclusive area names} \\
+  \V{I} & \in & \text{Component names} \\
+  \V{R} & \in & \text{Runnable names} \\
+  \V{P} & \in & \text{Port names} \\
+  \V{E} & \in & \text{Sender-receiver element names} \\
+  \V{O} & \in & \text{Client-server operation names} \\
+  \V{S} & \in & \text{Inter-runnable variable names} \\
+  \V{X} & \in & \text{Exclusive area names} \\
 \\
-  A & \in & \text{Addresses} \\
-  A & ::= & \Tr{R}{I}   \sep   \Tep{E}{P}{I}   \sep \Top{O}{P}{I}   \sep   \Ts{S}{I}   \sep   \Tx{X}{I}   \\
+  \V{A} & \in & \text{Addresses} \\
+  \V{A} & ::= & \Tr{\V{R}}{\V{I}}   \sep   \Tep{\V{E}}{\V{P}}{\V{I}}   \sep \Top{\V{O}}{\V{P}}{\V{I}}   \sep   \Ts{\V{S}}{\V{I}}   \sep   \Tx{\V{X}}{\V{I}}   \\
 \end{array}
 \]
 %
-Since AUTOSAR components can be arbitrarily nested, the component names $I$ can also be considered to have a similarly nested internal structure (component $I_1$ within component $I_2$ within component $I_3$, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite{TODO2}.
+Since AUTOSAR components can be arbitrarily nested, the component names \V{I} can also be considered to have a similarly nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite{TODO2}.
 
 The process terms of our calculus are as follows:
 \begin{itemize}
-\item $\Trunnable{\Tr{R}{I}}{K}{T}{\Act}{N}$  \newline
-Common state for runnable $R$ of component $I$ with continuation $K$, showing $N$ current instances, $T$ seconds left until next possible instantiation, and activation state $\Act$.
-\item $\Trinst{\Tr{R}{I}}{C}{\Xs}{\Code}$ \newline
-An instance of runnable $R$ of component $I$, currently executing $\Code$ and owning the exclusive areas $\Xs$, possibly running on behalf of client $C$.
-\item $\Texcl{\Tx{X}{I}}{B}$ \newline
-Exclusive area $X$ of component $I$, with boolean occupation state $B$.
-\item $\Tirv{\Ts{S}{I}}{V}$ \newline
-Inter-runnable variable $S$ of component $I$, currently holding value $V$.
-\item $\Tdelem{\Tep{E}{P}{I}}{B}{V}$ \newline
-Non-queued sender-receiver data element $E$ in port $P$ of component $I$, currently holding value $V$ with boolean update status flag $B$.
-\item $\Tqelem{\Tep{E}{P}{I}}{N}{\Vs}$ \newline
-Queued sender-receiver data element $E$ in port $P$ of component $I$ with maximum capacity $N$, currently holding value sequence $\Vs$.
-\item $\Topres{\Top{O}{P}{I}}{\Vs}$ \newline
-Client-server operation $O$ in port $P$ of component $I$, currently holding result value sequence $\Vs$.
-\item $\Ttimer{\Tr{R}{I}}{\V{T_p}}{T}$ \newline
-Countdown timer with period \V{T_p} for runnable $R$ of component $I$ with $T$ seconds left of its current cycle.
+\item $\Trunnable{\Tr{\V{R}}{\V{I}}}{\V{K}}{\V{T}}{\Act}{\V{N}}$  \newline
+Common state for runnable \V{R} of component \V{I} with continuation \V{K}, showing \V{N} current instances, \V{T} seconds left until next possible instantiation, and activation state $\Act$.
+\item $\Trinst{\Tr{\V{R}}{\V{I}}}{\V{C}}{\Xs}{\Code}$ \newline
+An instance of runnable \V{R} of component \V{I}, currently executing $\Code$ and owning the exclusive areas $\Xs$, possibly running on behalf of client \V{C}.
+\item $\Texcl{\Tx{\V{X}}{\V{I}}}{\V{B}}$ \newline
+Exclusive area \V{X} of component \V{I}, with boolean occupation state \V{B}.
+\item $\Tirv{\Ts{\V{S}}{\V{I}}}{\V{V}}$ \newline
+Inter-runnable variable \V{S} of component \V{I}, currently holding value \V{V}.
+\item $\Tdelem{\Tep{\V{E}}{\V{P}}{\V{I}}}{\V{B}}{\V{V}}$ \newline
+Non-queued sender-receiver data element \V{E} in port \V{P} of component \V{I}, currently holding value \V{V} with boolean update status flag \V{B}.
+\item $\Tqelem{\Tep{\V{E}}{\V{P}}{\V{I}}}{\V{N}}{\Vs}$ \newline
+Queued sender-receiver data element \V{E} in port \V{P} of component \V{I} with maximum capacity \V{N}, currently holding value sequence \Vs.
+\item $\Topres{\Top{\V{O}}{\V{P}}{\V{I}}}{\Vs}$ \newline
+Client-server operation \V{O} in port \V{P} of component \V{I}, currently holding result value sequence \Vs.
+\item $\Ttimer{\Tr{\V{R}}{\V{I}}}{\V{T_p}}{\V{T}}$ \newline
+Countdown timer with period \V{T_p} for runnable \V{R} of component \V{I} with \V{T} seconds left of its current cycle.
 \end{itemize}
 
-In the untyped setting of this report, a value $V$ can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables $N$, $B$ and $T$ range over natural numbers, boolean values and (floating point) time values, respectively. The client $C$ of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\Tserving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
+In the untyped setting of this report, a value \V{V} can be any data item computed and communicated by an AUTOSAR system, including the unit value $\Tvoid$ and the error codes that might be returned from RTE calls. Meta-variables \V{N}, \V{B} and \V{T} range over natural numbers, boolean values and (floating point) time values, respectively. The client \V{C} of a runnable instance is the address of the invoking port operation (if the runnable was invoked by a client-server call), or $\Tvoid$ otherwise. An activation state $\Act$ either toggles between $\Tidle$ and $\Tpending$, or it has the special shape $\Tserving{\Cs}{\Vs}$ (in the case of a runnable triggered by client-server calls). Formally,
 \[
 \begin{array}{rcll}
-  V    & \in & \text{Values} \\
-  N    & \in & \text{Natural numbers} \\
-  B    & \in & \text{Boolean values} \\
-  T    & \in & \text{Time values} \\
-  C    & ::= & \Top{O}{P}{I} \sep \Tvoid \\
+  \V{V}    & \in & \text{Values} \\
+  \V{N}    & \in & \text{Natural numbers} \\
+  \V{B}    & \in & \text{Boolean values} \\
+  \V{T}    & \in & \text{Time values} \\
+  \V{C}    & ::= & \Top{\V{O}}{\V{P}}{\V{I}} \sep \Tvoid \\
   \Act & ::= & \Tidle \sep \Tpending \sep \Tserving{\Cs}{\Vs} \\
 \end{array}
 \]
-We write $\Vs$ for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
+We write \Vs for a sequence of values, $\Cs$ for a sequence of clients, etc. Sequences may be empty, which is written $\epsilon$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
 
 The code part of a runnable instance should technically be a representation of the C or Matlab function that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in every detail, a more abstract notion of executable code will be required. To this end, we have chosen to ignore all details of internal computations, and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. Because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style to allow any data-dependencies to be expressed.
 %
 \[
 \begin{array}{lll}
-  \Code & ::= & \Enter{X}{\Cont}                \\
-        & |   & \Exit{X}{\Cont}                 \\
-        & |   & \IrvWrite{S}{V}{\Cont}          \\
-        & |   & \IrvRead{S}{\Cont}              \\
-        & |   & \Send{\Te{E}{P}}{V}{\Cont}      \\
-        & |   & \Receive{\Te{E}{P}}{\Cont}      \\
-        & |   & \Write{\Te{E}{P}}{V}{\Cont}     \\
-        & |   & \Read{\Te{E}{P}}{\Cont}         \\
-        & |   & \Invalidate{\Te{E}{P}}{\Cont}   \\
-        & |   & \IsUpdated{\Te{E}{P}}{\Cont}    \\
-        & |   & \Call{\To{O}{P}}{V}{\Cont}      \\
-        & |   & \Result{\To{O}{P}}{\Cont}       \\
-        & |   & \Return{V}                      \\
+  \Code & ::= & \Enter{\V{X}}{\Cont}                \\
+        & |   & \Exit{\V{X}}{\Cont}                 \\
+        & |   & \IrvWrite{\V{S}}{\V{V}}{\Cont}          \\
+        & |   & \IrvRead{\V{S}}{\Cont}              \\
+        & |   & \Send{\Te{\V{E}}{\V{P}}}{\V{V}}{\Cont}      \\
+        & |   & \Receive{\Te{\V{E}}{\V{P}}}{\Cont}      \\
+        & |   & \Write{\Te{\V{E}}{\V{P}}}{\V{V}}{\Cont}     \\
+        & |   & \Read{\Te{\V{E}}{\V{P}}}{\Cont}         \\
+        & |   & \Invalidate{\Te{\V{E}}{\V{P}}}{\Cont}   \\
+        & |   & \IsUpdated{\Te{\V{E}}{\V{P}}}{\Cont}    \\
+        & |   & \Call{\To{\V{O}}{\V{P}}}{\V{V}}{\Cont}      \\
+        & |   & \Result{\To{\V{O}}{\V{P}}}{\Cont}       \\
+        & |   & \Return{\V{V}}                      \\
 \\
-  \Cont & \in & V \rightarrow \Code             \\
+  \Cont & \in & \V{V} \rightarrow \Code             \\
 \end{array}
 \]
 
 Together with an operator for composing process terms in parallel, the process grammar for our AUTOSAR calculus becomes
 \[
 \begin{array}{rcll}
-  P,Q   & ::= & \Trunnable{A}{K}{T}{\Act}{N}    \\
-        & |   & \Trinst{A}{C}{\Xs}{\Code}       \\
-        & |   & \Texcl{A}{B}                    \\
-        & |   & \Tirv{A}{V}                     \\
-        & |   & \Tdelem{A}{B}{V}                \\
-        & |   & \Tqelem{A}{N}{\Vs}              \\
-        & |   & \Topres{A}{\Vs}                 \\
-        & |   & \Ttimer{A}{T}                   \\
-        & |   & P|Q                             \\
+  \V{P},\V{Q}   & ::= & \Trunnable{\V{A}}{\V{K}}{\V{T}}{\Act}{\V{N}}    \\
+        & |   & \Trinst{\V{A}}{\V{C}}{\Xs}{\Code}       \\
+        & |   & \Texcl{\V{A}}{\V{B}}                    \\
+        & |   & \Tirv{\V{A}}{\V{V}}                     \\
+        & |   & \Tdelem{\V{A}}{\V{B}}{\V{V}}            \\
+        & |   & \Tqelem{\V{A}}{\V{N}}{\Vs}              \\
+        & |   & \Topres{\V{A}}{\Vs}                     \\
+        & |   & \Ttimer{\V{A}}{\V{T_p}}{\V{T}}          \\
+        & |   & \Tpar{\V{P}}{\V{Q}}                     \\
 \end{array}
 \]
 
@@ -154,103 +152,102 @@ TODO: links from syntax and concepts introduced here to the AUTOSAR spec
 
 TODO: details on limitations: what's not covered by the calculus
 
-TODO: replace | with \Opar
 
 \section{Semantics}
 \label{sec:Sem}
 
-Our semantic approach defines the meaning of an AUTOSAR system as the possible chains of state changes that can be applied to the system's initial state; or equivalently, as the set of \emph{traces} that can be generated from the corresponding process term $P_0$. A trace is a possibly infinite sequence of transitions
+Our semantic approach defines the meaning of an AUTOSAR system as the possible chains of state changes that can be applied to the system's initial state; or equivalently, as the set of \emph{traces} that can be generated from the corresponding process term \V{P_0}. A trace is a possibly infinite sequence of transitions
 \[
 \begin{array}{c}
-  P_0 \red{L_1} P_1 \red{L_2} P_2 \red{L_3} \cdots
+  \V{P_0} \red{\V{L_1}} \V{P_1} \red{\V{L_2}} \V{P_2} \red{\V{L_3}} \cdots
 \end{array}
 \]
 where each step
 \[
 \begin{array}{c}
-  P_{i-1} \red{L_i} P_i
+  \V{P_{i-1}} \red{\V{L_i}} \V{P_i}
 \end{array}
 \]
-states that the system state captured as process term $P_{i-1}$ can evolve into state $P_i$ by means of a single transition labelled $L_i$.
+states that the system state captured as process term \V{P_{i-1}} can evolve into state \V{P_i} by means of a single transition labelled \V{L_i}.
 
 
-The label $L$ of a transition can be of two kinds, indicating that the affected process term either "says" or "hears" something during the transition. A label also always consists of an address $A$ paired with some additional detail $D$, as captured in the following label grammar:
+The label \V{L} of a transition can be of two kinds, indicating that the affected process term either "says" or "hears" something during the transition. A label also always consists of an address \V{A} paired with some additional detail \V{D}, as captured in the following label grammar:
 \[
 \begin{array}{rcll}
-  L     & ::= & A!D & \hspace{4em}\text{Say  $A$ and $D$} \\
-        & |   & A?D & \hspace{4em}\text{Hear $A$ and $D$} \\
+  \V{L}     & ::= & \V{A}!\V{D} & \hspace{4em}\text{Say  \V{A} and \V{D}} \\
+            & |   & \V{A}?\V{D} & \hspace{4em}\text{Hear \V{A} and \V{D}} \\
 \end{array}
 \]
-The possible forms of the extra label information $D$ will be introduced as the different transition rules are defined.
+The possible forms of the extra label information \V{D} will be introduced as the different transition rules are defined.
 
-Two processes $P$ and $Q$ can make transitions in parallel if they agree on what is being said or heard. Just as the saying/hearing intuition suggests, at most one of the processes can have the saying role in such an agreement. The following set of inference rules capture this intuition formally.
+Two processes \V{P} and \V{Q} can make transitions in parallel if they agree on what is being said or heard. Just as the saying/hearing intuition suggests, at most one of the processes can have the saying role in such an agreement. The following set of inference rules capture this intuition formally.
 \begin{mathpar}
   \inferrule
-    {P \red{A!D} P' \\ Q \red{A?D} Q'}
-    {\Tpar{P}{Q} \red{A!D} \Tpar{P'}{Q'}}
+    {\V{P} \red{\V{A}!\V{D}} \V{P'} \\ \V{Q} \red{\V{A}?\V{D}} \V{Q'}}
+    {\Tpar{\V{P}}{\V{Q}} \red{\V{A}!\V{D}} \Tpar{\V{P'}}{\V{Q'}}}
 \and
   \inferrule
-    {P \red{A?D} P' \\ Q \red{A!D} Q'}
-    {P | Q \red{A!D} P' | Q'}
+    {\V{P} \red{\V{A}?\V{D}} \V{P'} \\ \V{Q} \red{\V{A}!\V{D}} \V{Q'}}
+    {\Tpar{\V{P}}{\V{Q}} \red{\V{A}!\V{D}} \Tpar{\V{P'}}{\V{Q'}}}
 \and
   \inferrule
-    {P \red{A?D} P' \\ Q \red{A?D} Q'}
-    {P | Q \red{A?D} P' | Q'}
+    {\V{P} \red{\V{A}?\V{D}} \V{P'} \\ \V{Q} \red{\V{A}?\V{D}} \V{Q'}}
+    {\Tpar{\V{P}}{\V{Q}} \red{\V{A}?\V{D}} \Tpar{\V{P'}}{\V{Q'}}}
 \end{mathpar}
 
 The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behavior serves us well, because in general, what one AUTOSAR runnable does may have impact on many -- if not all -- parts of the executing system. It is however important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over a parallel system is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
 
-The initial process $P_0$ is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
+The initial process \V{P_0} is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
 \begin{enumerate}
 
-\item For each runnable $R$ of each component $I$ with continuation (code) $K$, a term
+\item For each runnable \V{R} of each component \V{I} with continuation (code) \V{K}, a term
 \[
 \begin{array}{c}
-  \Trunnable{\Tr{R}{I}}{K}{0.0}{\Act}{0}
+  \Trunnable{\Tr{\V{R}}{\V{I}}}{\V{K}}{0.0}{\Act}{0}
 \end{array}
 \]
-where $\Act$ is $\Tserving{\epsilon}{\epsilon}$ if $R$ is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if $R$ is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
+where $\Act$ is $\Tserving{\epsilon}{\epsilon}$ if \V{R} is triggered by an \emph{OperationInvokedEvent}; else $\Act$ is $\Tpending$ if \V{R} is triggered by an \emph{InitEvent}; otherwise $\Act$ is $\Tidle$.
 % SWS_Rte_03524 (SWS_Rte_03526?) forbids mixing OperationInvokedEvents with other events for the same runnable
 
-\item For each exclusive area $X$ of each atomic component $I$, a term
+\item For each exclusive area \V{X} of each atomic component \V{I}, a term
 \[
 \begin{array}{c}
-  \Texcl{\Tx{X}{I}}{\Tfalse}
+  \Texcl{\Tx{\V{X}}{\V{I}}}{\Tfalse}
 \end{array}
 \]
 
-\item For each inter-runnable variable $S$ of each atomic component $I$, a term
+\item For each inter-runnable variable \V{S} of each atomic component \V{I}, a term
 \[
 \begin{array}{c}
-  \Tirv{\Ts{S}{I}}{V}
+  \Tirv{\Ts{\V{S}}{\V{I}}}{\V{V}}
 \end{array}
 \]
-where $V$ is the initial value attributed to $S$ if it exists, otherwise $V$ is $\Tvoid$.
+where \V{V} is the initial value attributed to \V{S} if it exists, otherwise \V{V} is $\Tvoid$.
 
-\item For each data element $E$ of each required port $P$ of each atomic component $I$, a term
+\item For each data element \V{E} of each required port \V{P} of each atomic component \V{I}, a term
 \[
 \begin{array}{c}
-  \Tqelem{\Tep{E}{P}{I}}{N}{\epsilon}
+  \Tqelem{\Tep{\V{E}}{\V{P}}{\V{I}}}{\V{N}}{\epsilon}
 \end{array}
 \]
-if the \emph{swImplPolicy} attribute of element $E$ is \emph{queued} (with capacity $N$); otherwise, a term
+if the \emph{swImplPolicy} attribute of element \V{E} is \emph{queued} (with capacity \V{N}); otherwise, a term
 \[
 \begin{array}{c}
-  \Tdelem{\Tep{E}{P}{I}}{\Tfalse}{\text{nodata}}
-\end{array}
-\]
-
-\item For each operation $O$ of each required port $P$ of each atomic component $I$, a term
-\[
-\begin{array}{c}
-  \Topres{\Tep{O}{P}{I}}{\epsilon}
+  \Tdelem{\Tep{\V{E}}{\V{P}}{\V{I}}}{\Tfalse}{\text{nodata}}
 \end{array}
 \]
 
-\item For each \emph{TimingEvent} triggering each runnable $R$ of each atomic component $I$, a term
+\item For each operation \V{O} of each required port \V{P} of each atomic component \V{I}, a term
 \[
 \begin{array}{c}
-  \Ttimer{\Tr{R}{I}}{\V{T_p}}{0.0}
+  \Topres{\Tep{\V{O}}{\V{P}}{\V{I}}}{\epsilon}
+\end{array}
+\]
+
+\item For each \emph{TimingEvent} triggering each runnable \V{R} of each atomic component \V{I}, a term
+\[
+\begin{array}{c}
+  \Ttimer{\Tr{\V{R}}{\V{I}}}{\V{T_p}}{0.0}
 \end{array}
 \]
 where \V{T_p} is the period of the event.
@@ -260,13 +257,13 @@ where \V{T_p} is the period of the event.
 
 Some further static model information will also be referenced by the transition rules. We refer to the \emph{connectors} of a model using a binary relation $\Rightarrow$ on addresses, defined as
 \[
-  \Tconnect{\Tep{E}{$P_1$}{$I_1$}}{\Tep{E}{$P_2$}{$I_2$}} \;\;\text{for all elements $E$ of port $P_2$}
+  \Tconnect{\Tep{\V{E}}{\V{P_1}}{\V{I_1}}}{\Tep{\V{E}}{\V{P_2}}{\V{I_2}}} \;\;\text{for all elements \V{E} of port \V{P_2}}
 \]
-if there is a connector in the model from provided sender-receiver port $P_1$ of component $I_1$ to required port $P_2$ of component $I_2$; and
+if there is a connector in the model from provided sender-receiver port \V{P_1} of component \V{I_1} to required port \V{P_2} of component \V{I_2}; and
 \[
-  \Tconnect{\Top{O}{$P_1$}{$I_1$}}{\Top{O}{$P_2$}{$I_2$}} \;\;\text{for all operations $O$ of port $P_1$}
+  \Tconnect{\Top{\V{O}}{\V{P_1}}{\V{I_1}}}{\Top{\V{O}}{\V{P_2}}{\V{I_2}}} \;\;\text{for all operations \V{O} of port \V{P_1}}
 \]
-if there is a connector in the model from required client-server port $P_1$ of component $I_1$ to provided port $P_2$ of component $I_2$.
+if there is a connector in the model from required client-server port \V{P_1} of component \V{I_1} to provided port \V{P_2} of component \V{I_2}.
 
 We expect the \emph{implementation} of a runnable to be available as a continuation $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these function by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments and results will be replaced by the unit value $\Tvoid$.
 
@@ -329,7 +326,6 @@ Return to the limitation - what is the next step (which can be lifted more easil
 %\renewcommand{\Pcomma}{,\quad}
 \renewcommand{\Pcomma}{\quad\text{and}\quad}
 
-%TODO: fix the alignment of p2, q1
 \[ \begin{array}{r@{}c@{}lcr@{}c@{}l@{}r@{}c@{}l}  \CombRed  \end{array} \]
 }
 \subsection{Exclusive areas}
@@ -346,7 +342,6 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \subsection{Obtaining a server result}
 \[ \begin{array}{r@{}c@{}lcl}    \ServerResult            \end{array} \]
 \subsection{Spawning and terminating}
-%TODO: make the parallell composition more visible
 \[ \begin{array}{r@{}c@{}lcl}    \SpawnTerminate          \end{array} \]
 \subsection{Passing time}
 \[ \begin{array}{r@{}c@{}lcl}    \PassingTime             \end{array} \]
