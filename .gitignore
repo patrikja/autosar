@@ -1,5 +1,6 @@
 dist/
 cabal.sandbox.config
+.cabal-sandbox
 cabal-dev
 *.o
 *.hi
@@ -13,3 +14,4 @@ Main
 /plot4.dat
 /plot5.dat
 *~
+*.mexmaci64
