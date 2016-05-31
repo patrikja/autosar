@@ -15,3 +15,7 @@ Main
 /plot5.dat
 *~
 *.mexmaci64
+*.mexa64
+*.autosave
+*.original
+slprj
