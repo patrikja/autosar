@@ -31,7 +31,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverlappingInstances #-}
 module Main where
 
 import NewARSim
@@ -471,17 +470,17 @@ main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
 
 
 
-instance ToExternal [WheelPorts] where
+instance {-# OVERLAPS #-} ToExternal [WheelPorts] where
     toExternal ports    = toExternal (map valve_out ports)
 
 instance ToExternal (ValvePort r c) where
   toExternal (ValvePort re pr) = toExternal re ++ toExternal pr
 
-instance FromExternal [WheelPorts] where
+instance {-# OVERLAPS #-} FromExternal [WheelPorts] where
     fromExternal ports  = fromExternal (map velo_in ports) ++ fromExternal (map accel_in ports)
 
 
 main2 = simulateUsingExternal abs_system
 
 
-main = main2
+main = main1
