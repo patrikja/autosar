@@ -31,57 +31,59 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module Main where
 
 import NewARSim
-import Test.QuickCheck
-import Test.QuickCheck.Property
+--import Test.QuickCheck
+--import Test.QuickCheck.Property
 import Data.List(nub)
 import System.Random
 import System.CPUTime
 
 
 -- Simple server returning unique tickets to clients.
-ticketDispenser :: AR c (ProvidedOperation () Int ())
-ticketDispenser = component $ do
-                     requestTicketP <- providedOperation
+--ticketDispenser :: AR c (ProvidedOperation () Int ())
+ticketDispenser = atomic $ do
+                     requestTicketP <- providedPort
                      cur <- interRunnableVariable (0 :: Int)
                      excl <- exclusiveArea
                      probeRead "Read" cur
                      probeWrite "Write" cur
-                     let rtBody = do --rteEnter excl
-                                     Ok v <- rteIrvRead cur
-                                     rteIrvWrite cur (v+1)
-                                     --rteExit excl
-                                     return v
-                     serverRunnable Concurrent [requestTicketP] (\() -> rtBody)
+                     serverRunnable Concurrent [OperationInvokedEvent requestTicketP] $ \() -> do
+                                --rteEnter excl
+                                Ok v <- rteIrvRead cur
+                                rteIrvWrite cur (v+1)
+                                --rteExit excl
+                                return v
                      return (seal requestTicketP)
 
-client :: Int -> AR c (RequiredOperation () Int ())
-client n        = component $ do
-                     requestTicketR <- requiredOperation
-                     let clientLoop = do Ok v <- rteCall requestTicketR ()
-                                         printlog "Ticket" v
-                                         clientLoop
-                     runnable Concurrent [Init] clientLoop
+--client :: Int -> AR c (RequiredOperation () Int ())
+client n        = atomic $ do
+                     requestTicketR <- requiredPort
+                     let clientLoop = do 
+                                Ok v <- rteCall requestTicketR ()
+                                printlog "Ticket" v
+                                clientLoop
+                     runnable Concurrent [InitEvent] clientLoop
                      return (seal requestTicketR)
 
 -- Create a server instance and 3 client instances and connect them
-system :: AR c ()
+--system :: AR c ()
 system          = do srv <- ticketDispenser
                      r1 <- client 1
                      r2 <- client 2
                      r3 <- client 3
-                     connect r1 srv
-                     connect r2 srv
-                     connect r3 srv
+                     connect srv r1
+                     connect srv r2
+                     connect srv r3
 
 
 type RandomSeed     = Int
 type SimulationTime = Int
 
 check :: (RandomSeed -> SimulationTime -> [Measure Int]) -> IO ()
-check example = quickCheck qprop
-  where qprop g (Small n) = counterexample ("\n"++ report measurement) $ tickets == nub tickets
-          where tickets = map measureValue $ ticketsOnly measurement
-                measurement = example g n
+check = undefined
+--check example = quickCheck qprop
+--  where qprop g (Small n) = counterexample ("\n"++ report measurement) $ tickets == nub tickets
+--          where tickets = map measureValue $ ticketsOnly measurement
+--                measurement = example g n
 
 report ms = unlines $ map showMeasure $ ms
   where showMeasure m = measureID m ++ ": " ++ show (measureValue m)
@@ -124,4 +126,4 @@ demo8 = check example_rr
 demo9 = check example_triv
 
 
-main = demo4
+main = demo3
