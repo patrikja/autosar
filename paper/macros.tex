@@ -3,7 +3,7 @@
 
 %----------------
 %\newcommand{\V}[1]{\textit{\lowercase{#1}}}
-\newcommand{\V}[1]{\ensuremath{\lowercase{#1}}}
+\newcommand{\V}[1]{\ensuremath{\lowercase{\mathit{#1}}}}
 %{ Not used in semantics.tex
 \newcommand{\Code} {\V{Code}}
 \newcommand{\Cont} {\V{Cont}}  %TODO: Sometimes just K is used - check for consistency.
@@ -25,7 +25,7 @@
 \newcommand{\Tdelem}   [3]{\kw{delem}(#1,#2,#3)}
 \newcommand{\Tqelem}   [3]{\kw{qelem}(#1,#2,#3)}
 \newcommand{\Topres}   [2]{\kw{opres}(#1,#2)}
-\newcommand{\Ttimer}   [2]{\kw{timer}(#1,#2)}
+\newcommand{\Ttimer}   [3]{\kw{timer}(#1,#2,#3)}
 
 %TODO: start with lower case
 \newcommand{\rte}[1]{\text{#1}}
@@ -93,13 +93,13 @@
 \newcommand{\Tfalse}        {\Tatom{false}}
 \newcommand{\Ttrue}         {\Tatom{true}}
 \newcommand{\Tinvalid}      {\Tatom{invalid}}
-\newcommand{\Tnil}          {\kw{nil}}
+\newcommand{\Tnil}          {\Tatom{nil}}
 \newcommand{\Tvoid}         {\Tatom{void}}
 \newcommand{\Tenter}        {\Tatom{enter}}
 \newcommand{\Texit}         {\Tatom{exit}}
 \newcommand{\Tinv}          {\Tatom{inv}}
 \newcommand{\Tterm}         {\Tatom{term}}
-\newcommand{\Tnull}         {\Tatom{null}}
+\newcommand{\Tzero}         {\kw{0}}
 \newcommand{\Tnew}          {\Tatom{new}}
 \newcommand{\Ttick}         {\Tatom{tick}}
 
@@ -109,13 +109,14 @@
 \newcommand{\Pif}{\text{if}}
 
 \newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2\\}
+\newcommand{\Pcomma}{,}
 %\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
 \newcommand{\Pcontline}[1]{\\ #1}
 \newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2.}\\}
 \newcommand{\Pfact}[1]{#1.\\}
 \newcommand{\Pnegate}[1]{\neg(#1)}
 
-\newcommand{\Opar}{\ensuremath{\mathbin{\,|\,}}}
+\newcommand{\Opar}{\ensuremath{\mathbin{\,\rule[-0.5ex]{0.25ex}{2.4ex}\,}}}
 \newcommand{\Tpar}    [2]{#1 \Opar #2}
 \newcommand{\TparLong}[2]{\begin{array}{@{}l} ~~#1 \\ \Opar #2 \end{array}}
 
@@ -131,7 +132,7 @@
 \newcommand{\Top}   [3]{\emph{#3.#2.#1}}
 
 %\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
-\newcommand{\Tcons}         [2]{#1:#2}
+\newcommand{\Tcons}         [2]{#1{:}#2}
 \newcommand{\Tap}           [2]{#1(#2)}
 %\newcommand{\Tseq}          [2]{#1\mathbin{\plusplus}#2}
 \newcommand{\Tsnoc}{\Tseq}

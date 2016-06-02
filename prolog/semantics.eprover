@@ -153,7 +153,7 @@ endgroup(ServerResult).
 
 begingroup(SpawnTerminate).
 
-step( rinst(A, nil, eps, return(_)),                          say(A,term),    null                                                                  ).
+step( rinst(A, nil, eps, return(_)),                          say(A,term),    zero                                                                  ).
 step( runnable(A, K, T, Act, N),                              hear(A,term),   runnable(A, K, T, Act, minus(N,1))                                    ).
 step( runnable(A, K, 0, pending, 0),                          say(A,new),     par( runnable(A, K, T, idle, 1),
                                                                                    rinst(A, nil, eps, ap(K,void)) )                                 ) :-
@@ -177,11 +177,11 @@ endgroup(SpawnTerminate).
 
 begingroup(PassingTime).
 
-step( timer(A, 0),                 say(A,tick),    timer(A, T)                        ) :-    member(events(A),timing(T)).
+step( timer(A, T_p, 0),            say(A,tick),    timer(A, T_p, T_p)                 ).
 step( runnable(A, K, T, _, N),     hear(A,tick),   runnable(A, K, T, pending, N)      ).
 
 % The "time left" state V is always decreasing in delta(T) steps, and never negative.
-step( timer(A, V),                 delta(T),       timer(A, minus(V,T))               ) :-   lesseq(T,V).
+step( timer(A, T_p, V),            delta(T),       timer(A, T_p, minus(V,T))          ) :-   lesseq(T,V).
 step( runnable(A, K, V, Act, N),   delta(T),       runnable(A, K, minus(V,T), Act, N) ) :-   lesseq(T,V).
 step( runnable(A, K, 0, Act, N),   delta(_),       runnable(A, K, 0, Act, N)          ).
 step( rinst(A, C, Xs, Code),       delta(_),       rinst(A, C, Xs, Code)              ).
@@ -198,7 +198,7 @@ endgroup(PassingTime).
 begingroup(IgnoreBroadcast).
 
 step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)                ).
-step( timer(B, T),                 hear(_,_),      timer(B, T)                       ).
+step( timer(B, T_p, T),            hear(_,_),      timer(B, T_p, T)                  ).
 step( runnable(B, K, T, Act, N),   hear(A,_),      runnable(B, K, T, Act, N)         ) :-   ~equal(A,B).
 step( excl(B, V),                  hear(A,_),      excl(B, V)                        ) :-   ~equal(A,B).
 step( irv(B, V),                   hear(A,_),      irv(B, V)                         ) :-   ~equal(A,B).
