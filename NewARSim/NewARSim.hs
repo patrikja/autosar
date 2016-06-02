@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -376,16 +377,20 @@ connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
 
 
 class Addressed a where
-        address                     :: a -> Address
+    type Payload a              :: *
+    address                     :: a -> Address
 
 instance Addressed (InterRunnableVariable a c) where
-        address (IV n)              = n
+    type Payload (InterRunnableVariable a c) = a
+    address (IV n)              = n
 
 instance Addressed (DataElement q a r c) where
-        address (DE n)              = n
+    type Payload (DataElement q a r c) = a
+    address (DE n)              = n
 
 instance Addressed (ClientServerOperation a b r c) where
-        address (OP n)              = n
+    type Payload (ClientServerOperation a b r c) = a
+    address (OP n)              = n
 
 
 type family Seal a where
@@ -462,7 +467,7 @@ fromDyn                     :: Data a => Value -> a
 fromDyn                     = value'
 
 -- TODO: add Reading/Writing classes instead of Addressed?
-probeRead                   :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
+probeRead                   :: (Addressed t, Data (Payload t)) => String -> t -> AR c ()
 probeRead s x              = singleton $ NewProbe s g
   where
     g (RD b (Ok v))    | a==b    = Just v
@@ -473,13 +478,13 @@ probeRead s x              = singleton $ NewProbe s g
     a = address x
 
 
-probeWrite                  :: (Data a, Addressed (e a r c)) => String -> e a r c -> AR c' ()
+probeWrite                  :: (Addressed t, Data (Payload t)) => String -> t -> AR c ()
 probeWrite s x            = singleton $ NewProbe s g
   where
     g (IRVW b v)     | a==b     = Just v
     g (WR b v)       | a==b     = Just v
     g (SND b v _)    | a==b     = Just v -- Not sure about these.
---    g (CALL b v _)   | a==b     = Just v
+    g (CALL b v _)   | a==b     = Just v
     g (RET b v)      | a==b     = Just v
     g _                     = Nothing
     a = address x
@@ -946,10 +951,10 @@ instance (FromExternal a, FromExternal b) => FromExternal (a, b) where
 class ToExternal a where
   toExternal :: a -> [Address]
 
-instance ToExternal a => ToExternal [a] where
+instance {-# OVERLAPPABLE #-} ToExternal a => ToExternal [a] where
   toExternal = concatMap toExternal
 
-instance (ToExternal a, ToExternal b) => ToExternal (a, b) where
+instance {-# OVERLAPPABLE #-} (ToExternal a, ToExternal b) => ToExternal (a, b) where
   toExternal (a, b) = toExternal a ++ toExternal b
 
 instance FromExternal (DataElement q a r c) where
