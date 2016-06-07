@@ -96,10 +96,10 @@ sequencer setup step ctrl = do
 --------------------------------------------------------------
 
 relief_scale :: Accel -> Limit
-relief_scale a = round (-a * 75) + 1
+relief_scale a = round (-a * 20) + 1
 
 defaultSeqState :: SeqState
-defaultSeqState = Running 0 5 0 -- Count to five time steps (ms), then index 0
+defaultSeqState = Running 0 10 0 -- Count to five time steps (ms), then index 0
 
 relief_setup :: DataElement Unqueued Bool Provided c -> RTE c SeqState
 relief_setup valve = do
@@ -153,7 +153,7 @@ relief_seq = atomic $ do
 --------------------------------------------------------------
 
 pressure_scale :: Accel -> Limit
-pressure_scale a = round (a * 175) + 1
+pressure_scale a = round (a * 600) + 1
 
 pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
 pressure_setup valve = do
@@ -166,7 +166,7 @@ pressure_step ::
   Index -> RTE c SeqState
 pressure_step valve accel 0 = do
         rteWrite valve True
-        return (Running 0 50 1)
+        return (Running 0 100 1)
 pressure_step valve accel 20 = do
         rteWrite valve True
         return Stopped
@@ -177,7 +177,7 @@ pressure_step valve accel n | even n = do
         return (Running 0 (pressure_scale a) (n + 1))
 pressure_step valve accel n | odd n = do
         rteWrite valve False
-        return (Running 0 20 (n + 1))
+        return (Running 0 25 (n + 1))
 
 pressure_ctrl ::
   DataElement Unqueued Valve Provided c  ->
@@ -231,7 +231,7 @@ controller = atomic $ do
         runnable (MinInterval 0) [DataReceivedEvent slipstream] $ do
             Ok slip   <- rteReceive slipstream
             Ok slip'  <- rteIrvRead memo
-            case (slip < 0.8, slip' < 0.8) of
+            case (slip < 0.85, slip' < 0.85) of
                     (True, False) -> do
                             printlog "" ("Slip " ++ show slip)
                             rteCall onoff_pressure 0
