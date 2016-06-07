@@ -94,6 +94,10 @@ sequencer setup step ctrl = do
 -- stays negative. It provides a boolean on/off control operation as
 -- well as a boolean data element producing valve settings.
 --------------------------------------------------------------
+
+relief_scale :: Accel -> Limit
+relief_scale a = round (-a * 75) + 1
+
 defaultSeqState :: SeqState
 defaultSeqState = Running 0 5 0 -- Count to five time steps (ms), then index 0
 
@@ -110,7 +114,7 @@ relief_step valve accel 0 = do
         printlog "" ("Relief " ++ show a)
         if a < 0 then do
                 rteWrite valve True
-                return (Running 0 (round (-a*10)) 1)
+                return (Running 0 (relief_scale a) 1)
          else
                 return defaultSeqState
 relief_step valve accel n = do
@@ -148,6 +152,9 @@ relief_seq = atomic $ do
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
+pressure_scale :: Accel -> Limit
+pressure_scale a = round (a * 175) + 1
+
 pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
 pressure_setup valve = do
         rteWrite valve True
@@ -159,7 +166,7 @@ pressure_step ::
   Index -> RTE c SeqState
 pressure_step valve accel 0 = do
         rteWrite valve True
-        return (Running 0 100 1)
+        return (Running 0 50 1)
 pressure_step valve accel 20 = do
         rteWrite valve True
         return Stopped
@@ -167,10 +174,10 @@ pressure_step valve accel n | even n = do
         rteWrite valve True
         Ok a <- rteRead accel
         printlog "" ("Pressure " ++ show a)
-        return (Running 0 (round (a*50)) (n+1))
+        return (Running 0 (pressure_scale a) (n + 1))
 pressure_step valve accel n | odd n = do
         rteWrite valve False
-        return (Running 0 20 (n+1))
+        return (Running 0 20 (n + 1))
 
 pressure_ctrl ::
   DataElement Unqueued Valve Provided c  ->
@@ -483,4 +490,4 @@ instance {-# OVERLAPS #-} FromExternal [WheelPorts] where
 main2 = simulateUsingExternal abs_system
 
 
-main = main1
+main = main2
