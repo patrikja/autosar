@@ -17,3 +17,7 @@ A simplified model of programming in autosar
 | oldARSim/  | Earlier version of the simulator (now in ARSim/)        |
 | mercury/   |
 | curry/     |
+
+## Dissemination
+
+Presentation (+ demo) at the [Software Center Sprint 10 reporting workshop](http://www.cse.chalmers.se/~patrikj/talks/2016-06-09_RAWFP@SoftwareCentre.pdf).
