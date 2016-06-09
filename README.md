@@ -20,4 +20,7 @@ A simplified model of programming in autosar
 
 ## Dissemination
 
-Presentation (+ demo) at the [Software Center Sprint 10 reporting workshop](http://www.cse.chalmers.se/~patrikj/talks/2016-06-09_RAWFP@SoftwareCentre.pdf).
+* 2016-06-09: [Software Center Sprint 10 reporting workshop](http://www.software-center.se/news-events/n//software-center-sprint-10-reporting-workshop.cid1376373).
+    * [Short presentation (by Patrik Jansson)](http://www.cse.chalmers.se/~patrikj/talks/2016-06-09_RAWFP@SoftwareCentre.pdf)
+    * Longer presentation & demo in the afternoon (by Oskar Abrahamsson)
+* [Technical report / paper](paper/)
