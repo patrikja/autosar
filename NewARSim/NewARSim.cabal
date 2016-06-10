@@ -40,7 +40,8 @@ library
     random,
     syb,
     vector,
-    unix
+    unix,
+    QuickCheck
 
   default-language:    Haskell2010
 

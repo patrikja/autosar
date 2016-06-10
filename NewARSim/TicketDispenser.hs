@@ -37,6 +37,8 @@ import Data.List(nub)
 import System.Random
 import System.CPUTime
 
+import Test.QuickCheck
+import Debug.Trace (trace)
 
 -- Simple server returning unique tickets to clients.
 --ticketDispenser :: AR c (ProvidedOperation () Int ())
@@ -66,6 +68,7 @@ client n        = atomic $ do
 
 -- Create a server instance and 3 client instances and connect them
 --system :: AR c ()
+system :: AUTOSAR ()
 system          = do srv <- ticketDispenser
                      r1 <- client 1
                      r2 <- client 2
@@ -96,6 +99,7 @@ run example = do c <- getCPUTime
                  putStrLn (report (ticketsOnly measurement))
 
 
+example0 :: Data a => SchedChoice -> t -> Int -> [Measure a]
 example0 sched g n = probes ["Read","Write","Ticket"] $ limitTrans (abs n + 1) $ execSim sched system
 
 example_triv g n = example0 TrivialSched g n
@@ -103,6 +107,9 @@ example_triv g n = example0 TrivialSched g n
 example_rr g n = example0 RoundRobinSched g n
 
 example_rand g n = example0 (RandomSched (mkStdGen g)) g n
+
+exampleQC :: Property
+exampleQC = traceProp system (\tt -> let t :: [Measure Int]; t = probes ["Ticket"] tt in let t' = [ snd $ measureTimeValue x | x <- t] in counterexample (show t) $ counterexample (show t') $ counterexample (unlines $ map show $ snd tt) (t' == nub t') )
 
 
 demo1 = run example_triv

@@ -439,7 +439,7 @@ test = do
 
 
 makePlot :: Trace -> IO Bool
-makePlot trace = plot (PS "plot.ps") curves
+makePlot trace = plot (PDF "plot.pdf") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
                   | (str,pts) <- ms ]
         color "pressure 2"              = Red
@@ -465,7 +465,7 @@ scale ("pressure 2", m) = ("pressure 2", map (fmap scaleValve) m)
   where scaleValve      = (+4.0) . fromIntegral . fromEnum
 
 main1 :: IO Bool
-main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
+main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 112)) test
   where output trace = printLogs trace >> makePlot trace
 
 
