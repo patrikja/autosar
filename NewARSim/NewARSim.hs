@@ -931,37 +931,34 @@ handshake (fdIn, fdOut) (w1, w2) =
            return ()
       _ -> fail "Error when performing handshake."
 
--- * The `FromExternal` and `ToExternal` typeclasses.
+-- * @External@ typeclass. 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Typeclasses for marking DataElements as external connections.
+-- Typeclass for marking DataElements as external connections.
+--
+-- *** TODO *** 
+--
+-- Change type of @toExternal@ to provide port labels:
+--
+-- > toExternal :: String -> a -> [(Address, String)]
 
--- | A type class for marking values of type @a@ carrying an address for export
--- as input /from/ Simulink.
-class FromExternal a where
+-- | A type class for marking values of type @a@ carrying an address for export.
+-- @fromExternal@ carries input /from/ Simulink, and @toExternal@ /to/ Simulink.
+class External a where
   fromExternal :: a -> [Address]
+  toExternal   :: a -> [Address]
+  {-# MINIMAL fromExternal | toExternal #-}
 
-instance FromExternal a => FromExternal [a] where
+instance {-# OVERLAPPABLE #-} External a => External [a] where
   fromExternal = concatMap fromExternal
+  toExternal   = concatMap toExternal
 
-instance (FromExternal a, FromExternal b) => FromExternal (a, b) where
+instance {-# OVERLAPPABLE #-} (External a, External b) => External (a, b) where
   fromExternal (a, b) = fromExternal a ++ fromExternal b
+  toExternal   (a, b) = toExternal a   ++ toExternal b
 
--- | A type class for marking values of type @a@ carrying an address for export
--- as output /to/ Simulink.
-class ToExternal a where
-  toExternal :: a -> [Address]
-
-instance {-# OVERLAPPABLE #-} ToExternal a => ToExternal [a] where
-  toExternal = concatMap toExternal
-
-instance {-# OVERLAPPABLE #-} (ToExternal a, ToExternal b) => ToExternal (a, b) where
-  toExternal (a, b) = toExternal a ++ toExternal b
-
-instance FromExternal (DataElement q a r c) where
+instance External (DataElement q a r c) where
   fromExternal de = [address de]
-
-instance ToExternal (DataElement q a r c) where
-  toExternal de = [address de]
+  toExternal de   = [address de]
 
 -- * Marshalling data.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1229,7 +1226,7 @@ simulateStandalone time f sched = f . limitTime time . execSim sched
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
-simulateUsingExternal :: (ToExternal a, FromExternal a) => AUTOSAR a -> IO ()
+simulateUsingExternal :: External a => AUTOSAR a -> IO ()
 simulateUsingExternal sys = exceptionHandler $
   do args <- getArgs
      case args of
@@ -1242,7 +1239,7 @@ simulateUsingExternal sys = exceptionHandler $
 
 -- | The external simulation entry-point. Given two file descriptors for
 -- input/output FIFOs we can start the simulation of the AUTOSAR program.
-entrypoint :: (FromExternal a, ToExternal a)
+entrypoint :: External a
            => AUTOSAR a                      -- ^ AUTOSAR program.
            -> (Fd, Fd)                       -- ^ (Input, Output)
            -> IO ()
@@ -1272,7 +1269,7 @@ entrypoint system fds =
 
 -- | Run simulation of the system using the provided file descriptors as
 -- FIFOs.
-runWithFIFOs :: (ToExternal a, FromExternal a)
+runWithFIFOs :: External a
              => FilePath
              -> FilePath
              -> AUTOSAR a

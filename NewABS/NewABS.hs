@@ -444,7 +444,6 @@ test = do
         connectEach (a_sensors car)         (map accel_in w_ports)
         connectEach (map valve_out w_ports) (actuators car)
 
-
 makePlot :: Trace -> IO Bool
 makePlot trace = plot (PS "plot.ps") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
@@ -475,19 +474,15 @@ main1 :: IO Bool
 main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 111)) test
   where output trace = printLogs trace >> makePlot trace
 
-
-
-instance {-# OVERLAPS #-} ToExternal [WheelPorts] where
+instance {-# OVERLAPS #-} External [WheelPorts] where
     toExternal ports    = toExternal (map valve_out ports)
+    fromExternal ports  = fromExternal (map velo_in ports) ++ 
+                          fromExternal (map accel_in ports)
 
-instance ToExternal (ValvePort r c) where
+instance External (ValvePort r c) where
   toExternal (ValvePort re pr) = toExternal re ++ toExternal pr
-
-instance {-# OVERLAPS #-} FromExternal [WheelPorts] where
-    fromExternal ports  = fromExternal (map velo_in ports) ++ fromExternal (map accel_in ports)
-
 
 main2 = simulateUsingExternal abs_system
 
-
 main = main2
+
