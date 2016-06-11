@@ -114,6 +114,8 @@ prop_norace_rand = noShrinking $ traceProp test norace
 prop_norace_rand_shrink :: Property
 prop_norace_rand_shrink = traceProp test norace
  
+-- quickCheck $ noShrinking  (traceProp test (\s@(Sim (t, ps)) -> counterexample (Data.Tree.drawForest $ (fmap (fmap show) $ toForest t)) (norace s)))
+
 main :: IO ()
 main = quickCheck prop_norace
 

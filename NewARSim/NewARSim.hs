@@ -52,7 +52,9 @@ import           Control.Monad.State.Lazy   hiding (void)
 import           Data.Char                         (ord, chr)
 import           Data.List
 import           Data.Map                          (Map)
-import qualified Data.Map.Lazy                   as Map
+import qualified Data.Map                        as Map
+import           Data.Set                          (Set)
+import qualified Data.Set                        as Set
 import           Data.Maybe
 import qualified Data.Vector.Storable            as SV
 import           Data.Vector.Storable              ((!), (//))
@@ -69,6 +71,8 @@ import           System.IO.Unsafe
 import           System.Random
 import           System.Posix
 import qualified Unsafe.Coerce
+import           Test.QuickCheck hiding (collect)
+import           Test.QuickCheck.Property (unProperty)
 
 
 -- The RTE monad -------------------------------------------------------------
@@ -175,10 +179,15 @@ data SimState               = SimState {
                                     nextA       :: Address
                                 }
 
+instance Show SimState where
+  show (SimState procs conns simProves initvals nextA) =
+    unwords ["SimState", show procs, show conns, show initvals, show nextA]
+
 data Proc                   = forall c .
                               Run       Address Time Act Int (Static c)
+                              -- The Int identifies the particular instance spawned by a runnable
                             | forall c .
-                              RInst     Address (Maybe Client) [Address] (RTE c Value)
+                              RInst     Address Int (Maybe Client) [Address] (RTE c Value)
                             | Excl      Address Exclusive
                             | Irv       Address Value
                             | Timer     Address Time Time
@@ -187,6 +196,33 @@ data Proc                   = forall c .
                             | Op        Address [Value]
                             | Input     Address Value
                             | Output    Address Value
+
+instance Show Proc where
+  show (Run a t act n _)   = unwords ["Run", show a, show t, show act, show n]
+  show (RInst a n mc ax _) = unwords ["RInst", show (a, n), show mc, show ax]
+  show (Excl a e)          = unwords ["Excl", show a, show e]
+  show (Irv a _)           = unwords ["Irv", show a]
+  show (Timer a _ _)       = unwords ["Timer", show a]
+  show (QElem a _ _)       = unwords ["QElem", show a]
+  show (DElem a _ _)       = unwords ["DElem", show a]
+  show (Op a _)            = unwords ["Op", show a]
+  show (Input a _)         = unwords ["Input", show a]
+  show (Output a _)        = unwords ["Output", show a]
+
+procAddress :: Proc -> Either Address (Address, Int)
+procAddress (Run   a _ _ _ _) = Left a
+procAddress (RInst a n _ _ _) = Right (a, n)
+procAddress (Timer  a _ _)    = Left a
+procAddress _                 = error "procAddress: Since the remaining processes are never active, this should not happen"
+{-
+procAddress (Excl  a _)       = Left a
+procAddress (Irv  a _)        = Left a
+procAddress (QElem  a _ _)    = Left a
+procAddress (DElem  a _ _)    = Left a
+procAddress (Op a _)          = Left a
+procAddress (Input a _)       = Left a
+procAddress (Output a _)      = Left a
+-}
 
 type Conn                   = (Address, Address)
 
@@ -205,8 +241,10 @@ type Client                 = Address
 data Act                    = Idle
                             | Pending
                             | Serving [Client] [Value]
+  deriving (Show)
 
 data Exclusive              = Free | Taken
+  deriving (Show)
 
 data Static c               = Static {
                                     triggers        :: [Address],
@@ -574,7 +612,7 @@ maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
 maySay (Run a t act n s)  | t > 0.0            = DELTA t
 maySay (Timer a 0.0 t)                         = TICK  a
 maySay (Timer a t t0)     | t > 0.0            = DELTA t
-maySay (RInst a c ex code)                     = maySay' (view code)
+maySay (RInst a _ c ex code)                   = maySay' (view code)
   where maySay' (Enter (EX x)      :>>= cont)  = ENTER x
         maySay' (Exit  (EX x)      :>>= cont)  = case ex of
                                                      y:ys | y==x -> EXIT x
@@ -599,32 +637,32 @@ maySay _                                       = VETO   -- most processes can't 
 
 say :: Label -> Proc -> [Proc]
 say (NEW _)   (Run a _ Pending n s)                     = [Run a (minstart s) Idle (n+1) s,
-                                                           RInst a Nothing [] (implementation s (toValue ()))]
+                                                           RInst a n Nothing [] (implementation s (toValue ()))]
 say (NEW _)   (Run a _ (Serving (c:cs) (v:vs)) n s)     = [Run a (minstart s) (Serving cs vs) (n+1) s,
-                                                           RInst a (Just c) [] (implementation s v)]
+                                                           RInst a n (Just c) [] (implementation s v)]
 say (DELTA d) (Run a t act n s)                         = [Run a (t-d) act n s]
 say (TICK _)  (Timer a _ t)                             = [Timer a t t]
 say (DELTA d) (Timer a t t0)                            = [Timer a (t-d) t0]
-say label     (RInst a c ex code)                       = say' label (view code)
-  where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [RInst a c (x:ex)   (cont void)]
-        say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (IRVR _ res)   (IrvRead _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (RCV _ res)    (Receive _    :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (SND _ _ res)  (Send _ _     :>>= cont)    = [RInst a c ex       (cont res)]
-        say' (RD _ res)     (Read _       :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (WR _ _)       (Write _ _    :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (UP _ res)     (IsUpdated _  :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a c ex       (cont void)]
-        say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a c ex       (cont res)]
-        say' (RES _    res) (Result _     :>>= cont)    = [RInst a c ex       (cont (fromStdDyn res))]
-        say' (RET _ _)      (Return v)                  = [RInst a Nothing ex (return (toValue ()))]
+say label     (RInst a n c ex code)                     = say' label (view code)
+  where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [RInst a n c (x:ex)   (cont void)]
+        say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [RInst a n c ex       (cont void)]
+        say' (IRVR _ res)   (IrvRead _    :>>= cont)    = [RInst a n c ex       (cont (fromStdDyn res))]
+        say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [RInst a n c ex       (cont void)]
+        say' (RCV _ res)    (Receive _    :>>= cont)    = [RInst a n c ex       (cont (fromStdDyn res))]
+        say' (SND _ _ res)  (Send _ _     :>>= cont)    = [RInst a n c ex       (cont res)]
+        say' (RD _ res)     (Read _       :>>= cont)    = [RInst a n c ex       (cont (fromStdDyn res))]
+        say' (WR _ _)       (Write _ _    :>>= cont)    = [RInst a n c ex       (cont void)]
+        say' (UP _ res)     (IsUpdated _  :>>= cont)    = [RInst a n c ex       (cont (fromStdDyn res))]
+        say' (INV _)        (Invalidate _ :>>= cont)    = [RInst a n c ex       (cont void)]
+        say' (CALL _ _ res) (Call _ _     :>>= cont)    = [RInst a n c ex       (cont res)]
+        say' (RES _    res) (Result _     :>>= cont)    = [RInst a n c ex       (cont (fromStdDyn res))]
+        say' (RET _ _)      (Return v)                  = [RInst a n Nothing ex (return (toValue ()))]
         say' (TERM _)       (Return _)                  = []
         say' label          (Printlog i v :>>= cont)    = say' label (view (cont ()))
 say (WR _ _)  (Input _ _)                               = []
 
 
-mayLog (RInst a c ex code)                              = mayLog' (view code)
+mayLog (RInst a n c ex code)                            = mayLog' (view code)
   where mayLog' :: ProgramView (RTEop c) a -> Logs
         mayLog' (Printlog i v :>>= cont)                = (i,toValue v) : mayLog' (view (cont ()))
         mayLog' _                                       = []
@@ -725,9 +763,6 @@ hear conn label         proc                                    = proc
 -- Some /simple/ improvements.
 
 -- | @'respond' conn ps label@ is a variant of @foldl (mayHear conn) label ps@.
--- The reason for this is a speed improvement due to the fact that @VETO@
--- annihilates the fold as soon as encountered. On the stand-alone NewABS
--- example this simplification improved performance by roughly 100 percent.
 respond :: ConnRel -- ^ Connection relation
         -> [Proc]  -- ^ Ingoing processes to generate responses
         -> Label   -- ^ Initial label
@@ -750,30 +785,29 @@ step conn procs = explore conn [] labels procs
 -- connection relation @conn@, a list of labels @ls@ and a list of processes
 -- @ps@.
 explore :: ConnRel -> [Proc] -> [Label] -> [Proc] -> [SchedulerOption]
-explore conn pre (VETO:ls) (p:post) = explore conn (p:pre) ls post
-explore conn pre (l:ls)    (p:post) = commit : explore conn (p:pre) ls post
-  where 
-    commit    = (l, logs l, broadcast)
-    broadcast = map (hear conn l) pre ++ say l p ++ map (hear conn l) post
-    logs (DELTA _) = []
-    logs _         = mayLog p
-explore conn _ _ _                  = []
+explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
+explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post
+  where commit                          = (l, procAddress p, logs l, map (hear conn l) pre ++ say l p ++ map (hear conn l) post)
+        logs (DELTA _)                  = []
+        logs _                          = mayLog p
+explore conn _ _ _                      = []
 
--- * The simulator proper
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-type Logs            = [(ProbeID, Value)]
-type SchedulerOption = (Label, Logs, [Proc])
+-- The simulator proper ---------------------------------------------------------------------------------------
 
-data Transition = Trans 
-  { transChoice :: Int
-  , transLabel  :: Label
-  , transLogs   :: Logs
-  , transProcs  :: [Proc]
-  }
+type Logs                   = [(ProbeID,Value)]
 
-type Scheduler m = [SchedulerOption] -> m Transition
-type Trace       = (SimState, [Transition])
+type SchedulerOption        = (Label, Either Address (Address, Int), Logs, [Proc])
+data Transition             = Trans { transChoice :: Int
+                                    , transLabel  :: Label
+                                    , transActive :: Either Address (Address, Int) -- The address of the active process
+                                    , transLogs   :: Logs
+                                    , transProcs  :: [Proc]}
+  deriving (Show)
+
+type Scheduler m            = [SchedulerOption] -> m Transition
+type Trace                  = (SimState, [Transition])
+>>>>>>> upstream/master
 
 traceLabels :: Trace -> [Label]
 traceLabels = map transLabel . traceTrans
@@ -786,6 +820,29 @@ traceProbes = simProbes . fst
 
 traceLogs :: Trace -> Logs
 traceLogs = concatMap transLogs . traceTrans
+
+
+printRow :: Int -> Int -> (Int -> String) -> String
+printRow width tot prt =
+  intercalate "|" [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]]
+{-printTraceRow :: (SchedOpt', Int) -> Int -> String
+printTraceRow ((_row, _, lab), col) i 
+  | col == i + 1 = show lab
+  | otherwise    = "" -}
+{-
+traceTable :: Trace -> String
+traceTable t = unlines $ prt (reverse cnames !!) : prt (const $ repeat '-') : (map (prt . printTraceRow) $ byRows f)
+  where
+  prt = printRow 10 lind
+  (f, (lind, cnames)) = S.runState (mapM reallyAllocate $ toForest t) (0, [])
+-}
+
+-- Return the set of all active processes
+traceProcs :: Trace -> Set (Either Address (Address, Int))
+traceProcs (_, t) = foldl' (\acc trans -> Set.insert (transActive trans) acc) Set.empty t
+
+rankSet :: Set a -> Map a Int
+rankSet s = Map.fromDistinctAscList $ zip (Set.elems s) [0..]
 
 -------------------------------------------------------------------------------
 -- * Stand-alone simulation
@@ -814,40 +871,41 @@ simulate sched conn procs =
 -- Progresses simulation until there are no more transition alternatives.
 simulate1 :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
 simulate1 sched conn procs
-  | null alts = return Nothing
-  | otherwise = Just <$> maximumProgress sched alts
-  where alts  = step conn procs
+  | null alts               = return Nothing
+  | otherwise               = liftM Just $ maximumProgress sched alts
+  where alts :: [SchedulerOption]
+        alts                = step conn procs
 
 -- Schedules work as long as work-steps are available. When no more work can be
 -- done, @DELTA@-steps are scheduled.
 maximumProgress :: Scheduler m -> Scheduler m
 maximumProgress sched alts
-  | null work = sched deltas 
-  | otherwise = sched work 
-  where 
-    (deltas, work)        = partition isDelta alts
-    isDelta (DELTA _,_,_) = True
-    isDelta _             = False
+  | null work               = sched deltas
+  | otherwise               = sched work
+  where (deltas,work)       = partition isDelta alts
+        isDelta (DELTA _, _,_,_) = True
+        isDelta _                = False
 
-trivialSched :: Scheduler Identity
-trivialSched alts = return (Trans 0 label logs procs)
-  where 
-    (label, logs, procs) = head alts 
+trivialSched                :: Scheduler Identity
+trivialSched alts           = return (Trans 0 label active logs procs)
+  where (label,active,logs,procs)  = head alts
 
-roundRobinSched :: Scheduler (State Int)
-roundRobinSched alts = 
-  do m <- get
-     let n = (m + 1) `mod` length alts
-         (label,logs,procs) = alts !! n
-     put n
-     return (Trans n label logs procs)
+roundRobinSched             :: Scheduler (State Int)
+roundRobinSched alts        = do m <- get
+                                 let n = (m+1) `mod` length alts
+                                     (label,active,logs,procs) = alts!!n
+                                 put n
+                                 return (Trans n label active logs procs)
 
-randomSched :: Scheduler (State StdGen)
-randomSched alts = 
-  do n <- state next
-     let m = n `mod` length alts
-         (label, logs, procs) = alts !! m
-     return (Trans n label logs procs)
+randomSched                 :: Scheduler (State StdGen)
+randomSched alts            = do n <- state next
+                                 let (label,active,logs,procs) = alts!!(n `mod` length alts)
+                                 return (Trans n label active logs procs)
+
+genSched :: Scheduler Gen
+genSched alts = do
+  ((label, active, logs, procs), n) <- elements $ zip alts [0..]
+  return $ Trans n label active logs procs
 
 data SchedChoice            where
   TrivialSched        :: SchedChoice
@@ -864,6 +922,19 @@ runSim (AnySched sch run) sys  = run (simulation sch sys)
 
 execSim :: SchedChoice -> AUTOSAR a -> Trace
 execSim sch sys = snd $ runSim sch sys
+
+simulationRandG :: AUTOSAR a -> Gen (a, Trace)
+simulationRandG a = simulation genSched a
+
+tracePropS :: (Testable p) => (AUTOSAR a -> Gen (a, Trace)) -> AUTOSAR a -> (Trace -> p) -> Property
+tracePropS sim code prop = property $ sized $ \n -> do
+  let limit = (1+n*10)
+      gen :: Gen Trace
+      gen = fmap (limitTrans limit . snd) $ sim code
+  unProperty $ forAll gen prop
+
+traceProp :: (Testable p) => AUTOSAR a -> (Trace -> p) -> Property
+traceProp code prop = tracePropS simulationRandG code prop
 
 limitTrans :: Int -> Trace -> Trace
 limitTrans t (a,trs) = (a,take t trs)
@@ -1151,9 +1222,8 @@ ioRandomSched :: Scheduler RandStateIO
 ioRandomSched alts =
  do (n, g) <- (next . gen) <$> get
     modify (\st -> st { gen = g})
-    let m = n `mod` length alts
-        (label, logs, procs) = alts !! m
-    return (Trans n label logs procs)
+    let (label, active, logs, procs) = alts !! (n `mod` length alts)
+    return (Trans n label active logs procs)
 
 -- | Initialize the simulator with an initial state and run it. This provides
 -- the same basic functionality as 'simulation'.

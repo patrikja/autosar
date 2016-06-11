@@ -28,7 +28,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies,
-             RankNTypes, ExistentialQuantification #-}
+             RankNTypes, ExistentialQuantification, FlexibleContexts #-}
 
 module ARSim -- Lets design the interface later...
 {-
@@ -53,7 +53,7 @@ import Data.Tree
 import Data.Function(on)
 
 import System.Random (StdGen)
-import Test.QuickCheck (Gen, elements, choose, shrinkNothing, forAllShrink, sized, Property)
+import Test.QuickCheck (Gen, elements, choose, shrinkNothing, forAllShrink, sized, Property, Testable)
 import Test.QuickCheck.Arbitrary (shrinkList)
 import Test.QuickCheck.Gen (Gen(..))
 import Test.QuickCheck.Property (property, unProperty)
@@ -853,7 +853,7 @@ simTable (Sim (t, _)) = traceTable t
                              
 sortByParent tls = sortBy (compare `on` (\(a,b,c) -> b)) tls
 
-tracePropS :: ((forall c. AR c [Tag]) -> Gen (Trace, [Tag])) -> (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
+tracePropS :: (Testable p) => ((forall c. AR c [Tag]) -> Gen (Trace, [Tag])) -> (forall c. AR c [Tag]) -> (Sim -> p) -> Property
 tracePropS sim code prop = property $ sized $ \n -> do
   let limit = (1+n*10)
       gen :: Gen Sim
@@ -861,7 +861,7 @@ tracePropS sim code prop = property $ sized $ \n -> do
   -- forAllShrink gen shrinkNothinh prop -- Disable shrinking
   unProperty $ forAllShrink gen (shrinkSim code) prop
 
-traceProp :: (forall c. AR c [Tag]) -> (Sim -> Bool) -> Property
+traceProp :: (Testable p) => (forall c. AR c [Tag]) -> (Sim -> p) -> Property
 traceProp = tracePropS simulationRandG
 
 -- Take a finite initial part of the simulation trace
