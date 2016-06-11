@@ -774,8 +774,6 @@ respond conn (p:ps) label = respond conn ps acc
 
 -- | @'step' conn procs@ produces a list of scheduling options, i.e. progresses
 -- the simulation by one step.
--- step :: ConnRel -> [Proc] -> [SchedulerOption]
--- step conn procs = explore conn [] labels procs
 step :: ConnRel -> [Proc] -> [SchedulerOption]
 step conn procs = explore conn [] labels procs  
   where 
@@ -807,7 +805,6 @@ data Transition             = Trans { transChoice :: Int
 
 type Scheduler m            = [SchedulerOption] -> m Transition
 type Trace                  = (SimState, [Transition])
->>>>>>> upstream/master
 
 traceLabels :: Trace -> [Label]
 traceLabels = map transLabel . traceTrans
