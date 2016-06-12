@@ -38,7 +38,7 @@ int    hs_output_fd;
 char   hs_input_fifo[]  = "/tmp/infifo";
 char   hs_output_fifo[] = "/tmp/outfifo";
 double next_hit         = 0.0;
-
+bool   first_call_done  = false;
 
 /* == FUNCTION init_simulator =================================================
  * Sets up input and output FIFOs and waits for port width information from
@@ -160,7 +160,7 @@ static void mdlInitializeSizes(SimStruct *S)
 
   if (!ssSetNumInputPorts(S, 1)) return;
   ssSetInputPortWidth(S, 0, DYNAMICALLY_SIZED);
-  ssSetInputPortDirectFeedThrough(S, 0, 1);
+  // ssSetInputPortDirectFeedThrough(S, 0, 1);
 
   if (!ssSetNumOutputPorts(S, 1)) return;
   ssSetOutputPortWidth(S, 0, DYNAMICALLY_SIZED);
@@ -210,8 +210,7 @@ void mdlSetInputPortWidth(SimStruct *S, int portIndex, int width)
   return;
 }
 
-/* == FUNCTION mdlSetOutputPortWidth ==========================================
- * Called by Simulink to set a desired port width.
+/* Called by Simulink to set a desired port width.
  *
  * Cross checks against data communicated from the Haskell AUTOSAR model. If 
  * port width is legal (i.e. does not exceed that of the AUTOSAR model) a new 
@@ -236,21 +235,24 @@ void mdlSetOutputPortWidth(SimStruct *S, int portIndex, int width)
 
 }
 
-/* == FUNCTION mdlOutputs =====================================================
- * Triggers a step in the simulation. Called by Simulink whenever a simulation
- * step takes place.
+/* == FUNCTION mdlUpdate ======================================================
+ * Called by Simulink to update model in every major integration step.
  *
- * o  All MATLAB types are coerced into doubles.
+ * This ships the last input to the Haskell simulator, which starts crunching
+ * the data, and updates the new outputs accordingly when done.
  *
- * o  Input must be read elsewhere if we are to not use direct feedthrough
- *    (might need to, in order to support assymetric port in-/out widths).
+ * This is in place so that we won't have to use direct feedthrough. This will
+ * minimize algebraic loops and hopefully enable Haskell and MATLAB to run more
+ * concurrently (thus more in parallel). 
  */
-static void mdlOutputs(SimStruct *S, int_T tid)
+#define MDL_UPDATE
+static void mdlUpdate(SimStruct *S, int_T tid)
 {
+  // Set flag.
+  if (!first_call_done) first_call_done = true;
+
   InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S, 0);
-  real_T*           outp  = ssGetOutputPortRealSignal(S, 0);
-  size_t            width = (size_t) ssGetInputPortWidth(S, 0);
-  
+ 
   // -- Put data on simulator input bus -------------------------------------//
   
   double time = (double) ssGetT(S);
@@ -259,6 +261,31 @@ static void mdlOutputs(SimStruct *S, int_T tid)
   write(hs_input_fd, (char *) *uPtrs, hs_input_width * sizeof(double));
 
   // ------------------------------------------------------------------------//
+
+}
+
+/* == FUNCTION mdlOutputs =====================================================
+ * Triggers a step in the simulation. Called by Simulink whenever a simulation
+ * step takes place.
+ *
+ * o  All MATLAB types are coerced into doubles.
+ *
+ */
+static void mdlOutputs(SimStruct *S, int_T tid)
+{
+  real_T* outp  = ssGetOutputPortRealSignal(S, 0);
+  size_t  width = (size_t) ssGetInputPortWidth(S, 0);
+  
+  /* Unless mdlUpdate has been done, just put zeroes on the outport.
+   *
+   */
+  if (!first_call_done) {
+    double *tmp = calloc(hs_output_width, sizeof(double));
+    memcpy(outp, tmp, hs_output_width * sizeof(double));
+    free(tmp);
+    return;
+  }
+  
 
   // -- Retrieve data from simulator output bus -----------------------------//
 
@@ -323,6 +350,7 @@ static void mdlTerminate(SimStruct *S) {
   hs_output_width = 0;
   next_hit        = 1e-1; 
   sim_running     = false;
+  first_call_done = false;
   
   /* Close file descriptors, not terribly interested if this succeeds
    * or not as we're done anyway.

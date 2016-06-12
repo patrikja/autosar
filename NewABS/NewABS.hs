@@ -94,8 +94,12 @@ sequencer setup step ctrl = do
 -- stays negative. It provides a boolean on/off control operation as
 -- well as a boolean data element producing valve settings.
 --------------------------------------------------------------
+
+relief_scale :: Accel -> Limit
+relief_scale a = round (-a * 20) + 1
+
 defaultSeqState :: SeqState
-defaultSeqState = Running 0 5 0 -- Count to five time steps (ms), then index 0
+defaultSeqState = Running 0 10 0 -- Count to five time steps (ms), then index 0
 
 relief_setup :: DataElement Unqueued Bool Provided c -> RTE c SeqState
 relief_setup valve = do
@@ -110,7 +114,7 @@ relief_step valve accel 0 = do
         printlog "" ("Relief " ++ show a)
         if a < 0 then do
                 rteWrite valve True
-                return (Running 0 (round (-a*10)) 1)
+                return (Running 0 (relief_scale a) 1)
          else
                 return defaultSeqState
 relief_step valve accel n = do
@@ -148,6 +152,9 @@ relief_seq = atomic $ do
 -- as well as a boolean data element producing valve settings.
 --------------------------------------------------------------
 
+pressure_scale :: Accel -> Limit
+pressure_scale a = round (a * 600) + 1
+
 pressure_setup :: DataElement Unqueued Valve Provided c -> RTE c SeqState
 pressure_setup valve = do
         rteWrite valve True
@@ -167,10 +174,10 @@ pressure_step valve accel n | even n = do
         rteWrite valve True
         Ok a <- rteRead accel
         printlog "" ("Pressure " ++ show a)
-        return (Running 0 (round (a*50)) (n+1))
+        return (Running 0 (pressure_scale a) (n + 1))
 pressure_step valve accel n | odd n = do
         rteWrite valve False
-        return (Running 0 20 (n+1))
+        return (Running 0 25 (n + 1))
 
 pressure_ctrl ::
   DataElement Unqueued Valve Provided c  ->
@@ -224,7 +231,7 @@ controller = atomic $ do
         runnable (MinInterval 0) [DataReceivedEvent slipstream] $ do
             Ok slip   <- rteReceive slipstream
             Ok slip'  <- rteIrvRead memo
-            case (slip < 0.8, slip' < 0.8) of
+            case (slip < 0.85, slip' < 0.85) of
                     (True, False) -> do
                             printlog "" ("Slip " ++ show slip)
                             rteCall onoff_pressure 0
@@ -437,7 +444,6 @@ test = do
         connectEach (a_sensors car)         (map accel_in w_ports)
         connectEach (map valve_out w_ports) (actuators car)
 
-
 makePlot :: Trace -> IO Bool
 makePlot trace = plot (PDF "plot.pdf") curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
@@ -468,19 +474,14 @@ main1 :: IO Bool
 main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 112)) test
   where output trace = printLogs trace >> makePlot trace
 
-
-
-instance {-# OVERLAPS #-} ToExternal [WheelPorts] where
+instance {-# OVERLAPS #-} External [WheelPorts] where
     toExternal ports    = toExternal (map valve_out ports)
+    fromExternal ports  = fromExternal (map velo_in ports) ++ 
+                          fromExternal (map accel_in ports)
 
-instance ToExternal (ValvePort r c) where
+instance External (ValvePort r c) where
   toExternal (ValvePort re pr) = toExternal re ++ toExternal pr
 
-instance {-# OVERLAPS #-} FromExternal [WheelPorts] where
-    fromExternal ports  = fromExternal (map velo_in ports) ++ fromExternal (map accel_in ports)
-
-
 main2 = simulateUsingExternal abs_system
-
 
 main = main1

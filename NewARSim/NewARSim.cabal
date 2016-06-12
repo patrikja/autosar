@@ -17,8 +17,11 @@ library
   exposed-modules:
     NewARSim
 
+-- I have commented out Speculation3 since it won't build under GHC 8:
   other-modules:
-    Dynamics, Speculation2, Speculation3
+    Dynamics,
+    Speculation2
+--   Speculation3
 
   default-extensions:
     FlexibleContexts

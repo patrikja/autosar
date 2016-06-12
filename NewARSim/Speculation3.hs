@@ -1,6 +1,17 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
+
+-- *** TODO ***
+--
+-- GHC 8.0.1 complains about the definition of atomic:
+--
+-- • Cannot instantiate unification variable ‘a0’
+--    with a type involving foralls: (forall c. Atomic c a) -> AUTOSAR a
+--      GHC doesn't yet support impredicative polymorphism
+-- • In the expression: undefined
+--   In an equation for ‘atomic’: atomic = undefined
+--
 module Speculation3 where
 import Unsafe.Coerce
 

@@ -48,7 +48,7 @@ module NewARSim
 import           Control.Monad.Catch
 import           Control.Monad.Operational
 import           Control.Monad.Identity     hiding (void)
-import           Control.Monad.State        hiding (void)
+import           Control.Monad.State.Lazy   hiding (void)
 import           Data.Char                         (ord, chr)
 import           Data.List
 import           Data.Map                          (Map)
@@ -67,6 +67,7 @@ import           Foreign.Storable
 import           System.Environment
 import           System.Exit
 import           System.IO.Error
+import           System.IO.Unsafe
 import           System.Random
 import           System.Posix
 import qualified Unsafe.Coerce
@@ -411,7 +412,7 @@ instance Port (ClientServerOperation a b) where
 
 
 connectEach :: Port p => [p Provided Closed] -> [p Required Closed] -> AUTOSAR ()
-connectEach prov req = forM_ (prov `zip` req) $ \(p,r) -> connect p r
+connectEach prov req = forM_ (prov `zip` req) $ uncurry connect 
 
 
 class Addressed a where
@@ -687,6 +688,10 @@ minstart s      = case invocation s of
 trig :: ConnRel -> Address -> Static c -> Bool
 trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
+-- Based on a connection relation @conn@, a label and a process, @mayHear@
+-- produces a label. Through (mayHear conn) we create a binary operation which
+-- is folded over a list of processes. Note that @VETO@ annihilates all elements
+-- in the structure.
 mayHear :: ConnRel -> Label -> Proc -> Label
 mayHear conn VETO _                                             = VETO
 mayHear conn (ENTER a)       (Excl b Free)     | a==b           = ENTER a --
@@ -752,12 +757,31 @@ hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) 
 hear conn (WR a v)      (Output b _)       | a `conn` b         = Output b v
 hear conn label         proc                                    = proc
 
+-- * 'step' and 'explore'
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- 
+-- Some /simple/ improvements.
 
+-- | @'respond' conn ps label@ is a variant of @foldl (mayHear conn) label ps@.
+respond :: ConnRel -- ^ Connection relation
+        -> [Proc]  -- ^ Ingoing processes to generate responses
+        -> Label   -- ^ Initial label
+        -> Label
+respond _    _      VETO  = VETO
+respond _    []     label = label
+respond conn (p:ps) label = respond conn ps acc 
+  where acc = mayHear conn label p
+
+-- | @'step' conn procs@ produces a list of scheduling options, i.e. progresses
+-- the simulation by one step.
 step :: ConnRel -> [Proc] -> [SchedulerOption]
-step conn procs        = explore conn [] labels procs
-  where labels         = map  (respond . maySay)     procs
-        respond label  = foldl (mayHear conn) label  procs
+step conn procs = explore conn [] labels procs  
+  where 
+    labels  = map (respond conn procs . maySay) procs
 
+-- | @'explore' conn _ ls ps@ explores all scheduling options given the
+-- connection relation @conn@, a list of labels @ls@ and a list of processes
+-- @ps@.
 explore :: ConnRel -> [Proc] -> [Label] -> [Proc] -> [SchedulerOption]
 explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
 explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post
@@ -792,7 +816,7 @@ traceProbes :: Trace -> [Probe]
 traceProbes = simProbes . fst
 
 traceLogs :: Trace -> Logs
-traceLogs = concat . map transLogs . traceTrans
+traceLogs = concatMap transLogs . traceTrans
 
 
 printRow :: Int -> Int -> (Int -> String) -> String
@@ -821,28 +845,37 @@ rankSet s = Map.fromDistinctAscList $ zip (Set.elems s) [0..]
 -- * Stand-alone simulation
 -------------------------------------------------------------------------------
 
-simulation                  :: Monad m => Scheduler m -> AUTOSAR a -> m (a,Trace)
-simulation sched sys        = do trs <- simulate sched conn (procs state1)
-                                 return (res, (state1,trs))
-  where (res,state1)        = initialize sys
-        a `conn` b          = (a,b) `elem` conns state1 || a==b
+-- | Initialize the simulator with an initial state and run it.
+simulation :: Monad m => Scheduler m -> AUTOSAR a -> m (a, Trace)
+simulation sched sys = 
+  do trs <- simulate sched conn (procs state1)
+     return (res, (state1, trs))
+  where 
+    (res, state1) = initialize sys
+    a `conn` b    = (a, b) `elem` conns state1 || a == b
 
-simulate                    :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m [Transition]
-simulate sched conn procs   = do next <- simulate1 sched conn procs
-                                 case next of
-                                     Nothing ->
-                                         return []
-                                     Just trans@Trans{transProcs = procs1} ->
-                                         liftM (trans:) $ simulate sched conn procs1
+-- Internal simulator function. Progresses simulation until there are no more
+-- transitions to take.
+simulate :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m [Transition]
+simulate sched conn procs = 
+  do next <- simulate1 sched conn procs
+     case next of
+       Nothing ->
+         return []
+       Just trans@Trans{transProcs = procs1} ->
+         (trans:) <$> simulate sched conn procs1
 
-simulate1                   :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
+-- Progresses simulation until there are no more transition alternatives.
+simulate1 :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
 simulate1 sched conn procs
   | null alts               = return Nothing
   | otherwise               = liftM Just $ maximumProgress sched alts
   where alts :: [SchedulerOption]
         alts                = step conn procs
 
-maximumProgress             :: Scheduler m -> Scheduler m
+-- Schedules work as long as work-steps are available. When no more work can be
+-- done, @DELTA@-steps are scheduled.
+maximumProgress :: Scheduler m -> Scheduler m
 maximumProgress sched alts
   | null work               = sched deltas
   | otherwise               = sched work
@@ -870,7 +903,6 @@ genSched :: Scheduler Gen
 genSched alts = do
   ((label, active, logs, procs), n) <- elements $ zip alts [0..]
   return $ Trans n label active logs procs
-  
 
 data SchedChoice            where
   TrivialSched        :: SchedChoice
@@ -878,7 +910,6 @@ data SchedChoice            where
   RandomSched         :: StdGen -> SchedChoice
   -- This can be used to define all the other cases
   AnySched            :: Monad m => Scheduler m -> (forall a. m a -> a) -> SchedChoice
-
 
 runSim                         :: SchedChoice -> AUTOSAR a -> (a,Trace)
 runSim TrivialSched sys        = runIdentity (simulation trivialSched sys)
@@ -919,8 +950,6 @@ printLogs trace = do
 
 debug :: Trace -> IO ()
 debug = mapM_ print . traceLabels
-
-
 
 data Measure a = Measure { measureID    :: ProbeID
                          , measureTime  :: Time
@@ -976,6 +1005,11 @@ internal ms = [m{measureValue = a}|m <- ms, Just a <- return (value (measureValu
 --    same protocol as in (1), followed by @n@ bytes of new data. If
 --    unsuccessful, send 1 non-zero byte.
 --
+-- *** TODO *** 
+--
+-- Simulink expects data /prior/ to an update. The current way of handling this
+-- is using a flag in the S-function and send back zeroes before an update has
+-- been called. The protocol could perhaps be adjusted to reflect this.
 
 data Status = OK | DIE
   deriving Show
@@ -1014,37 +1048,37 @@ handshake (fdIn, fdOut) (w1, w2) =
            return ()
       _ -> fail "Error when performing handshake."
 
--- * The `FromExternal` and `ToExternal` typeclasses.
+-- * @External@ typeclass. 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Typeclasses for marking DataElements as external connections.
+-- Typeclass for marking DataElements as external connections.
+--
+-- *** TODO *** 
+--
+-- Change type of @toExternal@ to provide port labels:
+--
+-- > toExternal :: String -> a -> [(Address, String)]
 
--- | A type class for marking values of type @a@ carrying an address for export
--- as input /from/ Simulink.
-class FromExternal a where
+-- | A type class for marking values of type @a@ carrying an address for export.
+-- @fromExternal@ carries input /from/ Simulink, and @toExternal@ /to/ Simulink.
+class External a where
   fromExternal :: a -> [Address]
+  fromExternal _ = []
 
-instance FromExternal a => FromExternal [a] where
-  fromExternal = concatMap fromExternal
-
-instance (FromExternal a, FromExternal b) => FromExternal (a, b) where
-  fromExternal (a, b) = fromExternal a ++ fromExternal b
-
--- | A type class for marking values of type @a@ carrying an address for export
--- as output /to/ Simulink.
-class ToExternal a where
   toExternal :: a -> [Address]
+  toExternal _ = []
+  {-# MINIMAL fromExternal | toExternal #-}
 
-instance {-# OVERLAPPABLE #-} ToExternal a => ToExternal [a] where
-  toExternal = concatMap toExternal
+instance {-# OVERLAPPABLE #-} External a => External [a] where
+  fromExternal = concatMap fromExternal
+  toExternal   = concatMap toExternal
 
-instance {-# OVERLAPPABLE #-} (ToExternal a, ToExternal b) => ToExternal (a, b) where
-  toExternal (a, b) = toExternal a ++ toExternal b
+instance {-# OVERLAPPABLE #-} (External a, External b) => External (a, b) where
+  fromExternal (a, b) = fromExternal a ++ fromExternal b
+  toExternal   (a, b) = toExternal a   ++ toExternal b
 
-instance FromExternal (DataElement q a r c) where
+instance External (DataElement q a r c) where
   fromExternal de = [address de]
-
-instance ToExternal (DataElement q a r c) where
-  toExternal de = [address de]
+  toExternal de   = [address de]
 
 -- * Marshalling data.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1110,7 +1144,7 @@ receiveVector fd width = liftIO $
 -- internal data (i.e. Input/Output processes).
 
 -- | This might be unnecessary and should probably be avoided.
-copyVector :: SV.Vector CDouble -> StateT RandState IO (SV.Vector CDouble)
+copyVector :: SV.Vector CDouble -> RandStateIO (SV.Vector CDouble)
 copyVector vec = liftIO $ SV.freeze =<< SV.thaw vec
 
 -- | Convert a list of processes to a vector for marshalling.
@@ -1159,6 +1193,7 @@ vectorToProcs vec prev idx = map toProc $ filter diff es
 -- Provides some basic facilites for running the simulator inside the IO monad,
 -- such as a IO state.
 
+-- | External simulator state.
 data RandState = RandState
   { gen     :: StdGen
   , prevIn  :: SV.Vector CDouble
@@ -1167,6 +1202,7 @@ data RandState = RandState
   , addrOut :: Map Address Int
   }
 
+-- | Initial external simulator state. Currently fixed to random scheduling.
 rstate0 :: StdGen -> RandState
 rstate0 g = RandState
   { gen     = g
@@ -1176,8 +1212,10 @@ rstate0 g = RandState
   , addrOut = Map.empty
   }
 
+type RandStateIO = StateT RandState IO
+
 -- | Forcing the @randomSched@ scheduler to live in IO.
-ioRandomSched :: Scheduler (StateT RandState IO)
+ioRandomSched :: Scheduler RandStateIO
 ioRandomSched alts =
  do (n, g) <- (next . gen) <$> get
     modify (\st -> st { gen = g})
@@ -1190,7 +1228,7 @@ simulationExt :: (Fd, Fd)                      -- ^ (Input, Output)
               -> AUTOSAR a                     -- ^ AUTOSAR system.
               -> [(Int, Address)]              -- ^ ...
               -> [(Address, Int)]              -- ^ ...
-              -> StateT RandState IO (a, Trace)
+              -> RandStateIO (a, Trace)
 simulationExt fds sys idx_in idx_out =
   do -- Initialize state.
      modify $ \st ->
@@ -1211,10 +1249,10 @@ simulationExt fds sys idx_in idx_out =
 -- | Internal simulator function. Blocks until we receive input from the
 -- input file descriptor, which drives the simulation forward.
 simulateExt :: (Fd, Fd)                          -- ^ (Input, Output)
-         -> Scheduler (StateT RandState IO)
+         -> Scheduler RandStateIO
          -> ConnRel
          -> [Proc]
-         -> StateT RandState IO [Transition]
+         -> RandStateIO [Transition]
 simulateExt (fdInput, fdOutput) sched conn procs =
   do status <- readStatus fdInput
      case status of
@@ -1262,17 +1300,15 @@ simulateExt (fdInput, fdOutput) sched conn procs =
          do liftIO $ putStrLn "Sender requested halt, stopping."
             return []
 
-
-
 -- | @simulate1Ext@ progresses the simulation as long as possible without
 -- advancing time. When @maximumProgress@ returns a @DELTA@ labeled
 -- transition, @simulate1Ext@ returns @Just (time, procs, transitions)@. If the
 -- simulator runs out of alternatives, @Nothing@ is returned.
-simulate1Ext :: Scheduler (StateT RandState IO)
+simulate1Ext :: Scheduler RandStateIO
              -> ConnRel
              -> [Proc]
              -> [Transition]
-             -> StateT RandState IO (Maybe (Time, [Proc], [Transition]))
+             -> RandStateIO (Maybe (Time, [Proc], [Transition]))
 simulate1Ext sched conn procs acc
   | null alts = return Nothing
   | otherwise =
@@ -1312,7 +1348,7 @@ simulateStandalone time f sched = f . limitTime time . execSim sched
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
-simulateUsingExternal :: (ToExternal a, FromExternal a) => AUTOSAR a -> IO ()
+simulateUsingExternal :: External a => AUTOSAR a -> IO ()
 simulateUsingExternal sys = exceptionHandler $
   do args <- getArgs
      case args of
@@ -1325,7 +1361,7 @@ simulateUsingExternal sys = exceptionHandler $
 
 -- | The external simulation entry-point. Given two file descriptors for
 -- input/output FIFOs we can start the simulation of the AUTOSAR program.
-entrypoint :: (FromExternal a, ToExternal a)
+entrypoint :: External a
            => AUTOSAR a                      -- ^ AUTOSAR program.
            -> (Fd, Fd)                       -- ^ (Input, Output)
            -> IO ()
@@ -1355,7 +1391,7 @@ entrypoint system fds =
 
 -- | Run simulation of the system using the provided file descriptors as
 -- FIFOs.
-runWithFIFOs :: (ToExternal a, FromExternal a)
+runWithFIFOs :: External a
              => FilePath
              -> FilePath
              -> AUTOSAR a
