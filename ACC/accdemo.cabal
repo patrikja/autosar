@@ -1,0 +1,25 @@
+name:                accdemo
+version:             0.1.0.0
+synopsis:            ARSim ACC demo
+-- description:         
+license:             BSD3
+license-file:        LICENSE
+author:              Oskar Abrahamsson
+maintainer:          aboskar@chalmers.se
+-- copyright:           
+-- category:            
+build-type:          Simple
+extra-source-files:  ChangeLog.md
+cabal-version:       >=1.10
+
+executable accdemo
+  main-is:             ACC.hs
+  default-language:    Haskell2010
+  other-modules:
+      Plot
+    , Sequencer
+  build-depends:       
+      base >=4.9 && <4.10
+    , easyplot
+    , NewARSim
+
