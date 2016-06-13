@@ -1,26 +1,26 @@
-module DummyCar 
-  ( dummyCar
-  , Car(..)
-  ) where
+module Main where
 
-import NewARSim
+import ACC
+import Control.Monad
+import Graphics.EasyPlot
+import NewARSim          hiding (void)
 
 data Car = Car
-  { pedal  :: DataElem Unqueued Double Required
-  , velo   :: DataElem Unqueued Double Provided
-  , cruise :: DataElem Unqueued Double Provided
+  { pedal  :: DataElem Unqueued Throttle Required
+  , velo   :: DataElem Unqueued Velo     Provided
+  , cruise :: DataElem Unqueued Velo     Provided
   }
 
 -- Initial velocity (km/h).
-initVel :: Double
+initVel :: Velo 
 initVel = 10
 
 -- Initial control velocity (km/h).
-initCruise :: Double
+initCruise :: Velo
 initCruise = 50
 
 -- The sample time resolution of the dummy car.
-resolution :: Double
+resolution :: Time
 resolution = 1e-2
 
 -- | A dummy car. The car is running in some sine shaped one dimensional 
@@ -35,7 +35,6 @@ dummyCar = atomic $
      vv  <- providedPort
      cv  <- providedPort
 
-     probeWrite "throttle" ped
      probeWrite "velocity" vv
      probeWrite "cruise"   cv
 
@@ -56,7 +55,7 @@ dummyCar = atomic $
      return $ sealBy Car ped vv cv
 
 -- | Compute incline based on time.
-incline :: Double -> Double
+incline :: Time -> Double
 incline t = pi / 4 * sin (t * pi)
 
 -- | Accelerate car based on previous speed, incline and throttle.
@@ -68,8 +67,51 @@ incline t = pi / 4 * sin (t * pi)
 --     but ...
 --   * ... it's still interesting to figure out how to do this in a reasonably
 --     good way.
-accelerate :: Double -> Double -> Double -> Double
-accelerate velo rads throttle = velo + dv + throttle / 1e2
+accelerate :: Velo -> Double -> Throttle -> Velo
+accelerate velo rads throttle = velo + dv + throttle * scale
   where
-    dv = (-rads) / pi / 10
+    dv    = (-rads) / pi / 10
+    scale = 1e-2
+
+-- * Plotting
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+makePlot :: Trace -> IO Bool
+makePlot trace = plot X11 curves
+  where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] 
+                    (discrete pts)
+                  | (str,pts) <- doubles ]
+        color "throttle"  = Red
+        color "velocity"  = Blue
+        color "cruise"    = Green
+        color _           = Black
+        doubles :: [(ProbeID, Measurement Double)]
+        doubles = probeAll trace
+
+discrete :: Fractional t => [((q, t), k)] -> [(t, k)]
+discrete []                     = []
+discrete (((_,t),v):vs)         = (t,v) : disc v vs
+  where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
+        disc _ _                = []
+        eps                     = 0.0001
+
+-- * Stand-alone simulation
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Stand-alone simulation using some simulated dummy car with the ACC, just to 
+-- get some output from the ACC component.
+
+test :: AUTOSAR ()
+test = 
+  do cc  <- cruiseCtrl 
+     car <- dummyCar 
+     connect (velo car)    (vvel cc)
+     connect (cruise car)  (cvel cc)
+     connect (throttle cc) (pedal car)
+
+main :: IO ()
+main = simulateStandalone 15.0 output (RandomSched (mkStdGen 111)) test
+  where 
+    output trace = void $
+      do printLogs trace 
+         makePlot trace
 

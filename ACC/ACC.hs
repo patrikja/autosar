@@ -1,11 +1,15 @@
 
 -- | Adaptive Cruise Control (ACC) component in the AUTOSAR monad. Current
 -- status: Old-school cruise control sandbox.
-module Main where
+module ACC 
+  ( -- * Cruise control
+    CruiseCtrl(..)
+  , cruiseCtrl
+    -- * Types
+  , Velo, Throttle
+  ) where
 
 import Control.Monad
-import DummyCar
-import Graphics.EasyPlot
 import NewARSim
 import Sequencer
 
@@ -13,7 +17,6 @@ import Sequencer
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 type Velo     = Double
-type Accel    = Double
 type Throttle = Double
 
 -- * PID controller
@@ -32,6 +35,10 @@ data PIDCtrl c = PIDCtrl
 --
 -- The function is parametric in sample-, integration- and differentiation time
 -- (scales), as well as a scale parameter (fixed).
+--
+-- *** TODO ***
+--   * Make some sort of skeleton out of this thing, and use it to create the 
+--     cruise control (instead of importing the functionality...)
 pidController :: Time 
               -- ^ Sample time
               -> Time
@@ -73,7 +80,6 @@ pidController st dt it scale =
 -- For simplicity we assume that the throttle is a double in the range @[0, 1]@.
 --
 -- *** TODO ***
---   * Normalize/saturate throttle.
 --   * On/off flag.
 
 -- | Cruise control exports.
@@ -86,6 +92,10 @@ data CruiseCtrl = CruiseCtrl
   -- ^ Throttle control (output)
   }
 
+instance External CruiseCtrl where
+  fromExternal (CruiseCtrl c v _) = fromExternal c ++ fromExternal v 
+  toExternal   (CruiseCtrl _ _ t) = toExternal t
+
 -- | The cruise control apparatus.
 cruiseCtrl :: AUTOSAR CruiseCtrl
 cruiseCtrl = composition $ 
@@ -95,71 +105,22 @@ cruiseCtrl = composition $
 
      let sampleTime = 1e-2
          diffTime   = 0
-         intTime    = 2
-         scale      = 1
+         intTime    = 1
+         scale      = 2
          resolution = 1e-2
 
      pid <- pidController sampleTime diffTime intTime scale
      connect pidInput (ctrl pid)
+     probeWrite "throttle" (output pid)
 
      runnable (MinInterval 0) [TimingEvent resolution] $
        do Ok c <- rteRead cruise
           Ok v <- rteRead vehicle
 
-          printlog "CC" $ "cruise  " ++ show c
-          printlog "CC" $ "vehicle " ++ show v
+          printlog "cruise_control" $ "requested cruise = " ++ show c
+          printlog "cruise_control" $ "vehicle speed    = " ++ show v
 
           rteSend pidInput (c, v)
           return ()
      return $ sealBy CruiseCtrl cruise vehicle (output pid)
-
--- * External simulation
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-instance External CruiseCtrl where
-  fromExternal (CruiseCtrl c v _) = fromExternal c ++ fromExternal v 
-  toExternal   (CruiseCtrl _ _ t) = toExternal t
-
--- * Stand-alone simulation
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Stand-alone simulation using some simulated dummy car just to get some output
--- from the program.
-
-test :: AUTOSAR ()
-test = 
-  do cc  <- cruiseCtrl 
-     car <- dummyCar 
-     connect (velo car)    (vvel cc)
-     connect (cruise car)  (cvel cc)
-     connect (throttle cc) (pedal car)
-
-main :: IO ()
-main = simulateStandalone 15.0 output (RandomSched (mkStdGen 111)) test
-  where 
-    output trace = 
-      do printLogs trace 
-         makePlot trace
-         return ()
-
--- * Plotting
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-makePlot :: Trace -> IO Bool
-makePlot trace = plot X11 curves
-  where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] 
-                    (discrete pts)
-                  | (str,pts) <- doubles ]
-        color "throttle"  = Red
-        color "velocity"  = Blue
-        color "cruise"    = Green
-        color _           = Black
-        doubles :: [(ProbeID, Measurement Double)]
-        doubles = probeAll trace
-
-discrete :: Fractional t => [((q, t), k)] -> [(t, k)]
-discrete []                     = []
-discrete (((_,t),v):vs)         = (t,v) : disc v vs
-  where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
-        disc _ _                = []
-        eps                     = 0.0001
 
