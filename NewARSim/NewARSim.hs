@@ -183,8 +183,9 @@ instance Show SimState where
   show (SimState procs conns simProves initvals nextA) =
     unwords ["SimState", show procs, show conns, show initvals, show nextA]
 
+                              -- The second Int is equal to the number of instances spawned so far
 data Proc                   = forall c .
-                              Run       Address Time Act Int (Static c)
+                              Run       Address Time Act Int Int (Static c)
                               -- The Int identifies the particular instance spawned by a runnable
                             | forall c .
                               RInst     Address Int (Maybe Client) [Address] (RTE c Value)
@@ -198,7 +199,7 @@ data Proc                   = forall c .
                             | Output    Address Value
 
 instance Show Proc where
-  show (Run a t act n _)   = unwords ["Run", show a, show t, show act, show n]
+  show (Run a t act n m _)   = unwords ["Run", show a, show t, show act, show n, show m]
   show (RInst a n mc ax _) = unwords ["RInst", show (a, n), show mc, show ax]
   show (Excl a e)          = unwords ["Excl", show a, show e]
   show (Irv a _)           = unwords ["Irv", show a]
@@ -210,10 +211,10 @@ instance Show Proc where
   show (Output a _)        = unwords ["Output", show a]
 
 procAddress :: Proc -> Either Address (Address, Int)
-procAddress (Run   a _ _ _ _) = Left a
-procAddress (RInst a n _ _ _) = Right (a, n)
-procAddress (Timer  a _ _)    = Left a
-procAddress _                 = error "procAddress: Since the remaining processes are never active, this should not happen"
+procAddress (Run   a _ _ _ _ _) = Left a
+procAddress (RInst a n _ _ _)   = Right (a, n)
+procAddress (Timer  a _ _)      = Left a
+procAddress _                   = error "procAddress: Since the remaining processes are never active, this should not happen"
 {-
 procAddress (Excl  a _)       = Left a
 procAddress (Irv  a _)        = Left a
@@ -490,14 +491,14 @@ exclusiveArea               = do a <- newAddress; newProcess (Excl a Free); retu
 
 runnable inv events code    = do a <- newAddress
                                  mapM (newProcess . Timer a 0.0) periods
-                                 newProcess (Run a 0.0 act 0 (Static watch inv code'))
+                                 newProcess (Run a 0.0 act 0 0 (Static watch inv code'))
   where periods             = [ t | TimingEvent t <- events ]
         watch               = [ a | DataReceivedEvent (DE a) <- events ]
         act                 = if null [ () | InitEvent <- events ] then Idle else Pending
         code'               = \dyn -> code >> return dyn
 
 serverRunnable inv ops code = do a <- newAddress
-                                 newProcess (Run a 0.0 act 0 (Static watch inv code'))
+                                 newProcess (Run a 0.0 act 0 0 (Static watch inv code'))
   where watch               = [ a | OperationInvokedEvent (OP a) <- ops ]
         act                 = Serving [] []
         code'               = fmap toValue . code . fromDyn
@@ -605,11 +606,11 @@ labelAddress l = case l of
 
 
 maySay :: Proc -> Label
-maySay (Run a 0.0 Pending n s)
+maySay (Run a 0.0 Pending n m s)
     | n == 0 || invocation s == Concurrent     = NEW   a
-maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n s)
+maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n m s)
     | n == 0 || invocation s == Concurrent     = NEW   a
-maySay (Run a t act n s)  | t > 0.0            = DELTA t
+maySay (Run a t act n m s)  | t > 0.0          = DELTA t
 maySay (Timer a 0.0 t)                         = TICK  a
 maySay (Timer a t t0)     | t > 0.0            = DELTA t
 maySay (RInst a _ c ex code)                   = maySay' (view code)
@@ -636,11 +637,11 @@ maySay _                                       = VETO   -- most processes can't 
 
 
 say :: Label -> Proc -> [Proc]
-say (NEW _)   (Run a _ Pending n s)                     = [Run a (minstart s) Idle (n+1) s,
-                                                           RInst a n Nothing [] (implementation s (toValue ()))]
-say (NEW _)   (Run a _ (Serving (c:cs) (v:vs)) n s)     = [Run a (minstart s) (Serving cs vs) (n+1) s,
-                                                           RInst a n (Just c) [] (implementation s v)]
-say (DELTA d) (Run a t act n s)                         = [Run a (t-d) act n s]
+say (NEW _)   (Run a _ Pending n m s)                   = [Run a (minstart s) Idle (n+1) (m+1) s,
+                                                           RInst a m Nothing [] (implementation s (toValue ()))]
+say (NEW _)   (Run a _ (Serving (c:cs) (v:vs)) n m s)   = [Run a (minstart s) (Serving cs vs) (n+1) (m+1) s,
+                                                           RInst a m (Just c) [] (implementation s v)]
+say (DELTA d) (Run a t act n m s)                       = [Run a (t-d) act n m s]
 say (TICK _)  (Timer a _ t)                             = [Timer a t t]
 say (DELTA d) (Timer a t t0)                            = [Timer a (t-d) t0]
 say label     (RInst a n c ex code)                     = say' label (view code)
@@ -705,21 +706,21 @@ mayHear conn (RCV a _)       (QElem b n [])    | a==b           = RCV a NO_DATA
 mayHear conn (SND a v res)   (QElem b n vs)
        | a `conn` b && length vs < n                            = SND a v res
        | a `conn` b                                             = SND a v LIMIT
-mayHear conn (SND a v res)   (Run _ _ _ _ s)   | trig conn a s  = SND a v res
+mayHear conn (SND a v res)   (Run _ _ _ _ _ s) | trig conn a s  = SND a v res
 mayHear conn (RD a _)        (DElem b u v)     | a==b           = RD a v
 mayHear conn (WR a v)        (DElem b _ _)     | a `conn` b     = WR a v
-mayHear conn (WR a v)        (Run _ _ _ _ s)   | trig conn a s  = WR a v
+mayHear conn (WR a v)        (Run _ _ _ _ _ s) | trig conn a s  = WR a v
 mayHear conn (UP a _)        (DElem b u _)     | a==b           = UP a (Ok (toValue u))
 mayHear conn (INV a)         (DElem b _ _)     | a `conn` b     = INV a
-mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n s)
+mayHear conn (CALL a v res)  (Run b t (Serving cs vs) n m s)
        | trig (rev conn) a s  &&  a `notElem` cs                = CALL a v void
        | trig (rev conn) a s                                    = CALL a v LIMIT
 mayHear conn (RES a _)       (Op b (v:vs))     | a==b           = RES a (Ok v)
 mayHear conn (RES a _)       (Op b [])         | a==b           = VETO  -- RES a NO_DATA
 mayHear conn (RET a v)       (Op b vs)         | a==b           = RET a v
-mayHear conn (TERM a)        (Run b _ _ _ _)   | a==b           = TERM a
-mayHear conn (TICK a)        (Run b _ _ _ _)   | a==b           = TICK a
-mayHear conn (DELTA d)       (Run _ t _ _ _)   | t == 0         = DELTA d
+mayHear conn (TERM a)        (Run b _ _ _ _ _) | a==b           = TERM a
+mayHear conn (TICK a)        (Run b _ _ _ _ _) | a==b           = TICK a
+mayHear conn (DELTA d)       (Run _ t _ _ _ _) | t == 0         = DELTA d
                                                | d <= t         = DELTA d
                                                | d > t          = VETO
 mayHear conn (DELTA d)       (Timer _ t _)     | d <= t         = DELTA d
@@ -737,22 +738,22 @@ hear conn (RCV a _)     (QElem b n [])     | a==b               = QElem b n []
 hear conn (SND a v _)   (QElem b n vs)
         | a `conn` b && length vs < n                           = QElem b n (vs++[v])
         | a `conn` b                                            = QElem b n vs
-hear conn (SND a _ _)   (Run b t _ n s)    | trig conn a s      = Run b t Pending n s
+hear conn (SND a _ _)   (Run b t _ n m s)  | trig conn a s      = Run b t Pending n m s
 hear conn (RD a _)      (DElem b _ v)      | a==b               = DElem b False v
 hear conn (WR a v)      (DElem b _ _)      | a `conn` b         = DElem b True (Ok v)
-hear conn (WR a _)      (Run b t _ n s)    | trig conn a s      = Run b t Pending n s
+hear conn (WR a _)      (Run b t _ n m s)  | trig conn a s      = Run b t Pending n m s
 hear conn (UP a _)      (DElem b u v)      | a==b               = DElem b u v
 hear conn (INV a)       (DElem b _ _)      | a `conn` b         = DElem b True NO_DATA
-hear conn (CALL a v _)  (Run b t (Serving cs vs) n s)
-        | trig (rev conn) a s && a `notElem` cs                 = Run b t (Serving (cs++[a]) (vs++[v])) n s
-        | trig (rev conn) a s                                   = Run b t (Serving cs vs) n s
+hear conn (CALL a v _)  (Run b t (Serving cs vs) n m s)
+        | trig (rev conn) a s && a `notElem` cs                 = Run b t (Serving (cs++[a]) (vs++[v])) n m s
+        | trig (rev conn) a s                                   = Run b t (Serving cs vs) n m s
 hear conn (RES a _)     (Op b (v:vs))         | a==b            = Op b vs
 hear conn (RES a _)     (Op b [])             | a==b            = Op b []
 hear conn (RET a v)     (Op b vs)             | a==b            = Op b (vs++[v])
-hear conn (TERM a)      (Run b t act n s)     | a==b            = Run b t act (n-1) s
-hear conn (TICK a)      (Run b t _ n s)       | a==b            = Run b t Pending n s
-hear conn (DELTA d)     (Run b 0.0 act n s)                     = Run b 0.0 act n s
-hear conn (DELTA d)     (Run b t act n s)                       = Run b (t-d) act n s
+hear conn (TERM a)      (Run b t act n m s)   | a==b            = Run b t act (n-1) m s
+hear conn (TICK a)      (Run b t _ n m s)     | a==b            = Run b t Pending n m s
+hear conn (DELTA d)     (Run b 0.0 act n m s)                   = Run b 0.0 act n m s
+hear conn (DELTA d)     (Run b t act n m s)                     = Run b (t-d) act n m s
 hear conn (DELTA d)     (Timer b t t0)                          = Timer b (t-d) t0
 hear conn (WR a v)      (Output b _)       | a `conn` b         = Output b v
 hear conn label         proc                                    = proc
@@ -822,10 +823,10 @@ traceLogs = concatMap transLogs . traceTrans
 printRow :: Int -> Int -> (Int -> String) -> String
 printRow width tot prt =
   intercalate "|" [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]]
-{-printTraceRow :: (SchedOpt', Int) -> Int -> String
-printTraceRow ((_row, _, lab), col) i 
-  | col == i + 1 = show lab
-  | otherwise    = "" -}
+printTraceRow :: (Label, Int) -> Int -> String
+printTraceRow (lab, col) i 
+  | col == i  = show lab
+  | otherwise = ""
 {-
 traceTable :: Trace -> String
 traceTable t = unlines $ prt (reverse cnames !!) : prt (const $ repeat '-') : (map (prt . printTraceRow) $ byRows f)
@@ -833,8 +834,16 @@ traceTable t = unlines $ prt (reverse cnames !!) : prt (const $ repeat '-') : (m
   prt = printRow 10 lind
   (f, (lind, cnames)) = S.runState (mapM reallyAllocate $ toForest t) (0, [])
 -}
+traceTable :: Trace -> String
+traceTable t@(_, tx) = unlines $
+    prt ([show p | p <- Map.keys processes] !!): prt (const $ repeat '-') : [prt $ printTraceRow $ getRow tr | tr <- tx]
+  where
+  prt = printRow 17 (Map.size processes)
+  processes = rankSet $ traceProcs t
+  getRow :: Transition -> (Label, Int)
+  getRow tr = (transLabel tr, processes Map.! transActive tr)
 
--- Return the set of all active processes
+-- Return the set of addresses of all active processes
 traceProcs :: Trace -> Set (Either Address (Address, Int))
 traceProcs (_, t) = foldl' (\acc trans -> Set.insert (transActive trans) acc) Set.empty t
 
@@ -922,6 +931,48 @@ execSim sch sys = snd $ runSim sch sys
 
 simulationRandG :: AUTOSAR a -> Gen (a, Trace)
 simulationRandG a = simulation genSched a
+
+{-
+rerunSched :: Scheduler (State Trace)
+rerunSched n ls = do
+  (init,steps) <- get
+  case steps of
+    []         -> return Nothing -- Terminate
+    (rr,(gpar,_)):rrs'  -> do
+      put (init, rrs')
+      case [x | x@(lab, (gparx,_)) <- ls, (lab `similarLabel` rr) && (gpar `siblingTo` gparx)] of
+        []     -> do
+           let rrs'' = shortCut n (snd gpar) rrs'
+           put (init,rrs'')
+           rerunSched n ls
+        [x]  -> return $ Just $ x
+        xs   -> return $ Just $
+          case [x | x <- xs, orphan gpar `sameProcess` orphan (optionSpeaker x)] of
+            []    -> head xs
+            (x:_) -> x
+-}
+similarLabel :: Label -> Label -> Bool
+similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
+similarLabel (IRVW n1 _)   (IRVW n2 _)   = n1 == n2
+similarLabel (RES n1 _)    (RES n2 _)    = n1 == n2
+similarLabel (RET n1 _)    (RET n2 _)    = n1 == n2
+similarLabel (RCV n1 _)    (RCV n2 _)    = n1 == n2
+similarLabel (SND n1 _ _)  (SND n2 _ _)  = n1 == n2
+-- Several more cases could be added.
+similarLabel (ENTER n1)    (ENTER n2)    = n1 == n2
+similarLabel (EXIT n1)     (EXIT n2)     = n1 == n2
+similarLabel (RD n1 _)     (RD n2 _)     = n1 == n2
+similarLabel (WR n1 _)     (WR n2 _)     = n1 == n2
+similarLabel (UP n1 _)     (UP n2 _)     = n1 == n2
+similarLabel (INV n1)      (INV n2)      = n1 == n2
+similarLabel (CALL n1 _ _) (CALL n2 _ _) = n1 == n2
+similarLabel (NEW n1)      (NEW n2)      = n1 == n2
+similarLabel (TERM n1)     (TERM n2)     = n1 == n2
+similarLabel (TICK n1)     (TICK n2)     = n1 == n2
+similarLabel (DELTA _)     (DELTA _)     = True
+similarLabel a             b             = False
+
+siblingTo = undefined
 
 tracePropS :: (Testable p) => (AUTOSAR a -> Gen (a, Trace)) -> AUTOSAR a -> (Trace -> p) -> Property
 tracePropS sim code prop = property $ sized $ \n -> do
