@@ -1,17 +1,17 @@
-{- Johans generic AUTOSAR sequencer skeleton.
- 
-
--} 
-
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE RecordWildCards    #-}
 
-module Sequencer 
-  ( -- * Sequencer state 
-    SeqState(..)
-    -- * Types
-  , Ticks, Limit, Index
-    -- * Sequencer skeleton
+-- | Generic components / skeletons. 
+-- 
+-- Provides some basic generic components/skeletons, such as Johan's sequencer
+-- and the generic feedthrough component.
+module Generic
+  ( -- * Sequencer skeleton
+    SeqState(..), Ticks, Limit, Index
   , sequencer
+    -- * Feedthrough component
+  , Feedthrough(..)
+  , feedthrough
   ) where
 
 import NewARSim
@@ -19,8 +19,13 @@ import NewARSim
 -- * Sequencer skeleton
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+-- | `SeqState` current tick (ms).
 type Ticks = Int
+
+-- | `SeqState` tick limit (ms).
 type Limit = Int
+
+-- | `SeqState` index.
 type Index = Int
 
 -- | A sequencer state is either @Stopped@ or @Running ticks limit index@, where 
@@ -72,4 +77,37 @@ sequencer setup step ctrl = do
        rteExit excl
        return ()
   return onoff
+
+-- * Feedthrough component 
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- The feedthrough component serves as a skeleton for components of signals
+-- which are continuations in the RTE monad. Any function @f :: a -> b@ can be
+-- lifted to such a function using @g = return . f@.
+
+-- | The `Feedthrough` component requires an input and provides an output from
+-- which modified data is available.
+data Feedthrough c a b = Feedthrough
+  { feedIn  :: DataElement Queued   a Required c
+  , feedOut :: DataElement Unqueued b Provided c
+  }
+
+-- | Feedthrough component.
+feedthrough :: (Data a, Data b)
+            => (a -> RTE c b)
+            -- ^ Monadic signal manipulation
+            -> b 
+            -- ^ Initial value for output
+            -> Atomic c (Feedthrough c a b)
+feedthrough act init = 
+  do feedIn  <- requiredPort
+     feedOut <- providedPort
+
+     comSpec feedIn  (QueueLength 1)
+     comSpec feedOut (InitValue init)
+
+     -- Perform some sort of normalisation here
+     runnable (MinInterval 0) [DataReceivedEvent feedIn] $
+       do Ok t <- rteReceive feedIn
+          rteWrite feedOut =<< act t
+     return Feedthrough {..}
 

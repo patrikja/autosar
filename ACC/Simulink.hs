@@ -9,4 +9,4 @@ import NewARSim
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 main :: IO ()
-main = simulateUsingExternal cruiseCtrl 
+main = simulateUsingExternal vehicleIO 
