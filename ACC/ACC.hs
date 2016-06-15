@@ -1,5 +1,4 @@
 {-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 -- | Adaptive Cruise Control (ACC) component in the AUTOSAR monad.
 --
@@ -15,11 +14,6 @@
 --
 -- *** TODO *** 
 --
---  * Some components which are marked to receive input from external sources
---    expose queued ports with unit queue length. Revise this. It should be
---    possible to trigger on data-received events w/o queued ports. Otherwise,
---    just let these components inherit sample time.
---  
 --  * Fix the bug in the S-function when one output causes termination. Not sure
 --    why this happens, but it likely has to do with the protocol (ARSim seems
 --    to think it has received a @DIE@ message from C). Touching up the
@@ -34,13 +28,16 @@
 --    their corresponding indices, or manipulate the S-function mask to label
 --    the outputs automatically (this is possible using a hack).
 --
---  * The final piece of the puzzle before the simplified ACC system can be
---    tested is to somehow figure out how the ACC system can be bypassed on the
---    fly, i.e. just ignore outputs from the PID controller, and instead just
---    let the brake/throttle signals pass through w/o modification. This might
---    be possible to do with a feedthrough component which exports some sort of
---    ClientServerOp (or whatever it's called) which switches from sending data
---    from one output to another.
+--  * Override cruise speed when target vehicle has a lower relative speed.
+--
+--  * Control brakes. Preferably detect when velocity decline is too slow (since
+--    throttle cannot be negative), and apply brakes.
+--
+--  * What happens when there's nothing on the radar? Target vehicle sensor
+--    expects an input regardless.
+--
+--  * PID controller must be initialized outside of the ACC unit (preferably in
+--    the IOModule since thats where all the connections are done anyway).
 module ACC 
   ( -- * Cruise control
     CruiseCtrl(..)
@@ -54,7 +51,7 @@ module ACC
 
 import Control.Monad
 import Generic
-import NewARSim
+import NewARSim      hiding (void)
 
 -- * Types 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -235,11 +232,31 @@ vehicleIO = composition $
      -- Expose subsystems 
      accECU <- cruiseCtrl timeStep
      radar  <- radarCtrl  timeStep
-     switch <- converter 
      brakes <- brakeCtrl
      engine <- throttleCtrl
 
-     -- Create connections 
+     -- Two-way switches for bypassing ACC. Use /one/ bypass switch.
+     bypassBrakes <- switchRoute
+     bypassEngine <- switchRoute
+
+     -- Connect switch control operations to triggers on @onOff@
+     brakesBypassTrigger <- trigger timeStep toBool 0
+     engineBypassTrigger <- trigger timeStep toBool 0
+     connect onOff (input brakesBypassTrigger)
+     connect onOff (input engineBypassTrigger)
+     connect (switchOp bypassBrakes) (op brakesBypassTrigger)
+     connect (switchOp bypassEngine) (op engineBypassTrigger)
+
+     -- Connect switch ports
+     connect (brkCtrl accECU) (switchLeft bypassBrakes)
+     connect (thrCtrl accECU) (switchLeft bypassEngine)
+     connect brakeIn          (switchRight bypassBrakes)
+     connect throttleIn       (switchRight bypassEngine)
+
+     connect (switchOut bypassBrakes) brakeOut
+     connect (switchOut bypassEngine) brakeOut
+
+     -- Remaining connections 
      connect dist             (distance radar)
      connect brakeIn          (brkIn accECU)
      connect throttleIn       (thrIn accECU)
@@ -247,23 +264,22 @@ vehicleIO = composition $
      connect cruise           (crVel accECU)
      connect (feedOut engine) throttleOut 
      connect (feedOut brakes) brakeOut
-     connect (brkCtrl accECU) (feedIn brakes)
-     connect (thrCtrl accECU) (feedIn engine)
      connect (relative radar) (target accECU)
-
-     -- Create and connect control switch from @onOff@
-     connect onOff            (feedIn switch)
-     connect (feedOut switch) (switch accECU)
 
      return $ seal IOModule {..}
 
--- | Create a control switch from a @Double@ input.
-converter :: Atomic c (Feedthrough c Double Control)
-converter = feedthrough (return . toControl) Bypassed
-  where
-    toControl 0 = Bypassed
-    toControl _ = Active
+toBool :: Double -> Bool
+toBool 0 = False
+toBool _ = True
 
+-- | Create a control switch from a @Double@ input.
+converter :: Atomic c (Feedthrough c Double Bool)
+converter = feedthrough (return . toControl) True 
+  where
+    toControl 0 = False 
+    toControl _ = True
+
+-- * Adaptive Cruise Control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- The adaptive cruise-control consists of a PID regulator for achieving the
 -- desired cruise velocity during operations, an exported on/off operation, and
@@ -292,16 +308,12 @@ data CruiseCtrl = CruiseCtrl
     -- User input modules
   , thrIn   :: DataElem Unqueued Throttle Required  
   , brkIn   :: DataElem Unqueued Pedal    Required
-  , switch  :: DataElem Unqueued Control  Required 
     -- Target vehicle sensor
   , target  :: DataElem Unqueued Velo     Required
     -- Car subsystems
   , thrCtrl :: DataElem Unqueued Throttle Provided
   , brkCtrl :: DataElem Unqueued Pedal    Provided
   }
-
-data Control = Active | Bypassed
-  deriving (Data, Typeable)
 
 -- | The cruise control apparatus.
 cruiseCtrl :: Time -> AUTOSAR CruiseCtrl
@@ -311,9 +323,8 @@ cruiseCtrl resolution = composition $
      vhVel <- requiredPort
 
      -- User input modules
-     thrIn  <- requiredPort
-     brkIn  <- requiredPort
-     switch <- requiredPort
+     thrIn   <- requiredPort
+     brkIn   <- requiredPort
 
      -- Target vehicle sensor
      target <- requiredPort
@@ -332,21 +343,24 @@ cruiseCtrl resolution = composition $
                                            diffTime 
                                            intTime 
                                            scale
-     
-     runnable (MinInterval 0) [TimingEvent resolution] $ 
-       do Ok status <- rteRead switch
-          case status of 
-            Active   -> return ()
-            Bypassed -> return ()
-     return $ seal CruiseCtrl {..}
-
+--      connect pidOut thrCtrl
+-- 
+--      -- Cruise control mode.
+--      -- ~~~~~~~~~~~~~~~~~~~~
+--      -- *** TODO ***
+--      --
+--      -- * Control brakes,
+--      -- * override cruise speed when target vehicle is
+--      -- * slow.
 --      runnable (MinInterval 0) [TimingEvent resolution] $
---        do Ok c <- rteRead cruise
---           Ok v <- rteRead vehicle
+--        do Ok c <- rteRead crVel
+--           Ok v <- rteRead vhVel
 -- 
 --           printlog "cruise_control" $ "requested cruise = " ++ show c
 --           printlog "cruise_control" $ "vehicle speed    = " ++ show v
 -- 
 --           rteSend pidIn (c, v)
 --           return ()
+
+     return $ seal CruiseCtrl {..}
 

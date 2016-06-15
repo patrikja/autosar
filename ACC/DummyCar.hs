@@ -1,3 +1,5 @@
+-- | Dummy car. This module does not work with the revised cruise-control 
+-- component.
 module Main where
 
 import ACC

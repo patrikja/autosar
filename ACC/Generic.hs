@@ -12,12 +12,20 @@ module Generic
     -- * Feedthrough component
   , Feedthrough(..)
   , feedthrough
+    -- * Signal routing
+  , Switch(..)
+  , switchRoute
+    -- * Signal conversion
+  , Trigger(..)
+  , trigger
   ) where
 
-import NewARSim
+import Control.Monad
+import NewARSim      hiding (void)
 
 -- * Sequencer skeleton
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Johan's generic sequencer.
 
 -- | `SeqState` current tick (ms).
 type Ticks = Int
@@ -87,11 +95,15 @@ sequencer setup step ctrl = do
 -- | The `Feedthrough` component requires an input and provides an output from
 -- which modified data is available.
 data Feedthrough c a b = Feedthrough
-  { feedIn  :: DataElement Queued   a Required c
+  { feedIn  :: DataElement Unqueued a Required c
   , feedOut :: DataElement Unqueued b Provided c
   }
 
 -- | Feedthrough component.
+--
+-- *** TODO ***
+--  
+-- * Initial value not useful anymore.
 feedthrough :: (Data a, Data b)
             => (a -> RTE c b)
             -- ^ Monadic signal manipulation
@@ -101,13 +113,97 @@ feedthrough :: (Data a, Data b)
 feedthrough act init = 
   do feedIn  <- requiredPort
      feedOut <- providedPort
-
-     comSpec feedIn  (QueueLength 1)
      comSpec feedOut (InitValue init)
 
      -- Perform some sort of normalisation here
      runnable (MinInterval 0) [DataReceivedEvent feedIn] $
-       do Ok t <- rteReceive feedIn
+       do Ok t <- rteRead feedIn
           rteWrite feedOut =<< act t
      return Feedthrough {..}
+
+-- * Signal routing
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Offers the two-input switch which selects between two inputs. The switch is 
+-- controlled by an exported @Bool@ operation.
+--
+-- NOTE: Unsure if we have to constantly call @rteRead@ on both inputs.
+
+-- | A two input switch with a control operation.
+data Switch c a = Switch 
+  { switchLeft  :: DataElement Unqueued  a       Required c
+  , switchRight :: DataElement Unqueued  a       Required c
+  , switchOut   :: DataElement Unqueued  a       Provided c
+  , switchOp    :: ClientServerOperation Bool () Provided c
+  }
+
+-- | Two input switch. By default, the @switchLeft@ input is passed through.
+-- Calling the control operation @switchOp@ with @False@ sets input to
+-- @switchRight@.
+switchRoute :: Data a => Atomic c (Switch c a)
+switchRoute = 
+  do switchLeft  <- requiredPort
+     switchRight <- requiredPort
+     switchOut   <- providedPort
+     switchOp    <- providedPort
+
+     lock  <- exclusiveArea
+     state <- interRunnableVariable True
+
+     -- Change the switch state
+     serverRunnable (MinInterval 0) [OperationInvokedEvent switchOp] $ \sw ->
+       do rteEnter lock
+          rteIrvWrite state sw
+          rteExit lock
+          return ()
+
+     -- Feedthrough mechanism. Use /one/ runnable.
+     runnable (MinInterval 0) [DataReceivedEvent switchLeft] $
+       do rteEnter lock
+          Ok flag <- rteIrvRead state
+          Ok val  <- rteRead switchLeft
+          when flag $ void $ rteWrite switchOut val
+          rteExit lock
+     runnable (MinInterval 0) [DataReceivedEvent switchRight] $ 
+       do rteEnter lock
+          Ok flag <- rteIrvRead state
+          Ok val  <- rteRead switchRight
+          unless flag $ void $ rteWrite switchOut val
+          rteExit lock
+     
+     return Switch {..}
+
+-- * Trigger
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- To be documented or killed with fire.
+
+-- | Trigger.
+data Trigger c a b = Trigger
+  { input :: DataElement Unqueued  a    Required c
+  , op    :: ClientServerOperation b () Required c 
+  }
+
+-- | Let the changes in a discrete signal trigger a call to a  
+-- @ClientServerOperation@. @'trigger' step f init@ applies the mapping @f@ to
+-- the signal before feeding it to the @rteCall@. 
+trigger :: (Data a, Data b, Eq a)
+        => Time
+        -- ^ Sample time resolution
+        -> (a -> b)
+        -- ^ Mapping 
+        -> a
+        -- ^ Initial value
+        -> Atomic c (Trigger c a b)
+trigger step f init = 
+  do state <- interRunnableVariable init
+     input <- requiredPort
+     op    <- requiredPort 
+     
+     runnable (MinInterval 0) [TimingEvent step] $ 
+       do Ok v0 <- rteIrvRead state
+          Ok v1 <- rteRead input
+          when (v0 /= v1) $ 
+            do rteCall op (f v1)
+               rteIrvWrite state v1
+               return ()
+     return Trigger {..}
 
