@@ -1012,29 +1012,37 @@ replaySimulation tc m = swap $ evalState m' tc
     where m' :: State Trace (a, Trace)
           m' = simulation replaySched m
 
+-- The original list represented by (pre, x, suf)
+-- is pre ++ [x] ++ suf
+type ListZipper a = ([a], a, [a])
+
 shrinkTrace :: AUTOSAR a -> Trace -> [Trace]
-shrinkTrace code tc@(init, tx) =
+shrinkTrace code tc@(init, tx) = map (\tx' -> fst $ replaySimulation(init, tx') code) $
   -- Remove a dynamic process and shift all later processes
-  [ fst $ replaySimulation (init,
-            [ if a == b && j > i then tr { transActive = Right (b, j - 1) } else tr
-              | tr <- tx, p'@(Right (b, j)) <- [transActive tr]
-              , p' /= p
-              , not (transLabel tr `sameNew` NEW a i)]) -- We also remove the spawn (but it might be not enough)
-            code
+  [ 
+    [ if a == b && j > i then tr { transActive = Right (b, j - 1) } else tr
+      | tr <- tx, p'@(Right (b, j)) <- [transActive tr]
+      , p' /= p
+      , not (transLabel tr `sameNew` NEW a i)] -- We also remove the spawn (but we should 
+        -- also remove the event that triggered it)
   | p@(Right (a, i)) <- procs ] ++
   -- Remove a process
-  [ fst $ replaySimulation (init, [ tr | tr <- tx, transActive tr /= p ]) code | p <- procs ] ++
+  [ [ tr | tr <- tx, transActive tr /= p ] | p <- procs ] ++
   -- Remove arbitrary events
-  [ fst $ replaySimulation (init, tx') code | tx' <- shrinkList (const []) tx] ++
-  -- Remove the last action of a process
-  [ fst $ replaySimulation (init, deleteLast ((== p) . transActive) tx) code
-    | p <- procs ]
+  [ tx' | tx' <- shrinkList (const []) tx ] ++
+  -- Cluster events from the same process
+  [ pre ++ [x, y] ++ suf1 ++ suf2
+  | (pre, x, suf) <- allPositions tx
+    -- Try to find an action y from the same process as action x in the suffix,
+    -- and move it just after x.
+  , (suf1@(_:_), y:suf2) <- [break (\tr -> transActive tr == transActive x) suf] ]
   where
   procs = Set.elems $ traceProcs tc
-  -- deleteBy is very annoying to use with a predicate
-  deleteLast pred l = reverse $ deleteBy (const pred) undefined $ reverse l
   -- removeCtxSwitch :: [Transition] -> [Transition] -> [[Transition]]
-  -- also: remove process and shift
+  allPositions :: [a] -> [ListZipper a]
+  allPositions []     = []
+  allPositions (x:xs) = [([], x, xs)] ++
+    [(x:pre, y, suf) | (pre, y, suf) <- allPositions xs]
 
 shrinkTrace' :: AUTOSAR a -> Trace -> [(Either Address (Address, Int), Trace)]
 shrinkTrace' code tc@(init, tx) =
