@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 module NewARSim
   ( module NewARSim
@@ -59,6 +60,7 @@ import           Data.Maybe
 import qualified Data.Vector.Storable            as SV
 import           Data.Vector.Storable              ((!), (//))
 import qualified Data.Vector.Storable.Mutable    as MSV
+import           Data.Tuple                         (swap)
 import           Dynamics
 import           Foreign.C
 import           Foreign.Marshal            hiding (void)
@@ -73,6 +75,10 @@ import           System.Posix
 import qualified Unsafe.Coerce
 import           Test.QuickCheck hiding (collect)
 import           Test.QuickCheck.Property (unProperty)
+import qualified Test.QuickCheck.Property as QCP
+import qualified Test.QuickCheck.Text as QCT
+import qualified Test.QuickCheck.Exception as QCE
+import qualified Test.QuickCheck.State as QCS
 
 
 -- The RTE monad -------------------------------------------------------------
@@ -554,7 +560,7 @@ data Label                  = ENTER Address
                             | CALL  Address Value (StdRet ())
                             | RES   Address (StdRet Value)
                             | RET   Address Value
-                            | NEW   Address
+                            | NEW   Address Int
                             | TERM  Address
                             | TICK  Address
                             | DELTA Time
@@ -576,7 +582,7 @@ labelText l = case l of
           CALL  a val ret    -> "CALL:" ++show a++":"++show val
           RES   a     ret    -> "RES:"  ++show a
           RET   a val        -> "RET:"  ++show a++":"++show val
-          NEW   a            -> "NEW:"  ++show a
+          NEW   a _          -> "NEW:"  ++show a
           TERM  a            -> "TERM:" ++show a
           TICK  a            -> "TICK:" ++show a
           DELTA t            -> "DELTA:"++show t
@@ -597,7 +603,7 @@ labelAddress l = case l of
           CALL  a val ret    -> Just a
           RES   a     ret    -> Just a
           RET   a val        -> Just a
-          NEW   a            -> Just a
+          NEW   a _          -> Just a
           TERM  a            -> Just a
           TICK  a            -> Just a
           DELTA t            -> Nothing
@@ -607,9 +613,9 @@ labelAddress l = case l of
 
 maySay :: Proc -> Label
 maySay (Run a 0.0 Pending n m s)
-    | n == 0 || invocation s == Concurrent     = NEW   a
+    | n == 0 || invocation s == Concurrent     = NEW   a m
 maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n m s)
-    | n == 0 || invocation s == Concurrent     = NEW   a
+    | n == 0 || invocation s == Concurrent     = NEW   a m
 maySay (Run a t act n m s)  | t > 0.0          = DELTA t
 maySay (Timer a 0.0 t)                         = TICK  a
 maySay (Timer a t t0)     | t > 0.0            = DELTA t
@@ -637,9 +643,9 @@ maySay _                                       = VETO   -- most processes can't 
 
 
 say :: Label -> Proc -> [Proc]
-say (NEW _)   (Run a _ Pending n m s)                   = [Run a (minstart s) Idle (n+1) (m+1) s,
+say (NEW _ _) (Run a _ Pending n m s)                   = [Run a (minstart s) Idle (n+1) (m+1) s,
                                                            RInst a m Nothing [] (implementation s (toValue ()))]
-say (NEW _)   (Run a _ (Serving (c:cs) (v:vs)) n m s)   = [Run a (minstart s) (Serving cs vs) (n+1) (m+1) s,
+say (NEW _ _) (Run a _ (Serving (c:cs) (v:vs)) n m s)   = [Run a (minstart s) (Serving cs vs) (n+1) (m+1) s,
                                                            RInst a m (Just c) [] (implementation s v)]
 say (DELTA d) (Run a t act n m s)                       = [Run a (t-d) act n m s]
 say (TICK _)  (Timer a _ t)                             = [Timer a t t]
@@ -804,7 +810,7 @@ data Transition             = Trans { transChoice :: Int
                                     , transProcs  :: [Proc]}
   deriving (Show)
 
-type Scheduler m            = [SchedulerOption] -> m Transition
+type Scheduler m            = [SchedulerOption] -> m (Maybe Transition)
 type Trace                  = (SimState, [Transition])
 
 traceLabels :: Trace -> [Label]
@@ -878,7 +884,7 @@ simulate sched conn procs =
 simulate1 :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
 simulate1 sched conn procs
   | null alts               = return Nothing
-  | otherwise               = liftM Just $ maximumProgress sched alts
+  | otherwise               = maximumProgress sched alts
   where alts :: [SchedulerOption]
         alts                = step conn procs
 
@@ -893,7 +899,7 @@ maximumProgress sched alts
         isDelta _                = False
 
 trivialSched                :: Scheduler Identity
-trivialSched alts           = return (Trans 0 label active logs procs)
+trivialSched alts           = return (Just $ Trans 0 label active logs procs)
   where (label,active,logs,procs)  = head alts
 
 roundRobinSched             :: Scheduler (State Int)
@@ -901,17 +907,17 @@ roundRobinSched alts        = do m <- get
                                  let n = (m+1) `mod` length alts
                                      (label,active,logs,procs) = alts!!n
                                  put n
-                                 return (Trans n label active logs procs)
+                                 return (Just $ Trans n label active logs procs)
 
 randomSched                 :: Scheduler (State StdGen)
 randomSched alts            = do n <- state next
                                  let (label,active,logs,procs) = alts!!(n `mod` length alts)
-                                 return (Trans n label active logs procs)
+                                 return (Just $ Trans n label active logs procs)
 
 genSched :: Scheduler Gen
 genSched alts = do
   ((label, active, logs, procs), n) <- elements $ zip alts [0..]
-  return $ Trans n label active logs procs
+  return $ Just $ Trans n label active logs procs
 
 data SchedChoice            where
   TrivialSched        :: SchedChoice
@@ -951,6 +957,27 @@ rerunSched n ls = do
             []    -> head xs
             (x:_) -> x
 -}
+
+replaySched :: Scheduler (State Trace)
+replaySched ls = do
+  (init,steps) <- get
+  case steps of
+    []         -> return Nothing -- Terminate
+    tr:rrs'  -> do
+      put (init, rrs')
+      let tlab  = transLabel tr
+          taddr = transActive tr
+          ls'   = zip ls [0..]
+           -- First, try to match the label and the active process
+      case [x | x@((lab, addr, _, _), _) <- ls',
+                (lab `similarLabel` tlab) && (addr == taddr)] ++
+           -- If that fails, try to match the label and similar active process
+           [x | x@((lab, addr, _, _), _) <- ls',
+                (lab `similarLabel` tlab) && (addr `siblingTo` taddr)] of
+        []     -> replaySched ls -- If nothing matches, then just drop the event.
+                                 -- Another option would be to save the event for later.
+        ((lab, addr, logs, procs), n):xs -> return $ Just $ Trans n lab addr logs procs
+
 similarLabel :: Label -> Label -> Bool
 similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
 similarLabel (IRVW n1 _)   (IRVW n2 _)   = n1 == n2
@@ -966,20 +993,81 @@ similarLabel (WR n1 _)     (WR n2 _)     = n1 == n2
 similarLabel (UP n1 _)     (UP n2 _)     = n1 == n2
 similarLabel (INV n1)      (INV n2)      = n1 == n2
 similarLabel (CALL n1 _ _) (CALL n2 _ _) = n1 == n2
-similarLabel (NEW n1)      (NEW n2)      = n1 == n2
+similarLabel (NEW n1 _)    (NEW n2 _)    = n1 == n2
 similarLabel (TERM n1)     (TERM n2)     = n1 == n2
 similarLabel (TICK n1)     (TICK n2)     = n1 == n2
 similarLabel (DELTA _)     (DELTA _)     = True
 similarLabel a             b             = False
 
-siblingTo = undefined
+sameNew (NEW n1 m1) (NEW n2 m2) = n1 == n2 && m1 == m2
+sameNew _           _           = False
+
+siblingTo :: Either Address (Address, Int) -> Either Address (Address, Int) -> Bool
+siblingTo (Left n1)       (Left n2)       = n1 == n2
+siblingTo (Right (n1, _)) (Right (n2, _)) = n1 == n2
+siblingTo _               _               = False
+
+replaySimulation :: forall a. Trace -> AUTOSAR a -> (Trace, a)
+replaySimulation tc m = swap $ evalState m' tc
+    where m' :: State Trace (a, Trace)
+          m' = simulation replaySched m
+
+shrinkTrace :: AUTOSAR a -> Trace -> [Trace]
+shrinkTrace code tc@(init, tx) =
+  -- Remove a dynamic process and shift all later processes
+  [ fst $ replaySimulation (init,
+            [ if a == b && j > i then tr { transActive = Right (b, j - 1) } else tr
+              | tr <- tx, p'@(Right (b, j)) <- [transActive tr]
+              , p' /= p
+              , not (transLabel tr `sameNew` NEW a i)]) -- We also remove the spawn (but it might be not enough)
+            code
+  | p@(Right (a, i)) <- procs ] ++
+  -- Remove a process
+  [ fst $ replaySimulation (init, [ tr | tr <- tx, transActive tr /= p ]) code | p <- procs ] ++
+  -- Remove arbitrary events
+  [ fst $ replaySimulation (init, tx') code | tx' <- shrinkList (const []) tx] ++
+  -- Remove the last action of a process
+  [ fst $ replaySimulation (init, deleteLast ((== p) . transActive) tx) code
+    | p <- procs ]
+  where
+  procs = Set.elems $ traceProcs tc
+  -- deleteBy is very annoying to use with a predicate
+  deleteLast pred l = reverse $ deleteBy (const pred) undefined $ reverse l
+  -- removeCtxSwitch :: [Transition] -> [Transition] -> [[Transition]]
+  -- also: remove process and shift
+
+shrinkTrace' :: AUTOSAR a -> Trace -> [(Either Address (Address, Int), Trace)]
+shrinkTrace' code tc@(init, tx) =
+  [ (p, fst $ replaySimulation (init, [ tr | tr <- tx, transActive tr /= p ]) code) | p <- procs ]
+  where
+  procs = Set.elems $ traceProcs tc
+  deleteLast pred l = reverse $ deleteBy (const pred) undefined $ reverse l
+
+shrinkTrace'' :: AUTOSAR a -> Trace -> [Trace]
+shrinkTrace'' code tc@(init, tx) =
+  [ fst $ replaySimulation (init, deleteLast ((== p) . transActive) tx) code
+    | p <- procs ]
+  where
+  procs = Set.elems $ traceProcs tc
+  deleteLast pred l = reverse $ deleteBy (const pred) undefined $ reverse l
+
+counterexample' :: Testable prop => String -> prop -> Property
+counterexample' s =
+  QCP.callback $ QCP.PostTest QCP.Counterexample $ \st res ->
+    when (QCP.ok res == Just False) $ do
+      res <- QCE.tryEvaluateIO (QCT.putLine (QCS.terminal st) s)
+      case res of
+        Left err ->
+          QCT.putLine (QCS.terminal st) (QCP.formatException "Exception thrown while printing test case" err)
+        Right () ->
+          return ()
 
 tracePropS :: (Testable p) => (AUTOSAR a -> Gen (a, Trace)) -> AUTOSAR a -> (Trace -> p) -> Property
 tracePropS sim code prop = property $ sized $ \n -> do
   let limit = (1+n*10)
       gen :: Gen Trace
       gen = fmap (limitTrans limit . snd) $ sim code
-  unProperty $ forAll gen prop
+  unProperty $ forAllShrink gen (shrinkTrace code) prop
 
 traceProp :: (Testable p) => AUTOSAR a -> (Trace -> p) -> Property
 traceProp code prop = tracePropS simulationRandG code prop
@@ -1271,7 +1359,7 @@ ioRandomSched alts =
  do (n, g) <- (next . gen) <$> get
     modify (\st -> st { gen = g})
     let (label, active, logs, procs) = alts !! (n `mod` length alts)
-    return (Trans n label active logs procs)
+    return (Just $ Trans n label active logs procs)
 
 -- | Initialize the simulator with an initial state and run it. This provides
 -- the same basic functionality as 'simulation'.
@@ -1363,10 +1451,14 @@ simulate1Ext :: Scheduler RandStateIO
 simulate1Ext sched conn procs acc
   | null alts = return Nothing
   | otherwise =
-    do trans@Trans{ transProcs = procs1 } <- maximumProgress sched alts
-       case transLabel trans of
-         DELTA dt -> return $ Just (dt, procs1, trans:acc)
-         _        -> simulate1Ext sched conn procs1 (trans:acc)
+    do mtrans <- maximumProgress sched alts
+       case mtrans of
+         -- The trace finished - should we return a Just here?
+         Nothing -> return $ error "The trace finished. I don't know what to do."
+         Just (trans@Trans{ transProcs = procs1 }) ->
+           case transLabel trans of
+             DELTA dt -> return $ Just (dt, procs1, trans:acc)
+             _        -> simulate1Ext sched conn procs1 (trans:acc)
   where
     alts = step conn procs
 
