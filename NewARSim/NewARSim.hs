@@ -1086,50 +1086,73 @@ readStatus fd = liftIO $
          0 -> OK
          _ -> DIE
 
--- | Transfer information about desired port widths.
-handshake :: (Fd, Fd) -> (Int, Int) -> IO ()
-handshake (fdIn, fdOut) (w1, w2) =
+-- | Transfer information about desired port widths and port labels.
+handshake :: (Fd, Fd) -> (Int, Int, [String], [String]) -> IO ()
+handshake (fdIn, fdOut) (w1, w2, l1, l2) =
   do status <- readStatus fdIn
      case status of
       OK ->
-        do bc1 <- fdWrite fdOut [chr w1]
-           bc2 <- fdWrite fdOut [chr w2]
-           when (bc1 + bc2 /= 2) $ fail $
-             "handshake: tried sending 2 bytes, sent " ++ show (bc1 + bc2)
+        do -- Transfer port widths 
+           checkedFdWrite fdOut [chr w1]
+           checkedFdWrite fdOut [chr w2]
+
+           -- Transfer labels
+           sendLabels fdOut l1
+           sendLabels fdOut l2
            return ()
+
       _ -> fail "Error when performing handshake."
+
+-- | Transfers a list of string labels during the handshake.
+sendLabels :: Fd -> [String] -> IO ()
+sendLabels fd ls = 
+  do -- Transfer input label count
+     checkedFdWrite fd [chr (length ls)]
+     forM_ ls $ \label ->
+       withCStringLen label $ \(cstr, len) ->
+         do checkedFdWrite fd [chr len] -- Send label length
+            bc <- fdWriteBuf fd (castPtr cstr) (fromIntegral len) 
+            when (bc /= fromIntegral len) $ fail $
+              "sendLabels: tried to write " ++ show len ++ " bytes, but " ++
+              "succeeded with " ++ show bc
+
+-- | Performs a write with the desired byte count, calls @fail@ if it did not 
+-- succeed.
+checkedFdWrite :: Fd     -- ^ File descriptor
+               -> String -- ^ String to send
+               -> IO ()
+checkedFdWrite fd str =
+  do bc <- fdWrite fd str
+     when (fromIntegral bc /= length str) $ fail $ 
+       "checkedFdWrite: tried sending " ++ show (length str) ++ " bytes, " ++
+       "sent " ++ show bc
 
 -- * @External@ typeclass. 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Typeclass for marking DataElements as external connections.
---
--- *** TODO *** 
---
--- Change type of @toExternal@ to provide port labels:
---
--- > toExternal :: String -> a -> [(Address, String)]
+-- Typeclass for marking DataElements as external connections. 
 
 -- | A type class for marking values of type @a@ carrying an address for export.
 -- @fromExternal@ carries input /from/ Simulink, and @toExternal@ /to/ Simulink.
+-- The @String@ in the tuple is intended to provide port labels for Simulink.
 class External a where
-  fromExternal :: a -> [Address]
+  fromExternal :: a -> [(Address, String)]
   fromExternal _ = []
 
-  toExternal :: a -> [Address]
+  toExternal :: a -> [(Address, String)]
   toExternal _ = []
   {-# MINIMAL fromExternal | toExternal #-}
 
 instance {-# OVERLAPPABLE #-} External a => External [a] where
-  fromExternal = concatMap fromExternal
-  toExternal   = concatMap toExternal
+  fromExternal = concatMap fromExternal 
+  toExternal   = concatMap toExternal 
 
 instance {-# OVERLAPPABLE #-} (External a, External b) => External (a, b) where
   fromExternal (a, b) = fromExternal a ++ fromExternal b
-  toExternal   (a, b) = toExternal a   ++ toExternal b
+  toExternal   (a, b) = toExternal   a ++ toExternal   b
 
 instance External (DataElement q a r c) where
-  fromExternal de = [address de]
-  toExternal de   = [address de]
+  fromExternal de = [(address de, "DATAELEMENT_FROM")]
+  toExternal   de = [(address de, "DATAELEMENT_TO")]
 
 -- * Marshalling data.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1420,18 +1443,22 @@ entrypoint system fds =
   do
      -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
-     let (res, _)   = initialize system
-         addr_in    = fromExternal  res
-         addr_out   = toExternal res
-         inwidth    = length addr_in
-         outwidth   = length addr_out
+     let (res, _)               = initialize system
+         (addr_in, labels_in)   = unzip (fromExternal res)
+         (addr_out, labels_out) = unzip (toExternal res)
+         inwidth                = length addr_in
+         outwidth               = length addr_out
 
          -- These maps need to go with the simulator as static information
          idx_in  = zip [0..] addr_in
          idx_out = zip addr_out [0..]
 
      -- Perform the handshake
-     handshake fds (inwidth, outwidth)
+     handshake fds ( inwidth
+                   , outwidth
+                   , labels_in 
+                   , labels_out 
+                   )
 
      -- Get the simulator started. This is a blocking action that might throw
      -- exceptions. These should be handled so that we can message back to C
