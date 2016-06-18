@@ -108,8 +108,11 @@ example_rr g n = example0 RoundRobinSched g n
 
 example_rand g n = example0 (RandomSched (mkStdGen g)) g n
 
+exampleQCDebug :: Property
+exampleQCDebug = traceProp system (\tt -> let t :: [Measure Int]; t = probes ["Ticket"] tt in let t' = [ snd $ measureTimeValue x | x <- t] in counterexample (show t) $ counterexample (show t') $ counterexample (unlines $ map show $ snd tt) $ counterexample' (traceTable tt) $ counterexample (unlines $ concat [ [show p, traceTable tt'] | (p, tt') <- shrinkTrace' system tt]) $ counterexample (unlines $ ["deleteLast:"] ++ (map traceTable $ shrinkTrace'' system tt))(t' == nub t') )
+
 exampleQC :: Property
-exampleQC = traceProp system (\tt -> let t :: [Measure Int]; t = probes ["Ticket"] tt in let t' = [ snd $ measureTimeValue x | x <- t] in counterexample (show t) $ counterexample (show t') $ counterexample (unlines $ map show $ snd tt) $ counterexample (traceTable tt)(t' == nub t') )
+exampleQC = traceProp system (\tt -> let t :: [Measure Int]; t = probes ["Ticket"] tt in let t' = [ snd $ measureTimeValue x | x <- t] in counterexample (traceTable tt) $ t' == nub t' )
 
 
 demo1 = run example_triv
