@@ -1184,17 +1184,17 @@ readStatus fd = liftIO $
 
 -- | Transfer information about desired port widths and port labels.
 handshake :: (Fd, Fd) -> (Int, Int, [String], [String]) -> IO ()
-handshake (fdIn, fdOut) (w1, w2, l1, l2) =
+handshake (fdIn, fdOut) (widthIn, widthOut, labelsIn, labelsOut) =
   do status <- readStatus fdIn
      case status of
       OK ->
         do -- Transfer port widths 
-           checkedFdWrite fdOut [chr w1]
-           checkedFdWrite fdOut [chr w2]
+           checkedFdWrite fdOut [chr widthIn]
+           checkedFdWrite fdOut [chr widthOut]
 
            -- Transfer labels
-           sendLabels fdOut l1
-           sendLabels fdOut l2
+           sendLabels fdOut labelsIn
+           sendLabels fdOut labelsOut
            return ()
 
       _ -> fail "Error when performing handshake."
@@ -1249,6 +1249,18 @@ instance {-# OVERLAPPABLE #-} (External a, External b) => External (a, b) where
 instance External (DataElement q a r c) where
   fromExternal de = [(address de, "DATAELEMENT_FROM")]
   toExternal   de = [(address de, "DATAELEMENT_TO")]
+
+-- Some helpers to assist with the labeling. This system turned out to be not
+-- so practical; might change it later. In the meantime we get automatic labels
+-- in Simulink at least (to some extent)
+
+-- | Add a tailing number to an address-label combination.
+addNum :: Int -> [(Address, String)] -> [(Address, String)]
+addNum num = map (\(a, l) -> (a, l ++ show num))
+
+-- | Replace the label of an address-label combination.
+relabel :: String -> [(Address, String)] -> [(Address, String)]
+relabel str = map (\(a, _) -> (a, str)) 
 
 -- * Marshalling data.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1411,8 +1423,9 @@ simulationExt fds sys idx_in idx_out =
      let procs1        = procs state1
          (res, state1) = initialize sys
          a `conn` b    = (a, b) `elem` conns state1 || a==b
-
-         outs = [ Output a (toValue (0.0::Double)) | (a,i) <- idx_out ]
+         outs          = [ Output a (toValue (0.0 :: Double)) 
+                         | (a,i) <- idx_out ]
+     
      trs <- simulateExt fds ioRandomSched conn (procs1 ++ outs)
      return (res, (state1, trs))
 
@@ -1428,6 +1441,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
      case status of
        OK ->
          do time <- receiveCDouble fdInput
+            -- Calling length instead of just storing port widths is silly:
             vec <- receiveVector fdInput . SV.length =<< gets prevIn
 
             RandState { prevIn = prev1, addrIn = addr_in } <- get
@@ -1548,7 +1562,7 @@ entrypoint system fds =
          (addr_out, labels_out) = unzip (toExternal res)
          inwidth                = length addr_in
          outwidth               = length addr_out
-
+         
          -- These maps need to go with the simulator as static information
          idx_in  = zip [0..] addr_in
          idx_out = zip addr_out [0..]
