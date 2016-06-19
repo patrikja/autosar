@@ -1,44 +1,51 @@
 /* == S-Function interface for the AUTOSAR simulator ==========================
  *
- * Oskar Abrahamsson <aboskar@chalmers.se> 
+ * Oskar Abrahamsson, <aboskar@chalmers.se> 
  *
- * This S-function communicates with the ARWrapper code over named pipes.
- * As of now, the named pipes are created here (and not in Haskell), but this
- * function does not call the ARWrapper code (although it can). More like a 
- * proof of concept. :-)
+ * S-function wrapper for ARSIM. Connects to the pipe-based interface of ARSIM
+ * allowing for Simulink to replace external components in the simulated AUTOSAR 
+ * system.
  *
+ * KNOWN ISSUES
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *   o  There is an issue when simulating systems with a unit
+ *      (output) port width, causing ARSIM to interpret the
+ *      first data transfer as a request to halt simulation.
+ *      The handshake and transfer protocols (or perhaps the 
+ *      magic numbers involved) should be revised to prevent
+ *      this.
  */
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>   
 #include <sys/stat.h>
 #include <sys/types.h> 
 #include <unistd.h> 
 
+#include "protocol.h"
+
 #define S_FUNCTION_NAME swrapper
 #define S_FUNCTION_LEVEL 2       // Leave this as 2
 #include "simstruc.h"
 
-#define P_DIE                       protocol_die
-#define P_OK                        protocol_ok
 #define MINIMUM_NEXT_VAR_HIT_OFFSET 1e-12
 
-/* Very simple transfer protocol. */
-char protocol_die[1] = {1};
-char protocol_ok[1] = {0};
+/* Transfer protocol state */
+Protocol *protocol;
 
+/* S-function state */
 char   *path;
-size_t hs_input_width   = 0;
-size_t hs_output_width  = 0;
 bool   sim_running      = false;
 int    hs_input_fd;
 int    hs_output_fd;
-char   hs_input_fifo[]  = "/tmp/infifo";
-char   hs_output_fifo[] = "/tmp/outfifo";
+char   hs_input_fifo[]  = "/tmp/infifo";  // PARAMETER?
+char   hs_output_fifo[] = "/tmp/outfifo"; // PARAMETER?
 double next_hit         = 0.0;
-bool   first_call_done  = false;
+bool   model_updated    = false;
+
 
 /* == FUNCTION init_simulator =================================================
  * Sets up input and output FIFOs and waits for port width information from
@@ -48,12 +55,14 @@ bool   first_call_done  = false;
  * quit Simulink as long as we're blocked in here (i.e. not in a foreign
  * call).
  *
+ * TODO: Fix the string command allocations which are arbitrarily declared to 
+ *       a length of 256.
  */
 void init_simulator(SimStruct *S) 
 {
   if (!sim_running) {
-
     //-- Open FIFOs ---------------------------------------------------------//
+    
     if (mkfifo(hs_input_fifo, 0666) < 0) {
       ssSetErrorStatus(S, "Error creating Haskell input FIFO.");
       return;
@@ -63,10 +72,6 @@ void init_simulator(SimStruct *S)
       ssSetErrorStatus(S, "Error creating Haskell output FIFO.");
       return;
     }
-
-    ssPrintf("= FIFOS are\n  Input: %s\n  Output: %s\n"
-            , hs_input_fifo, hs_output_fifo);
-
 
     //-- Get simulator path and attempt system call -------------------------//
 
@@ -99,7 +104,6 @@ void init_simulator(SimStruct *S)
    
     pid_t child = fork();
     
-
     if (child < 0) {
       ssSetErrorStatus(S, "Call to fork() failed.");
       return;
@@ -119,21 +123,74 @@ void init_simulator(SimStruct *S)
         return;
       }
 
-      //-- Perform handshake ------------------------------------------------//
-      ssPrintf("= Sending OK.\n");
-      write(hs_input_fd, P_OK, 1);
+      //-- Init protocol struct and call handshake procedure ----------------// 
+      protocol = Protocol_init(hs_input_fd, hs_output_fd);
+      if (protocol == NULL) {
+        ssPrintf("Protocol_init returned NULL pointer.\n");
+        ssSetErrorStatus (S, "Protocol_init: PROTOCOL_MEM_ERROR");
+        return;
+      }
       
-      ssPrintf("= Waiting for size.\n");
-      char buf_in[1] = {0};
-      read(hs_output_fd, buf_in, 1);
-      hs_input_width = (size_t) buf_in[0]; 
-      ssPrintf("Haskell requested input size: %u\n", hs_input_width);
+      switch(Protocol_handshake(protocol)) {
+        case PROTOCOL_MEM_ERROR:
+          free(protocol);
+          ssSetErrorStatus(S, "Protocol_handshake: PROTOCOL_MEM_ERROR");
+          return;
+        case MEM_ERROR:
+          free(protocol);
+          ssSetErrorStatus(S, "Protocol_handshake: MEM_ERROR");
+          return;
+        case PROTOCOL_ERROR:
+          free(protocol);
+          ssSetErrorStatus(S, "Protocol_handshake: PROTOCOL_ERROR");
+          return;
+        case PROTOCOL_SUCCESS:
+        default: ;
+      }
 
-      ssPrintf("= Waiting for size.\n");
-      char buf_out[1] = {0};
-      read(hs_output_fd, buf_out, 1);
-      hs_output_width = (size_t) buf_out[0]; 
-      ssPrintf("Haskell requested output size: %u\n", hs_output_width);
+      /* Set mask port labels. 
+       * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+       * There seems to be no right way to do this, but the Mask objects provide 
+       * us with a 'port_label' command which can be used the following way in
+       * the mask initialization:
+       *
+       *   port_label(''output'', 1, ''some_label'');
+       *
+       * The above sets the label text for the first output port in the mask to
+       * 'some_label' (w/o ticks). The code can be executed in the mask context
+       * of the correct block by fetching the block path using 'ssGetPath(S)' on
+       * the SimStruct and calling the following
+       *
+       *   set_param(block_path, 'MaskDisplay', 'port_label(....)');
+       *
+       * from MATLAB. In order to make MATLAB evaluate it from here, we can 
+       * create the above string and call mexEvalString().
+       *
+       * XXX NOTE:
+       *     Decided on a fixed command size of 256 until I figure this out. If
+       *     a 256-byte string is used the null-termination imposed by calloc
+       *     will fail and we'll get a segfault.
+       * XXX
+       */
+      const char *block_label = ssGetPath(S);
+
+      for (uint8_t i = 0; i < protocol->p_input_labels; i++) {
+        char *cmd = calloc(256, sizeof(char));
+        sprintf(cmd, "setMaskLabel('%s', '%s', %u, '%s', %u);", 
+                block_label, protocol->p_input_labels_str[i], i + 1,
+                "input", i == 0);
+        mexEvalString(cmd);
+        free(cmd);
+      }
+      
+      for (uint8_t i = 0; i < protocol->p_output_labels; i++) {
+        char *cmd = calloc(256, sizeof(char));
+        sprintf(cmd, "setMaskLabel('%s', '%s', %u, '%s', %u);", 
+                block_label, protocol->p_output_labels_str[i], i + 1,
+                "output", 0);
+        mexEvalString(cmd);
+        free(cmd);
+      }
 
       sim_running = true;
     }
@@ -160,7 +217,6 @@ static void mdlInitializeSizes(SimStruct *S)
 
   if (!ssSetNumInputPorts(S, 1)) return;
   ssSetInputPortWidth(S, 0, DYNAMICALLY_SIZED);
-  // ssSetInputPortDirectFeedThrough(S, 0, 1);
 
   if (!ssSetNumOutputPorts(S, 1)) return;
   ssSetOutputPortWidth(S, 0, DYNAMICALLY_SIZED);
@@ -198,9 +254,9 @@ void mdlSetInputPortWidth(SimStruct *S, int portIndex, int width)
   init_simulator(S);
   if (!sim_running) return;
 
-  if (width != hs_input_width) {
+  if (width != protocol->p_input_width) {
     ssPrintf("AUTOSAR model expects an input port width of %u\n"
-             "Tried to set %u\n", hs_input_width, width);
+             "Tried to set %u\n", protocol->p_input_width, width);
     ssSetErrorStatus(S, "Tried to set port width not matching that specified"
                         "by AUTOSAR model");
     return;
@@ -222,9 +278,9 @@ void mdlSetOutputPortWidth(SimStruct *S, int portIndex, int width)
   init_simulator(S);
   if (!sim_running) return;
 
-  if (width != hs_output_width) {
+  if (width != protocol->p_output_width) {
     ssPrintf("AUTOSAR model expects an output port width of %u\n"
-             "Tried to set %u\n", hs_output_width, width);
+             "Tried to set %u\n", protocol->p_output_width, width);
     ssSetErrorStatus(S, "Tried to set port width not matching that specified"
                         "by AUTOSAR model");
     return;
@@ -237,71 +293,64 @@ void mdlSetOutputPortWidth(SimStruct *S, int portIndex, int width)
 
 /* == FUNCTION mdlUpdate ======================================================
  * Called by Simulink to update model in every major integration step.
+ * Sends data to Haskell, called prior to mdlOutputs.
  *
- * This ships the last input to the Haskell simulator, which starts crunching
- * the data, and updates the new outputs accordingly when done.
- *
- * This is in place so that we won't have to use direct feedthrough. This will
- * minimize algebraic loops and hopefully enable Haskell and MATLAB to run more
- * concurrently (thus more in parallel). 
+ * TODO: The dynamic allocation when sending data is a quick fix. Rewriting
+ *       Protocol_send_data and receiveVector (Haskell) to send/receive on a
+ *       per-byte basis feels stupid in case we'd like to hook up the Haskell 
+ *       code with something else at some point.
  */
 #define MDL_UPDATE
 static void mdlUpdate(SimStruct *S, int_T tid)
 {
   // Set flag.
-  if (!first_call_done) first_call_done = true;
+  if (!model_updated) model_updated = true;
 
   InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S, 0);
- 
-  // -- Put data on simulator input bus -------------------------------------//
+
+  /* XXX QUICK-FIX XXX */
+  double *data = malloc(protocol->p_input_width * sizeof(double));
+  for (size_t i = 0; i < 8; i++) data[i] = *uPtrs[i];
   
   double time = (double) ssGetT(S);
-  write(hs_input_fd, P_OK, 1);
-  write(hs_input_fd, &time, sizeof(double));
-  write(hs_input_fd, (char *) *uPtrs, hs_input_width * sizeof(double));
+  Protocol_send_data(protocol, time, data);
 
-  // ------------------------------------------------------------------------//
-
+  /* XXX QUICK-FIX XXX */
+  free(data);
 }
 
 /* == FUNCTION mdlOutputs =====================================================
  * Triggers a step in the simulation. Called by Simulink whenever a simulation
  * step takes place.
  *
- * o  All MATLAB types are coerced into doubles.
- *
+ * TODO: Fix the zero-output unless model updated. This should _always_ be the
+ * case; revise protocol.
  */
 static void mdlOutputs(SimStruct *S, int_T tid)
 {
   real_T* outp  = ssGetOutputPortRealSignal(S, 0);
   size_t  width = (size_t) ssGetInputPortWidth(S, 0);
   
-  /* Unless mdlUpdate has been done, just put zeroes on the outport.
-   *
-   */
-  if (!first_call_done) {
-    double *tmp = calloc(hs_output_width, sizeof(double));
-    memcpy(outp, tmp, hs_output_width * sizeof(double));
+  /* Unless mdlUpdate has been done, just put zeroes on the outport. */
+  if (!model_updated) {
+    double *tmp = calloc(protocol->p_output_width, sizeof(double));
+    memcpy(outp, tmp, protocol->p_output_width * sizeof(double));
     free(tmp);
     return;
   }
   
-
-  // -- Retrieve data from simulator output bus -----------------------------//
-
-  char status;
-  read(hs_output_fd, &status, 1);
-  if (status != 0) {
-    ssSetErrorStatus(S, "Simulator requested death, halting.");
-    sim_running = false;
-    return;
+  switch(Protocol_get_data(protocol, &next_hit, outp)) {
+    case PROTOCOL_SUCCESS: 
+      break;
+    case PROTOCOL_HALT: 
+      sim_running = false;
+      Protocol_destroy(protocol);
+      ssSetErrorStatus(S, "Simulator requested death, halting.");
+      return;
+    default:
+      ssSetErrorStatus(S, "PROTOCOL_FAILURE");
+      return;
   }
-
-  read(hs_output_fd, (char *) &next_hit, sizeof(double));
-  read(hs_output_fd, (char *) outp, hs_output_width * sizeof(double));
-
-  // ------------------------------------------------------------------------//
-
 }
 
 /* == FUNCTION mdlGetTimeOfNextVarHit =========================================
@@ -343,14 +392,15 @@ static void mdlGetTimeOfNextVarHit(SimStruct *S)
 static void mdlTerminate(SimStruct *S) {
   
   //-- Signal death, if not dead --------------------------------------------//
-  if (sim_running) write(hs_input_fd, P_DIE, 1);
+  if (sim_running) {
+    write(hs_input_fd, P_DIE, 1);
+    Protocol_destroy(protocol);
+  }
 
   //-- Reset everything -----------------------------------------------------//
-  hs_input_width  = 0;
-  hs_output_width = 0;
   next_hit        = 1e-1; 
   sim_running     = false;
-  first_call_done = false;
+  model_updated   = false;
   
   /* Close file descriptors, not terribly interested if this succeeds
    * or not as we're done anyway.
@@ -361,7 +411,9 @@ static void mdlTerminate(SimStruct *S) {
   unlink(hs_input_fifo);
   unlink(hs_output_fifo);
 
+#ifndef NDEBUG
   ssPrintf("= Unlinked FIFOs and reset model.\n");
+#endif
 
 }
 

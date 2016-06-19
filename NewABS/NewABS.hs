@@ -28,14 +28,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE FlexibleInstances #-}
-module Main where
+{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE FlexibleInstances  #-}
+module NewABS 
+  ( -- * Sequencer
+    sequencer
+  , Ticks, Limit, Index
+    -- * ABS system
+  , abs_system
+  , ValvePort(..), WheelPorts(..)
+  , ValveP, Velo, Accel
+  ) where
 
-import NewARSim
 import Control.Monad
-import Graphics.EasyPlot
+import Data.List
+import NewARSim
 import System.Random
 
 --------------------------------------------------------------
@@ -252,7 +260,7 @@ type Valve = Bool
 
 data ValvePort r c = ValvePort {
         relief   :: DataElement Unqueued Valve r c,
-        pressure :: DataElement Unqueued Valve r c }
+        pressure :: DataElement Unqueued Valve r c } 
 
 type ValveP r = ValvePort r Closed
 
@@ -283,10 +291,14 @@ instance Port ValvePort where
             pressure <- delegateR [ v | ValvePort{ pressure = v } <- ps ]
             return ValvePort{..}
 
-data WheelCtrl = WheelCtrl {
-        valve :: ValveP Provided,
-        accel :: DataElem Unqueued Accel Required,
-        slip  :: DataElem Queued Slip Required }
+-- Elected to put some index information here for convenience when performing
+-- external simulation w. Simulink.
+data WheelCtrl = WheelCtrl 
+  { valve :: ValveP Provided
+  , accel :: DataElem Unqueued Accel Required
+  , slip  :: DataElem Queued Slip Required
+  , index :: Int
+  }
 
 wheel_ctrl :: Index -> AUTOSAR WheelCtrl
 wheel_ctrl i = composition $ do
@@ -301,9 +313,7 @@ wheel_ctrl i = composition $ do
         accel <- delegate [accel_p, accel_r]
         let valve = ValvePort{..}
             slip = slipstream ctrl
-        return $ WheelCtrl valve accel slip
-
-
+        return $ WheelCtrl valve accel slip i
 
 --------------------------------------------------------------
 -- The "main loop" of the ABS algorithm is a component that
@@ -344,144 +354,35 @@ main_loop = atomic $ do
 -- external to the current system.
 --------------------------------------------------------------
 
-data WheelPorts = WheelPorts {
-        velo_in   :: DataElem Unqueued Velo Required,
-        accel_in  :: DataElem Unqueued Accel Required,
-        valve_out :: ValveP Provided }
+-- Elected to put some index information here for convenience when performing
+-- external simulation w. Simulink.
+data WheelPorts = WheelPorts 
+  { velo_in   :: DataElem Unqueued Velo Required
+  , accel_in  :: DataElem Unqueued Accel Required
+  , valve_out :: ValveP Provided
+  , wport_idx :: Int
+  }
 
 abs_system :: AUTOSAR [WheelPorts]
-abs_system = composition $ do
-        MainLoop velos_in slips_out <- main_loop
-        w_ctrls <- forM [1..4] wheel_ctrl
-        connectEach slips_out (map slip w_ctrls)
-        let w_ports = zipWith3 WheelPorts velos_in (map accel w_ctrls) (map valve w_ctrls)
-        return w_ports
+abs_system = composition $ 
+  do MainLoop velos_in slips_out <- main_loop
+     w_ctrls <- forM [1..4] wheel_ctrl
+     
+     connectEach slips_out (map slip w_ctrls)
+     
+     let w_ports = zipWith4 WheelPorts velos_in 
+                                       (map accel w_ctrls) 
+                                       (map valve w_ctrls)
+                                       (map index w_ctrls)
+     
+     return w_ports
 
-
--------------------------------------------------------------------
---  A simulated physical car
--------------------------------------------------------------------
-wheel_f :: Index -> Time -> Bool -> Bool -> Velo -> (Accel, Velo)
-wheel_f i time pressure relief velo
-        | time < 1.0                = veloStep 0          velo
-        | i /= 2                    = veloStep (-4.5)     velo
-        -- let wheel 2 skid...
-        -- We "postulate" a reasonable approximation of the wheel
-        -- speed (ignoring the actual valves). Ideally the whole car
-        -- dynamics whould be in another module (in Simulink).
-        | time < 1.6                = veloStep (-10)      velo
-        | time < 2                  = veloStep (-4)       velo
-        | time < 2.5                = veloStep (-3)       velo
-        | time < 3                  = veloStep 0.0        velo
-        | time < 3.4                = veloStep (-4.5)     velo
-        | time < 4                  = veloStep (-5)       velo
-        | time < 4.3                = veloStep (-8.4)     velo
-        | time < 4.7                = veloStep (-4)       velo
-        | otherwise                 = veloStep 0          velo
--- The "pressure logic" is something like this, but a proper
--- treatment need integration over time and knowledge of vehicle speed
--- and other physical parameters.
---        | pressure && not relief    = veloStep (-10)      velo
---        | relief && not pressure    = veloStep (-1)       velo
---        | otherwise                 = veloStep (-3)       velo
-
-timeStep :: Time
-timeStep = 0.01
-
-veloStep :: Accel -> Velo -> (Accel, Velo)
-veloStep a v = (a, v + a*timeStep)
-
-data Car = Car {
-            actuators  :: [ValveP Required],
-            v_sensors  :: [DataElem Unqueued Velo  Provided],
-            a_sensors  :: [DataElem Unqueued Accel Provided] }
-
-simulated_car :: AUTOSAR Car
-simulated_car = atomic $ do
-        wheels <- forM [1..4] $ \i -> do
-            actuator <- requiredPort
-            v_sensor <- providedPort
-            a_sensor <- providedPort
-            comSpec actuator (InitValue (False, True))
-            comSpec v_sensor (InitValue init_v)
-            comSpec a_sensor (InitValue init_a)
-            when (i<=2) $ do
-                probeWrite ("wheel "++show i++" speed")         v_sensor
-                probeWrite ("wheel "++show i++" acceleration")  a_sensor
-            return (actuator, v_sensor, a_sensor)
-        irv <- interRunnableVariable (init_a, replicate 4 init_v)
-        runnable (MinInterval 0) [TimingEvent timeStep] $ do
-            Ok (time, velos) <- rteIrvRead irv
-            let time' = time + timeStep
-            velos' <- forM (zip3 [1..] wheels velos) $ \(i, (actuator,v_sensor,a_sensor), velo) -> do
-                Ok pressure <- rteRead (pressure actuator) -- TODO: perhaps add error handling
-                Ok relief   <- rteRead (relief actuator)   --   in case the return code is not "Ok v"
-                let (acc, velo') = wheel_f i time' pressure relief velo
-                rteWrite v_sensor velo'
-                rteWrite a_sensor acc
-                return velo'
-            rteIrvWrite irv (time', velos')
-            return ()
-        let (actuators, v_sensors, a_sensors) = unzip3 wheels
-        return $ sealBy Car actuators v_sensors a_sensors
-
-init_v :: Velo
-init_v = 18
-
-init_a :: Accel
-init_a = 0
-
--------------------------------------------------------------------------
--- A test setup consists of the ABS implementation and the simulated car
--- cyclically connected into a closed system.
---------------------------------------------------------------------------
-
-test :: AUTOSAR ()
-test = do
-        w_ports <- abs_system
-        car <- simulated_car
-        connectEach (v_sensors car)         (map velo_in w_ports)
-        connectEach (a_sensors car)         (map accel_in w_ports)
-        connectEach (map valve_out w_ports) (actuators car)
-
-makePlot :: Trace -> IO Bool
-makePlot trace = plot (PDF "plot.pdf") curves
-  where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] (discrete pts)
-                  | (str,pts) <- ms ]
-        color "pressure 2"              = Red
-        color "relief 2"                = Blue
-        color "wheel 2 speed"           = Green
-        color "wheel 2 acceleration"    = Violet
-        color _                         = Black
-        ms                              = bools ++ doubles
-        doubles                         = probeAll trace
-        bools                           = map scale (probeAll trace)
-
-discrete :: Fractional t => [((q, t), k)] -> [(t, k)]
-discrete []                     = []
-discrete (((_,t),v):vs)         = (t,v) : disc v vs
-  where disc v0 (((_,t),v):vs)  = (t,v0) : (t+eps,v) : disc v vs
-        disc _ _                = []
-        eps                     = 0.0001
-
-scale :: (ProbeID, Measurement Bool) -> (ProbeID, Measurement Double)
-scale ("relief 2", m)   = ("relief 2", map (fmap scaleValve) m)
-  where scaleValve      = (+2.0) . fromIntegral . fromEnum
-scale ("pressure 2", m) = ("pressure 2", map (fmap scaleValve) m)
-  where scaleValve      = (+4.0) . fromIntegral . fromEnum
-
-main1 :: IO Bool
-main1 = simulateStandalone 5.0 output (RandomSched (mkStdGen 112)) test
-  where output trace = printLogs trace >> makePlot trace
-
-instance {-# OVERLAPS #-} External [WheelPorts] where
-    toExternal ports    = toExternal (map valve_out ports)
-    fromExternal ports  = fromExternal (map velo_in ports) ++ 
-                          fromExternal (map accel_in ports)
+instance External WheelPorts where
+  toExternal (WheelPorts _ _ r idx) = addNum idx (toExternal r)
+  fromExternal (WheelPorts v a _ idx) = addNum idx 
+    (relabel "VELO" (fromExternal v) ++ relabel "ACCEL" (fromExternal a))
 
 instance External (ValvePort r c) where
-  toExternal (ValvePort re pr) = toExternal re ++ toExternal pr
+  toExternal (ValvePort re pr) = 
+    relabel "RE" (toExternal re) ++ relabel "PR" (toExternal pr)
 
-main2 = simulateUsingExternal abs_system
-
-main = main1

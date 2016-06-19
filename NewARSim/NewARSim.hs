@@ -1182,50 +1182,85 @@ readStatus fd = liftIO $
          0 -> OK
          _ -> DIE
 
--- | Transfer information about desired port widths.
-handshake :: (Fd, Fd) -> (Int, Int) -> IO ()
-handshake (fdIn, fdOut) (w1, w2) =
+-- | Transfer information about desired port widths and port labels.
+handshake :: (Fd, Fd) -> (Int, Int, [String], [String]) -> IO ()
+handshake (fdIn, fdOut) (widthIn, widthOut, labelsIn, labelsOut) =
   do status <- readStatus fdIn
      case status of
       OK ->
-        do bc1 <- fdWrite fdOut [chr w1]
-           bc2 <- fdWrite fdOut [chr w2]
-           when (bc1 + bc2 /= 2) $ fail $
-             "handshake: tried sending 2 bytes, sent " ++ show (bc1 + bc2)
+        do -- Transfer port widths 
+           checkedFdWrite fdOut [chr widthIn]
+           checkedFdWrite fdOut [chr widthOut]
+
+           -- Transfer labels
+           sendLabels fdOut labelsIn
+           sendLabels fdOut labelsOut
            return ()
+
       _ -> fail "Error when performing handshake."
+
+-- | Transfers a list of string labels during the handshake.
+sendLabels :: Fd -> [String] -> IO ()
+sendLabels fd ls = 
+  do -- Transfer input label count
+     checkedFdWrite fd [chr (length ls)]
+     forM_ ls $ \label ->
+       withCStringLen label $ \(cstr, len) ->
+         do checkedFdWrite fd [chr len] -- Send label length
+            bc <- fdWriteBuf fd (castPtr cstr) (fromIntegral len) 
+            when (bc /= fromIntegral len) $ fail $
+              "sendLabels: tried to write " ++ show len ++ " bytes, but " ++
+              "succeeded with " ++ show bc
+
+-- | Performs a write with the desired byte count, calls @fail@ if it did not 
+-- succeed.
+checkedFdWrite :: Fd     -- ^ File descriptor
+               -> String -- ^ String to send
+               -> IO ()
+checkedFdWrite fd str =
+  do bc <- fdWrite fd str
+     when (fromIntegral bc /= length str) $ fail $ 
+       "checkedFdWrite: tried sending " ++ show (length str) ++ " bytes, " ++
+       "sent " ++ show bc
 
 -- * @External@ typeclass. 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Typeclass for marking DataElements as external connections.
---
--- *** TODO *** 
---
--- Change type of @toExternal@ to provide port labels:
---
--- > toExternal :: String -> a -> [(Address, String)]
+-- Typeclass for marking DataElements as external connections. 
 
 -- | A type class for marking values of type @a@ carrying an address for export.
 -- @fromExternal@ carries input /from/ Simulink, and @toExternal@ /to/ Simulink.
+-- The @String@ in the tuple is intended to provide port labels for Simulink.
 class External a where
-  fromExternal :: a -> [Address]
+  fromExternal :: a -> [(Address, String)]
   fromExternal _ = []
 
-  toExternal :: a -> [Address]
+  toExternal :: a -> [(Address, String)]
   toExternal _ = []
   {-# MINIMAL fromExternal | toExternal #-}
 
 instance {-# OVERLAPPABLE #-} External a => External [a] where
-  fromExternal = concatMap fromExternal
-  toExternal   = concatMap toExternal
+  fromExternal = concatMap fromExternal 
+  toExternal   = concatMap toExternal 
 
 instance {-# OVERLAPPABLE #-} (External a, External b) => External (a, b) where
   fromExternal (a, b) = fromExternal a ++ fromExternal b
-  toExternal   (a, b) = toExternal a   ++ toExternal b
+  toExternal   (a, b) = toExternal   a ++ toExternal   b
 
 instance External (DataElement q a r c) where
-  fromExternal de = [address de]
-  toExternal de   = [address de]
+  fromExternal de = [(address de, "DATAELEMENT_FROM")]
+  toExternal   de = [(address de, "DATAELEMENT_TO")]
+
+-- Some helpers to assist with the labeling. This system turned out to be not
+-- so practical; might change it later. In the meantime we get automatic labels
+-- in Simulink at least (to some extent)
+
+-- | Add a tailing number to an address-label combination.
+addNum :: Int -> [(Address, String)] -> [(Address, String)]
+addNum num = map (\(a, l) -> (a, l ++ show num))
+
+-- | Replace the label of an address-label combination.
+relabel :: String -> [(Address, String)] -> [(Address, String)]
+relabel str = map (\(a, _) -> (a, str)) 
 
 -- * Marshalling data.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1388,8 +1423,9 @@ simulationExt fds sys idx_in idx_out =
      let procs1        = procs state1
          (res, state1) = initialize sys
          a `conn` b    = (a, b) `elem` conns state1 || a==b
-
-         outs = [ Output a (toValue (0.0::Double)) | (a,i) <- idx_out ]
+         outs          = [ Output a (toValue (0.0 :: Double)) 
+                         | (a,i) <- idx_out ]
+     
      trs <- simulateExt fds ioRandomSched conn (procs1 ++ outs)
      return (res, (state1, trs))
 
@@ -1405,6 +1441,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
      case status of
        OK ->
          do time <- receiveCDouble fdInput
+            -- Calling length instead of just storing port widths is silly:
             vec <- receiveVector fdInput . SV.length =<< gets prevIn
 
             RandState { prevIn = prev1, addrIn = addr_in } <- get
@@ -1520,18 +1557,22 @@ entrypoint system fds =
   do
      -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
-     let (res, _)   = initialize system
-         addr_in    = fromExternal  res
-         addr_out   = toExternal res
-         inwidth    = length addr_in
-         outwidth   = length addr_out
-
+     let (res, _)               = initialize system
+         (addr_in, labels_in)   = unzip (fromExternal res)
+         (addr_out, labels_out) = unzip (toExternal res)
+         inwidth                = length addr_in
+         outwidth               = length addr_out
+         
          -- These maps need to go with the simulator as static information
          idx_in  = zip [0..] addr_in
          idx_out = zip addr_out [0..]
 
      -- Perform the handshake
-     handshake fds (inwidth, outwidth)
+     handshake fds ( inwidth
+                   , outwidth
+                   , labels_in 
+                   , labels_out 
+                   )
 
      -- Get the simulator started. This is a blocking action that might throw
      -- exceptions. These should be handled so that we can message back to C
