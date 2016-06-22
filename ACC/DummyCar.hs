@@ -1,5 +1,8 @@
 -- | Dummy car. This module does not work with the revised cruise-control 
 -- component.
+
+{-# LANGUAGE RecordWildCards #-}
+
 module Main where
 
 import ACC
@@ -8,9 +11,9 @@ import Graphics.EasyPlot
 import NewARSim          hiding (void)
 
 data Car = Car
-  { pedal  :: DataElem Unqueued Throttle Required
-  , velo   :: DataElem Unqueued Velo     Provided
-  , cruise :: DataElem Unqueued Velo     Provided
+  { pedal :: DataElem Unqueued Throttle Required
+  , velo  :: DataElem Unqueued Velo     Provided
+  , ctrl  :: DataElem Unqueued Velo     Provided
   }
 
 -- Initial velocity (km/h).
@@ -33,44 +36,41 @@ resolution = 1e-2
 -- car velocity. The cruise velocity is set to a constant for now.
 dummyCar :: AUTOSAR Car 
 dummyCar = atomic $ 
-  do ped <- requiredPort
-     vv  <- providedPort
-     cv  <- providedPort
+  do pedal <- requiredPort
+     velo  <- providedPort
+     ctrl  <- providedPort
 
-     probeWrite "velocity" vv
-     probeWrite "cruise"   cv
+     probeWrite "velocity" velo
+     probeWrite "cruise"   ctrl
 
-     comSpec vv (InitValue initVel)
-     comSpec cv (InitValue initCruise)
+     comSpec velo (InitValue initVel)
+     comSpec ctrl (InitValue initCruise)
      
      state <- interRunnableVariable (initVel, initCruise, 0.0) 
      runnable (MinInterval 0) [TimingEvent resolution] $
        do Ok (vel, cru, time) <- rteIrvRead state
-          Ok throttle <- rteRead ped
-          let newTime = time + resolution
-              newCru  = cru
-              newVel  = accelerate vel (incline time) throttle
-          rteWrite vv newVel
-          rteWrite cv newCru
-          rteIrvWrite state (newVel, newCru, newTime)
-          return ()
-     return $ sealBy Car ped vv cv
+          std <- rteRead pedal
+          case std of 
+            Ok throttle -> 
+              do let newTime = time + resolution
+                     newCru  = cru
+                     newVel  = accelerate vel (incline time) throttle
+                 rteWrite velo newVel
+                 rteWrite ctrl newCru
+                 rteIrvWrite state (newVel, newCru, newTime)
+                 return ()
+            _ -> 
+              do printlog "CAR" $ show std
+                 return ()
+     return $ sealBy Car pedal velo ctrl
 
 -- | Compute incline based on time.
 incline :: Time -> Double
 incline t = pi / 4 * sin (t * pi)
 
--- | Accelerate car based on previous speed, incline and throttle.
---
--- *** TODO *** 
---   * This is mostly to test that the ACC program actually runs and produces
---     some sort of output. It will quickly be replaced by a simulated car in
---     Simulink as soon as I find the old version which had a working engine,
---     but ...
---   * ... it's still interesting to figure out how to do this in a reasonably
---     good way.
+-- | Accelerate (or brake) car based on previous speed, incline and throttle.
 accelerate :: Velo -> Double -> Throttle -> Velo
-accelerate velo rads throttle = velo + dv + throttle * scale
+accelerate velo rads throttle = velo + dv + throttle * scale - 1
   where
     dv    = (-rads) / pi / 10
     scale = 1e-2
@@ -82,13 +82,15 @@ makePlot :: Trace -> IO Bool
 makePlot trace = plot X11 curves
   where curves  = [ Data2D [Title str, Style Lines, Color (color str)] [] 
                     (discrete pts)
-                  | (str,pts) <- doubles ]
-        color "throttle"  = Red
-        color "velocity"  = Blue
-        color "cruise"    = Green
-        color _           = Black
+                  | (str,pts) <- ms]
+        color "PID OUT"  = Red
+        color "V"        = Blue
+        color "C"        = Green
+        color _          = Black
+        ms               = doubles
         doubles :: [(ProbeID, Measurement Double)]
-        doubles = probeAll trace
+        doubles          = probeAll trace
+
 
 discrete :: Fractional t => [((q, t), k)] -> [(t, k)]
 discrete []                     = []
@@ -103,12 +105,21 @@ discrete (((_,t),v):vs)         = (t,v) : disc v vs
 -- get some output from the ACC component.
 
 test :: AUTOSAR ()
-test = 
-  do cc  <- cruiseCtrl 
+test =
+  do pid <- pidController 1e-2 0 1 2 
+     acc <- cruiseCtrl resolution
      car <- dummyCar 
-     connect (velo car)    (vvel cc)
-     connect (cruise car)  (cvel cc)
-     connect (throttle cc) (pedal car)
+
+     -- Connect PID
+     connect (ctrlIn acc)    (pidInput pid) 
+     connect (pidOutput pid) (ctrlOut acc)  
+
+     -- Connect car
+     connect (thrCtrl acc) (pedal car)
+--      r <- delegateP [thrCtrl acc, brkCtrl acc]
+--      connect r (pedal car)
+     connect (velo  car)   (vhVel acc)
+     connect (ctrl car)    (crVel acc)
 
 main :: IO ()
 main = simulateStandalone 15.0 output (RandomSched (mkStdGen 111)) test

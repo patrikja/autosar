@@ -6,11 +6,11 @@
 -- regulating vehicle speed, and an ACC component which composes all inputs and
 -- sub-systems.
 --
--- The system requires access to the brake and throttle controlling subsystems of 
--- the car, as well as /some/ input of the distance to the target vehicle. An on/
--- off switch is provided by reading an external double input (which is converted
--- to a @Bool@ and regarded as @True@ whenever non-zero). The on/off switch
--- essentially enables or bypasses the system.
+-- The system requires access to the brake and throttle controlling subsystems 
+-- of the car, as well as /some/ input of the distance to the target vehicle. An
+-- on/off switch is provided by reading an external double input (which is 
+-- converted to a @Bool@ and regarded as @True@ whenever non-zero). The on/off 
+-- switch essentially enables or bypasses the system.
 --
 -- *** TODO *** 
 --
@@ -19,25 +19,13 @@
 --    to think it has received a @DIE@ message from C). Touching up the
 --    communications protocol should be done in any case.
 --
---  * Manually assigning the in-/outputs of a system such as this in Simulink is
---    essentially done blindfolded and is getting a bit tedious. Revise the
---    @External@ typeclass to require @String@ labels when exporting things.
---    The communications protocol (more specifically, the handshake) will then
---    be revised to send back an array of null-terminated @CString@s which the
---    S-function could either just print out to the command window together with
---    their corresponding indices, or manipulate the S-function mask to label
---    the outputs automatically (this is possible using a hack).
---
 --  * Override cruise speed when target vehicle has a lower relative speed.
 --
---  * Control brakes. Preferably detect when velocity decline is too slow (since
---    throttle cannot be negative), and apply brakes.
+--  * System does not work :-)
 --
---  * What happens when there's nothing on the radar? Target vehicle sensor
---    expects an input regardless.
+-- *** NOTES ***
 --
---  * PID controller must be initialized outside of the ACC unit (preferably in
---    the IOModule since thats where all the connections are done anyway).
+--  * Logging slows down simulation considerably. Avoid @printlog@.
 module ACC 
   ( -- * Cruise control
     CruiseCtrl(..)
@@ -47,6 +35,9 @@ module ACC
   , vehicleIO
     -- * Types
   , Velo, Throttle, Distance
+    -- * PID controller
+  , PIDCtrl(..)
+  , pidController
   ) where
 
 import Control.Monad
@@ -77,7 +68,7 @@ type Pedal = Double
 -- | The PID controller requires a @(cruise, vehicle)@ velocity tuple and
 -- provides a throttle control.
 data PIDCtrl c = PIDCtrl
-  { pidInput  :: DataElement Queued   (Velo, Velo) Required c
+  { pidInput  :: DataElement Unqueued (Velo, Velo) Required c
   , pidOutput :: DataElement Unqueued Throttle     Provided c
   }
 
@@ -105,13 +96,14 @@ pidController st dt it scale =
 
      pidInput  <- requiredPort
      pidOutput <- providedPort 
-     comSpec pidInput  (QueueLength 1)
      comSpec pidOutput (InitValue 0.0)
 
+     probeWrite "PID OUT" pidOutput
+
      runnable (MinInterval 0) [DataReceivedEvent pidInput] $
-       do Ok (ctrl, feedback)   <- rteReceive pidInput
+       do Ok (ctrl, feedback)   <- rteRead pidInput
           Ok (prevInp, prevSum) <- rteIrvRead state
-          
+         
           let newInp = ctrl - feedback
               step   = newInp - prevInp
               newSum = prevSum + st / it * newInp
@@ -143,6 +135,7 @@ radarCtrl dt =
   do state    <- interRunnableVariable 0.0
      distance <- requiredPort
      relative <- providedPort
+     comSpec relative (InitValue 0.0)
 
      runnable (MinInterval 0) [TimingEvent dt] $ 
        do Ok d1 <- rteRead distance
@@ -182,9 +175,6 @@ brakeCtrl = feedthrough return 0.0
 -- The AUTOSAR system provides throttle and brake pedal outputs.
 
 -- | IO module for a vehicle using the ACC system.
---
--- *** TODO *** 
---   * Set @Provided@/@Required@ flags.
 data IOModule = IOModule
   { -- Inputs (from real world)
     cruise      :: DataElem Unqueued Velo     Provided
@@ -200,15 +190,16 @@ data IOModule = IOModule
 
 instance External IOModule where
   fromExternal iom = concat 
-    [ fromExternal (cruise     iom)
-    , fromExternal (velocity   iom)
-    , fromExternal (dist       iom)
-    , fromExternal (throttleIn iom)
-    , fromExternal (brakeIn    iom)
-    , fromExternal (onOff      iom)
+    [ relabel "CRUISE" $ fromExternal (cruise     iom)
+    , relabel "VELO"   $ fromExternal (velocity   iom)
+    , relabel "TARGET" $ fromExternal (dist       iom)
+    , relabel "THR_IN" $ fromExternal (throttleIn iom)
+    , relabel "BRK_IN" $ fromExternal (brakeIn    iom)
+    , relabel "ONOFF"  $ fromExternal (onOff      iom)
     ]
   
-  toExternal iom = toExternal (throttleOut iom) ++ toExternal (brakeOut iom)
+  toExternal iom = relabel "THR_OUT" (toExternal (throttleOut iom)) ++ 
+                   relabel "BRK_OUT" (toExternal (brakeOut iom))
 
 -- | Vehicle IO module.
 vehicleIO :: AUTOSAR IOModule
@@ -228,6 +219,12 @@ vehicleIO = composition $
      onOff       <- providedPort
      throttleIn  <- providedPort 
      velocity    <- providedPort 
+     comSpec brakeIn    (InitValue 0.0)
+     comSpec cruise     (InitValue 0.0) 
+     comSpec dist       (InitValue 0.0)
+     comSpec onOff      (InitValue 0.0)
+     comSpec throttleIn (InitValue 0.0)
+     comSpec velocity   (InitValue 0.0)
 
      -- Expose subsystems 
      accECU <- cruiseCtrl timeStep
@@ -235,11 +232,13 @@ vehicleIO = composition $
      brakes <- brakeCtrl
      engine <- throttleCtrl
 
-     -- Two-way switches for bypassing ACC. Use /one/ bypass switch.
+     -- Two-way switches for bypassing ACC. 
+     -- TODO: Use /one/ bypass switch.
      bypassBrakes <- switchRoute
      bypassEngine <- switchRoute
 
-     -- Connect switch control operations to triggers on @onOff@
+     -- Connect switch control operations to triggers on @onOff@.
+     -- TODO: Simplify.
      brakesBypassTrigger <- trigger timeStep toBool 0
      engineBypassTrigger <- trigger timeStep toBool 0
      connect onOff (input brakesBypassTrigger)
@@ -248,23 +247,34 @@ vehicleIO = composition $
      connect (switchOp bypassEngine) (op engineBypassTrigger)
 
      -- Connect switch ports
+     -- TODO: Simplify.
      connect (brkCtrl accECU) (switchLeft bypassBrakes)
      connect (thrCtrl accECU) (switchLeft bypassEngine)
      connect brakeIn          (switchRight bypassBrakes)
      connect throttleIn       (switchRight bypassEngine)
 
      connect (switchOut bypassBrakes) brakeOut
-     connect (switchOut bypassEngine) brakeOut
+     connect (switchOut bypassEngine) throttleOut
 
      -- Remaining connections 
      connect dist             (distance radar)
-     connect brakeIn          (brkIn accECU)
-     connect throttleIn       (thrIn accECU)
      connect velocity         (vhVel accECU)
      connect cruise           (crVel accECU)
      connect (feedOut engine) throttleOut 
      connect (feedOut brakes) brakeOut
      connect (relative radar) (target accECU)
+
+     -- PID setup
+     let sampleTime = 1e-2   -- P-thing sample scale
+         diffTime   = 0      -- D-thing sample scale
+         intTime    = 1      -- I-thing sample scale
+         scale      = 2      -- Output scale
+
+     pidCtrl <- pidController sampleTime diffTime intTime scale
+
+     -- Connect PID
+     connect (ctrlIn accECU) (pidInput pidCtrl) 
+     connect (pidOutput pidCtrl) (ctrlOut accECU)  
 
      return $ seal IOModule {..}
 
@@ -303,16 +313,16 @@ converter = feedthrough (return . toControl) True
 -- i.e. a bypass switch and brake/throttle inputs.
 data CruiseCtrl = CruiseCtrl
   { -- Vehicle information
-    crVel   :: DataElem Unqueued Velo     Required
-  , vhVel   :: DataElem Unqueued Velo     Required
-    -- User input modules
-  , thrIn   :: DataElem Unqueued Throttle Required  
-  , brkIn   :: DataElem Unqueued Pedal    Required
+    crVel   :: DataElem Unqueued Velo         Required
+  , vhVel   :: DataElem Unqueued Velo         Required
+    -- PID
+  , ctrlIn  :: DataElem Unqueued (Velo, Velo) Provided  
+  , ctrlOut :: DataElem Unqueued Throttle     Required
     -- Target vehicle sensor
-  , target  :: DataElem Unqueued Velo     Required
+  , target  :: DataElem Unqueued Velo         Required
     -- Car subsystems
-  , thrCtrl :: DataElem Unqueued Throttle Provided
-  , brkCtrl :: DataElem Unqueued Pedal    Provided
+  , thrCtrl :: DataElem Unqueued Throttle     Provided
+  , brkCtrl :: DataElem Unqueued Pedal        Provided
   }
 
 -- | The cruise control apparatus.
@@ -322,45 +332,37 @@ cruiseCtrl resolution = composition $
      crVel <- requiredPort
      vhVel <- requiredPort
 
-     -- User input modules
-     thrIn   <- requiredPort
-     brkIn   <- requiredPort
+     -- PID 
+     ctrlIn  <- providedPort
+     ctrlOut <- requiredPort
 
      -- Target vehicle sensor
      target <- requiredPort
 
      -- Car subsystems 
-     thrCtrl <- providedPort
      brkCtrl <- providedPort
+     thrCtrl <- providedPort
+     comSpec brkCtrl (InitValue 0.0)
+     comSpec thrCtrl (InitValue 0.0)
 
-     -- PID setup
-     let sampleTime = 1e-2   -- P-thing sample scale
-         diffTime   = 0      -- D-thing sample scale
-         intTime    = 1      -- I-thing sample scale
-         scale      = 2      -- Output scale
+     -- Cruise control mode.
+     -- ~~~~~~~~~~~~~~~~~~~~
+     -- *** TODO ***
+     --
+     -- * ...
+     runnable (MinInterval 0) [TimingEvent resolution] $
+       do Ok c <- rteRead crVel
+          Ok v <- rteRead vhVel
 
-     PIDCtrl pidIn pidOut <- pidController sampleTime 
-                                           diffTime 
-                                           intTime 
-                                           scale
---      connect pidOut thrCtrl
--- 
---      -- Cruise control mode.
---      -- ~~~~~~~~~~~~~~~~~~~~
---      -- *** TODO ***
---      --
---      -- * Control brakes,
---      -- * override cruise speed when target vehicle is
---      -- * slow.
---      runnable (MinInterval 0) [TimingEvent resolution] $
---        do Ok c <- rteRead crVel
---           Ok v <- rteRead vhVel
--- 
---           printlog "cruise_control" $ "requested cruise = " ++ show c
---           printlog "cruise_control" $ "vehicle speed    = " ++ show v
--- 
---           rteSend pidIn (c, v)
---           return ()
-
+          rteWrite ctrlIn (c, v) 
+          Ok ctrl <- rteRead ctrlOut
+          if ctrl < 0 then
+            do printlog "ACC" $ "brakes: " ++ show (-ctrl)
+               rteWrite thrCtrl 0
+               rteWrite brkCtrl (-ctrl)
+          else 
+            do printlog "ACC" $ "throttle: " ++ show ctrl
+               rteWrite thrCtrl ctrl
+               rteWrite brkCtrl 0
      return $ seal CruiseCtrl {..}
 
