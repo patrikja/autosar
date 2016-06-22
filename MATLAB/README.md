@@ -22,6 +22,7 @@ Utilities for connecting Simulink to ARSIM through the pipes interface.
 ## Instructions
 
 Build the S-function in MATLAB using the `makeMEX` script:
+
     >> makeMEX
     Building with 'Xcode with Clang'.
     MEX completed successfully.

@@ -7,6 +7,7 @@ A simplified model of programming in autosar
 
 | Directory  | Comment |
 | ---------- | ------- |
+| ACC/       | ACC example using ARSIM |
 | NewARSim/  | Simulator (written in Haskell) |
 | NewABS/    | ABS example using ARSIM |
 | ARXML/     | Translator from AUTOSAR XML to Haskell (in progress)    |
