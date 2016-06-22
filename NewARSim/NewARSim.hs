@@ -68,6 +68,7 @@ import           Foreign.Ptr
 import           Foreign.Storable
 import           System.Environment
 import           System.Exit
+import           System.IO
 import           System.IO.Error
 import           System.IO.Unsafe
 import           System.Random
@@ -1168,8 +1169,9 @@ writeStatus status fd = liftIO $
              case status of
                OK  -> 0
                DIE -> 1
-     when (bc /= 1) $ fail $
+     unless (bc == 1) $ fail $
        "writeStatus: tried to write 1 byte, but succeeded with " ++ show bc
+     logWrite $ "writeStatus: Wrote " ++ show bc ++ " bytes."
 
 -- | Read a status from the input file descriptor.
 readStatus :: MonadIO m => Fd -> m Status
@@ -1223,6 +1225,10 @@ checkedFdWrite fd str =
        "checkedFdWrite: tried sending " ++ show (length str) ++ " bytes, " ++
        "sent " ++ show bc
 
+-- Log information on @stderr@.
+logWrite :: MonadIO m => String -> m () 
+logWrite str = liftIO $ hPutStrLn stderr $ "[ARSIM] " ++ str 
+
 -- * @External@ typeclass. 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Typeclass for marking DataElements as external connections. 
@@ -1266,8 +1272,8 @@ relabel str = map (\(a, _) -> (a, str))
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Some helper functions for communicating data as bytes over named pipes.
 
-sizeOfDouble :: Int
-sizeOfDouble = sizeOf (undefined :: Double)
+sizeOfDouble :: ByteCount
+sizeOfDouble = fromIntegral (sizeOf (undefined :: Double))
 
 mkCDouble :: Double -> CDouble
 mkCDouble = CDouble
@@ -1283,15 +1289,19 @@ sendCDouble :: MonadIO m => CDouble -> Fd -> m ()
 sendCDouble x fd = liftIO $
   with x $ \ptr ->
     let bufPtr = castPtr ptr
-    in do fdWriteBuf fd bufPtr (fromIntegral sizeOfDouble)
+    in do bc <- fdWriteBuf fd bufPtr sizeOfDouble
+          unless (bc == sizeOfDouble) $ fail $
+            "sendCDouble: Tried sending " ++ show sizeOfDouble ++ 
+            " bytes but succeeded with " ++ show bc ++ " bytes."
+          logWrite $ "sendCDouble: Wrote " ++ show bc ++ " bytes."
           return ()
 
 -- | @'receiveCDouble' fd@ reads a double from the file descriptor @fd@.
 receiveCDouble :: MonadIO m => Fd -> m CDouble
 receiveCDouble fd = liftIO $
-  allocaBytes sizeOfDouble $ \ptr ->
+  allocaBytes (fromIntegral sizeOfDouble) $ \ptr ->
     let bufPtr = castPtr ptr
-    in do fdReadBuf fd bufPtr (fromIntegral sizeOfDouble)
+    in do fdReadBuf fd bufPtr sizeOfDouble
           peek ptr
 
 -- | @'sendVector' sv fd@ sends the vector @sv@ to the file descriptor @fd@.
@@ -1299,12 +1309,13 @@ sendVector :: MonadIO m => SV.Vector CDouble -> Fd -> m ()
 sendVector sv fd = liftIO $
   do mv <- SV.thaw sv
      MSV.unsafeWith mv $ \ptr ->
-       let busWidth = fromIntegral (sizeOfDouble * SV.length sv)
+       let busWidth = sizeOfDouble * fromIntegral (SV.length sv)
            busPtr   = castPtr ptr
        in do bc <- fdWriteBuf fd busPtr busWidth
              unless (fromIntegral bc == busWidth) $
                fail $ "sendVector: tried sending " ++ show busWidth ++
                       " bytes but succeeded with " ++ show bc ++ " bytes."
+             logWrite $ "sendVector: Wrote " ++ show bc ++ " bytes."
 
 -- | @'receiveVector' fd width@ reads @width@ doubles from the file descriptor
 -- @fd@ and returns a storable vector.
@@ -1312,10 +1323,10 @@ receiveVector :: MonadIO m => Fd -> Int -> m (SV.Vector CDouble)
 receiveVector fd width = liftIO $
   do mv <- MSV.new width
      MSV.unsafeWith mv $ \ptr ->
-       let busWidth = fromIntegral (sizeOfDouble * width)
+       let busWidth = sizeOfDouble * fromIntegral width
            busPtr   = castPtr ptr
        in do bc <- fdReadBuf fd busPtr busWidth
-             unless (fromIntegral bc == busWidth) $
+             unless (bc == busWidth) $
                fail $ "receiveVector: expected " ++ show busWidth ++ " bytes" ++
                       " but read " ++ show bc ++ " bytes."
      SV.freeze mv
@@ -1415,7 +1426,7 @@ simulationExt fds sys idx_in idx_out =
   do -- Initialize state.
      modify $ \st ->
        st { prevIn  = SV.replicate (length idx_in) (1/0)
-          , prevOut = SV.replicate (length idx_in) 0.0
+          , prevOut = SV.replicate (length idx_out) 0.0
           , addrIn  = Map.fromList idx_in
           , addrOut = Map.fromList idx_out
           }
@@ -1440,8 +1451,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
   do status <- readStatus fdInput
      case status of
        OK ->
-         do time <- receiveCDouble fdInput
-            -- Calling length instead of just storing port widths is silly:
+         do -- Calling length instead of just storing port widths is silly:
             vec <- receiveVector fdInput . SV.length =<< gets prevIn
 
             RandState { prevIn = prev1, addrIn = addr_in } <- get
@@ -1457,23 +1467,29 @@ simulateExt (fdInput, fdOutput) sched conn procs =
             progress <- simulate1Ext sched conn newProcs []
             case progress of
               Nothing ->
-                do liftIO $ putStrLn "  Ran out of alternatives."
+                do logWrite "Ran out of alternatives, requesting halt."
                    writeStatus DIE fdOutput
                    return []
 
               Just (dt, procs1, ts) ->
                 do RandState { addrOut = addr_out, prevOut = prev2 } <- get
 
-                   -- Set a new time to ask for and produce an output vector.
-                   let next      = time + mkCDouble dt
-                       output    = procsToVector procs1 prev2 addr_out
+                   -- Produce an output vector.
+                   let next   = mkCDouble dt
+                       output = procsToVector procs1 prev2 addr_out
+
+                   logWrite $ "PROCS: " ++ show output
 
                    -- Re-set the previous output to the current output.
                    newPrevOut <- copyVector output
                    modify $ \st -> st { prevOut = newPrevOut }
 
                    -- Signal OK and then data.
+                   logWrite "Sending status: OK"
                    writeStatus OK fdOutput
+                   logWrite $ "Sending DELTA: " ++ show next
+                   when (next == 0) $ logWrite  
+                     "************* WARNING: ZERO DELTA STEP *************"
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
@@ -1481,7 +1497,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
 
        -- In case this happened we did not receive OK and we should die.
        DIE ->
-         do liftIO $ putStrLn "Sender requested halt, stopping."
+         do logWrite "Master process requested halt, stopping."
             return []
 
 -- | @simulate1Ext@ progresses the simulation as long as possible without
@@ -1542,7 +1558,7 @@ simulateUsingExternal sys = exceptionHandler $
      case args of
       [inFifo, outFifo] -> runWithFIFOs inFifo outFifo sys
       _ ->
-        do putStrLn $ "Wrong number of arguments. Proceeding with default " ++
+        do logWrite $ "Wrong number of arguments. Proceeding with default " ++
                       "FIFOs."
            runWithFIFOs "/tmp/infifo" "/tmp/outfifo" sys
 
@@ -1554,8 +1570,7 @@ entrypoint :: External a
            -> (Fd, Fd)                       -- ^ (Input, Output)
            -> IO ()
 entrypoint system fds =
-  do
-     -- Fix the system, initialize to get information about AUTOSAR components
+  do -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
      let (res, _)               = initialize system
          (addr_in, labels_in)   = unzip (fromExternal res)
@@ -1567,16 +1582,13 @@ entrypoint system fds =
          idx_in  = zip [0..] addr_in
          idx_out = zip addr_out [0..]
 
-     -- Perform the handshake
+     -- Perform the handshake: Transfer port widths and labels
      handshake fds ( inwidth
                    , outwidth
                    , labels_in 
                    , labels_out 
                    )
 
-     -- Get the simulator started. This is a blocking action that might throw
-     -- exceptions. These should be handled so that we can message back to C
-     -- that we're done over here.
      runStateT (simulationExt fds system idx_in idx_out)
                (rstate0 (mkStdGen 111))
      return ()
@@ -1589,10 +1601,8 @@ runWithFIFOs :: External a
              -> AUTOSAR a
              -> IO ()
 runWithFIFOs inFifo outFifo sys =
-  do -- These will produce exceptions that should be handled
-     -- if FIFOs not present. Preferably we exit with exitFailure.
-     putStrLn $ "Using FIFO " ++ inFifo ++ " for input, " ++ outFifo ++
-                " for output."
+  do logWrite $ "Input FIFO:  " ++ inFifo
+     logWrite $ "Output FIFO: " ++ outFifo
      fdInput  <- openFd inFifo  ReadOnly Nothing defaultFileFlags
      fdOutput <- openFd outFifo WriteOnly Nothing defaultFileFlags
      entrypoint sys (fdInput, fdOutput)
@@ -1602,10 +1612,9 @@ exceptionHandler :: IO () -> IO ()
 exceptionHandler = catchPure . catchEOF
   where
     catchEOF m = catchIf isEOFError m $ \_ ->
-      putStrLn "Sender closed pipes, halting simulation."
+      logWrite "Master process closed pipes."
     catchPure m = catchAll m $ \e ->
-      putStrLn $ "Caught user error: " ++ show e
-
+      logWrite $ "Caught " ++ show e
 
 -- Code below this point is a bit outdated.
 

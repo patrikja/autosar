@@ -15,7 +15,6 @@ char PROTOCOL_MAGIC_NUMBERS[2] = {0, 1};
  */
 int Protocol_send_byte(Protocol *p, void *buf) 
 {
-  debug("CALLED.");
   if (p == NULL)   error(PROTOCOL_MEM_ERROR, "Protocol struct was NULL.");
   if (buf == NULL) error(MEM_ERROR, "Buffer pointer was NULL.");
   
@@ -30,7 +29,6 @@ int Protocol_send_byte(Protocol *p, void *buf)
  */
 int Protocol_send_bytes(Protocol *p, void *buf, int bytes) 
 {
-  debug("CALLED.");
   if (p == NULL)   error(PROTOCOL_MEM_ERROR, "Protocol struct was NULL.");
   if (buf == NULL) error(MEM_ERROR, "Buffer pointer was NULL.");
   
@@ -45,7 +43,6 @@ int Protocol_send_bytes(Protocol *p, void *buf, int bytes)
  */
 int Protocol_get_byte(Protocol *p, void *buf) 
 {
-  debug("CALLED.");
   if (p == NULL)   error(PROTOCOL_MEM_ERROR, "Protocol struct was NULL.");
   if (buf == NULL) error(MEM_ERROR, "Buffer pointer was NULL.");
 
@@ -60,7 +57,6 @@ int Protocol_get_byte(Protocol *p, void *buf)
  */
 int Protocol_get_bytes(Protocol *p, void *buf, int bytes) 
 {
-  debug("CALLED.");
   if (p == NULL)   error(PROTOCOL_MEM_ERROR, "Protocol struct was NULL.");
   if (buf == NULL) error(MEM_ERROR, "Buffer pointer was NULL.");
 
@@ -86,36 +82,26 @@ int Protocol_get_bytes(Protocol *p, void *buf, int bytes)
  */
 int Protocol_handshake(Protocol *p)
 {
-  debug("CALLED.");
   if (p == NULL) error(PROTOCOL_MEM_ERROR, "Protocol struct was NULL."); 
  
   if (Protocol_send_byte(p, P_OK) < 0) 
     error(PROTOCOL_ERROR, "Failed to send OK.");
 
-  // TODO: Remove these.
-  uint8_t in_width;
-  uint8_t out_width;
-  uint8_t labels_in; 
-  uint8_t labels_out;
-
-  if (Protocol_get_byte(p, &in_width) < 0)   
+  if (Protocol_get_byte(p, &p->p_input_width) < 1)   
     error(PROTOCOL_ERROR, "Failed to get input width.");
 
-  if (Protocol_get_byte(p, &out_width) < 0)
+  if (Protocol_get_byte(p, &p->p_output_width) < 1)
     error(PROTOCOL_ERROR, "Failed to get output width.");
 
   debug("Received sizes: OK.");
-  p->p_input_width  = in_width;
-  p->p_output_width = out_width;
 
   //-- Input labels ---------------------------------------------------------//
-  if (Protocol_get_byte(p, &labels_in) < 0)  
+  if (Protocol_get_byte(p, &p->p_input_labels) < 1)  
     error(PROTOCOL_ERROR, "Failed to get input label count.");
   
-  p->p_input_labels = labels_in;
-  debug("Received input label count %u: OK", labels_in);
+  debug("Received input label count %u: OK", p->p_input_labels);
 
-  p->p_input_labels_str = malloc(labels_in * sizeof(char *));
+  p->p_input_labels_str = malloc(p->p_input_labels * sizeof(char *));
   if (p->p_input_labels_str == NULL) 
     error(PROTOCOL_MEM_ERROR, "Failed to allocate space for input labels.");
 
@@ -139,13 +125,12 @@ int Protocol_handshake(Protocol *p)
   }
 
   //-- Output labels --------------------------------------------------------//
-  if (Protocol_get_byte(p, &labels_out) < 0)
+  if (Protocol_get_byte(p, &p->p_output_labels) < 1)
     error(PROTOCOL_ERROR, "Failed to get output label count.");
 
-  p->p_output_labels = labels_out;
-  debug("Received output label count %u: OK", labels_out);
+  debug("Received output label count %u: OK", p->p_output_labels);
 
-  p->p_output_labels_str = malloc(labels_out * sizeof(char *));
+  p->p_output_labels_str = malloc(p->p_output_labels * sizeof(char *));
   if (p->p_output_labels_str == NULL) {
     cleanup(p->p_input_labels_str, p->p_input_labels);
     error(PROTOCOL_MEM_ERROR, "Failed to allocate space for output labels.");
@@ -154,13 +139,13 @@ int Protocol_handshake(Protocol *p)
   for (uint8_t i = 0; i < p->p_output_labels; i++) {
     uint8_t str_len;
     Protocol_get_byte(p, &str_len);
-    debug("Got label %u length: %u.", i, str_len);
     
     p->p_output_labels_str[i] = calloc(1, (str_len + 1) * sizeof(char));
     if (p->p_output_labels_str[i] == NULL) {
       cleanup(p->p_input_labels_str, p->p_input_labels);
       cleanup(p->p_output_labels_str, i);
-      error(PROTOCOL_MEM_ERROR, "Allocation of label %u failed.", i);
+      error(PROTOCOL_MEM_ERROR, "Failed to allocate space for output label %u."
+           , i);
     }
 
     if (Protocol_get_bytes(p, p->p_output_labels_str[i], str_len) < 0) {
@@ -168,6 +153,7 @@ int Protocol_handshake(Protocol *p)
       cleanup(p->p_output_labels_str, i);
       error(PROTOCOL_ERROR, "Failed to get output label %u.", i);
     }
+    debug("LABEL %u: %s.", i, p->p_output_labels_str[i]);
   }
   debug("Received output labels: OK.");
 
@@ -182,8 +168,6 @@ int Protocol_handshake(Protocol *p)
  */
 Protocol *Protocol_init(int fildes_in, int fildes_out)
 {
-  debug("CALLED.");
-
   Protocol *p = calloc(1, sizeof(Protocol));
   if (p == NULL) error(NULL, "call to calloc failed.");
 
@@ -198,8 +182,6 @@ Protocol *Protocol_init(int fildes_in, int fildes_out)
  */
 void Protocol_destroy(Protocol *p)
 {
-  debug("CALLED.");
-
   for (uint8_t i = 0; i < p->p_input_labels; i++)
     free(p->p_input_labels_str[i]);
 
@@ -216,44 +198,54 @@ void Protocol_destroy(Protocol *p)
 /* == FUNCTION Protocol_send_data =============================================
  * Transfers data to ARSIM.
  *
+ * NOTE: Removed time, since ARSim does not need it.
  */
-int Protocol_send_data(Protocol *p, double time, const double *data)
+int Protocol_send_data(Protocol *p, const double *data)
 {
-  debug("CALLED.");
-
-  if (Protocol_send_byte(p, P_OK) < 0) 
+  if (Protocol_send_byte(p, P_OK) < 1) 
     error(PROTOCOL_ERROR, "Failed when sending OK.");
 
-  if (Protocol_send_bytes(p, &time, sizeof(double)) < 0)
-    error(PROTOCOL_ERROR, "Failed when sending timestamp.");
+  debug("Sent status.");
 
-  if (Protocol_send_bytes(p, (void *) data,
-      p->p_input_width * sizeof(double)) < 0)
+//  if (Protocol_send_bytes(p, &time, sizeof(double)) < sizeof(double))
+//    error(PROTOCOL_ERROR, "Failed when sending timestamp.");
+//
+//  debug("Sent timestamp %e", time);
+
+  if (Protocol_send_bytes(p, (void *) data, p->p_input_width * sizeof(double)) < 
+      p->p_input_width * sizeof(double))
     error(PROTOCOL_ERROR, "Failed when sending data vector.");
   
+  debug("Sent data.");
+
   return PROTOCOL_SUCCESS;
 }
 
 /* == FUNCTION Protocol_get_data ==============================================
  * Receives data from ARSIM.
  */
-int Protocol_get_data(Protocol *p, double *next_hit, double *data)
+int Protocol_get_data(Protocol *p, double *delta, double *data)
 {
-  debug("CALLED.");
-
-  char status;
-  if (Protocol_get_byte(p, &status) < 0) 
+  char status = 0;
+  if (Protocol_get_byte(p, &status) < 1) 
     error(PROTOCOL_ERROR, "Failed receiving status.");
+
+  debug("Received status %d.", status);
 
   if (status != 0)
     error(PROTOCOL_HALT, "ARSIM requested halt.");
 
-  if (Protocol_get_bytes(p, next_hit, sizeof(double)) < 0)
+  if (Protocol_get_bytes(p, delta, sizeof(double)) < sizeof(double))
     error(PROTOCOL_ERROR, "Failed receiving next sample time.");
 
-  if (Protocol_get_bytes(p, data, p->p_output_width * sizeof(double)) < 0)
+  debug("Received DELTA: %e", *delta);
+
+  if (Protocol_get_bytes(p, data, p->p_output_width * sizeof(double)) < 
+      p->p_output_width * sizeof(double))
     error(PROTOCOL_ERROR, "Failed receiving data vector.");
-  
+
+  debug("Received data.");
+
   return PROTOCOL_SUCCESS;
 }
 /* == FUNCTION cleanup ========================================================
@@ -261,8 +253,6 @@ int Protocol_get_data(Protocol *p, double *next_hit, double *data)
  */
 void cleanup(char **ptr, uint8_t successes) 
 {
-  debug("CALLED.");
-
   for (uint8_t i = 0; i < successes; i++) 
     free(ptr[i]);
   free(ptr);

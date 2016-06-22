@@ -6,6 +6,21 @@
  * allowing for Simulink to replace external components in the simulated AUTOSAR 
  * system.
  *
+ * Simulink calling order, for future reference:
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * 1. mdlInitializeSizes
+ * 2. [Various things such as port widths etc]
+ * 
+ * Simulation loop:
+ *   3. mdlGetTimeOfNextVarHit
+ *   4. mdlOutputs
+ *   5. mdlUpdate
+ *
+ * The backwards order of the simulation loop means we need to run
+ * ARSim with empty inputs one time before proceeding with regular
+ * simulation. This is done in init_simulator() which is called from
+ * mdlInitializeSizes.
+ *
  * KNOWN ISSUES
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  *   o  There is an issue when simulating systems with a unit
@@ -25,13 +40,14 @@
 #include <sys/types.h> 
 #include <unistd.h> 
 
+#include "debugm.h"
 #include "protocol.h"
 
 #define S_FUNCTION_NAME swrapper
 #define S_FUNCTION_LEVEL 2       // Leave this as 2
 #include "simstruc.h"
 
-#define MINIMUM_NEXT_VAR_HIT_OFFSET 1e-12
+#define MINIMUM_DELTA 1e-6
 
 /* Transfer protocol state */
 Protocol *protocol;
@@ -43,9 +59,8 @@ int    hs_input_fd;
 int    hs_output_fd;
 char   hs_input_fifo[]  = "/tmp/infifo";  // PARAMETER?
 char   hs_output_fifo[] = "/tmp/outfifo"; // PARAMETER?
-double next_hit         = 0.0;
-bool   model_updated    = false;
-
+double delta_time       = MINIMUM_DELTA;
+double *intermediate;
 
 /* == FUNCTION init_simulator =================================================
  * Sets up input and output FIFOs and waits for port width information from
@@ -150,21 +165,6 @@ void init_simulator(SimStruct *S)
 
       /* Set mask port labels. 
        * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-       * There seems to be no right way to do this, but the Mask objects provide 
-       * us with a 'port_label' command which can be used the following way in
-       * the mask initialization:
-       *
-       *   port_label(''output'', 1, ''some_label'');
-       *
-       * The above sets the label text for the first output port in the mask to
-       * 'some_label' (w/o ticks). The code can be executed in the mask context
-       * of the correct block by fetching the block path using 'ssGetPath(S)' on
-       * the SimStruct and calling the following
-       *
-       *   set_param(block_path, 'MaskDisplay', 'port_label(....)');
-       *
-       * from MATLAB. In order to make MATLAB evaluate it from here, we can 
-       * create the above string and call mexEvalString().
        *
        * XXX NOTE:
        *     Decided on a fixed command size of 256 until I figure this out. If
@@ -192,6 +192,15 @@ void init_simulator(SimStruct *S)
         free(cmd);
       }
 
+      /* - Set up some intermediate storage (MATLAB crux). 
+       * - Run the simulator one step (need some outputs to be ready since
+       *   Simulink updates the model in a backwards order).
+       *
+       * TODO: Error handling for calloc
+       */
+      intermediate = calloc(protocol->p_input_width, sizeof(double));
+      Protocol_send_data(protocol, intermediate);
+
       sim_running = true;
     }
     
@@ -207,9 +216,18 @@ void init_simulator(SimStruct *S)
  *
  * The port widths are re-set after the AUTOSAR model has been queried, leave
  * as dynamically sized.
+ *
+ * NOTE: This is the first function call performed by Simulink during model
+ *       initialization. Because of this, we perform ARSim initialization here.
  */
 static void mdlInitializeSizes(SimStruct *S)
 {
+  // Easier to spot a restart this way.
+  fprintf(stderr, "******************************************"
+                  "******************************************\n\n");
+  
+  debug("( trace )");
+
   ssSetNumSFcnParams(S, 1);
   if (ssGetNumSFcnParams(S) != ssGetSFcnParamsCount(S)) {
     return;
@@ -223,6 +241,8 @@ static void mdlInitializeSizes(SimStruct *S)
 
   ssSetOptions(S, SS_OPTION_EXCEPTION_FREE_CODE);
   ssSetOptions(S, SS_OPTION_CALL_TERMINATE_ON_EXIT);
+  
+  init_simulator(S);
 }
 
 /* == FUNCTION mdlInitializeSampleTimes =======================================
@@ -251,9 +271,6 @@ static void mdlInitializeSampleTimes(SimStruct *S)
 #define MDL_SET_INPUT_PORT_WIDTH
 void mdlSetInputPortWidth(SimStruct *S, int portIndex, int width)
 {
-  init_simulator(S);
-  if (!sim_running) return;
-
   if (width != protocol->p_input_width) {
     ssPrintf("AUTOSAR model expects an input port width of %u\n"
              "Tried to set %u\n", protocol->p_input_width, width);
@@ -275,9 +292,6 @@ void mdlSetInputPortWidth(SimStruct *S, int portIndex, int width)
 #define MDL_SET_OUTPUT_PORT_WIDTH
 void mdlSetOutputPortWidth(SimStruct *S, int portIndex, int width)
 {
-  init_simulator(S);
-  if (!sim_running) return;
-
   if (width != protocol->p_output_width) {
     ssPrintf("AUTOSAR model expects an output port width of %u\n"
              "Tried to set %u\n", protocol->p_output_width, width);
@@ -295,51 +309,35 @@ void mdlSetOutputPortWidth(SimStruct *S, int portIndex, int width)
  * Called by Simulink to update model in every major integration step.
  * Sends data to Haskell, called prior to mdlOutputs.
  *
- * TODO: The dynamic allocation when sending data is a quick fix. Rewriting
- *       Protocol_send_data and receiveVector (Haskell) to send/receive on a
- *       per-byte basis feels stupid in case we'd like to hook up the Haskell 
- *       code with something else at some point.
+ * Input variables from Simulink can be of all kinds of types. Performing a 
+ * memcpy or read from *uPtrs directly leads to all kinds of weird results,
+ * hence the need for a scratchpad (*intermediate).
  */
 #define MDL_UPDATE
 static void mdlUpdate(SimStruct *S, int_T tid)
 {
-  // Set flag.
-  if (!model_updated) model_updated = true;
+  debug("( trace )");
 
   InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S, 0);
 
-  /* XXX QUICK-FIX XXX */
-  double *data = malloc(protocol->p_input_width * sizeof(double));
-  for (size_t i = 0; i < 8; i++) data[i] = *uPtrs[i];
-  
-  double time = (double) ssGetT(S);
-  Protocol_send_data(protocol, time, data);
+  for (size_t i = 0; i < protocol->p_input_width; i++) 
+    intermediate[i] = *uPtrs[i];
 
-  /* XXX QUICK-FIX XXX */
-  free(data);
+  Protocol_send_data(protocol, intermediate);
 }
 
 /* == FUNCTION mdlOutputs =====================================================
  * Triggers a step in the simulation. Called by Simulink whenever a simulation
  * step takes place.
- *
- * TODO: Fix the zero-output unless model updated. This should _always_ be the
- * case; revise protocol.
  */
 static void mdlOutputs(SimStruct *S, int_T tid)
 {
+  debug("( trace )");
+
   real_T* outp  = ssGetOutputPortRealSignal(S, 0);
   size_t  width = (size_t) ssGetInputPortWidth(S, 0);
   
-  /* Unless mdlUpdate has been done, just put zeroes on the outport. */
-  if (!model_updated) {
-    double *tmp = calloc(protocol->p_output_width, sizeof(double));
-    memcpy(outp, tmp, protocol->p_output_width * sizeof(double));
-    free(tmp);
-    return;
-  }
-  
-  switch(Protocol_get_data(protocol, &next_hit, outp)) {
+  switch(Protocol_get_data(protocol, &delta_time, outp)) {
     case PROTOCOL_SUCCESS: 
       break;
     case PROTOCOL_HALT: 
@@ -354,34 +352,20 @@ static void mdlOutputs(SimStruct *S, int_T tid)
 }
 
 /* == FUNCTION mdlGetTimeOfNextVarHit =========================================
- * Set time of next sample hit with variable sample time. Time of next hit 
- * must EXCEED the current time given by ssGetT().
- *
- * TODO: There is a mishap right now where this is called before the first 
- * time we have triggered the simulator (and thus the output bus contains a
- * zero at the head). This is currently solved by incrementing time by a very
- * small amount set by MINIMUM_NEXT_VAR_HIT_OFFSET.
+ * Set time of next sample hit with variable sample time.
  */
 #define MDL_GET_TIME_OF_NEXT_VAR_HIT
 static void mdlGetTimeOfNextVarHit(SimStruct *S)
 {
-  time_T min_step = ssGetT(S) + MINIMUM_NEXT_VAR_HIT_OFFSET;
-  time_T requested_time = (time_T) next_hit; 
+  debug("( trace )");
 
-  // MATLAB calls this before mdlOutputs. Right now we shift time by a very 
-  // small amount but it means the time in the simulator is wrong by this
-  // amount the first step. This should be avoided if possible.
-  if (requested_time <= ssGetT(S)) {
-#ifndef NDEBUG
-    ssPrintf("error: incorrect time of %.8f requested (not exceeding "
-             "%.8f). Progressing with minimum step.\n", 
-             requested_time, ssGetT(S));
-#endif
-    ssSetTNext(S, min_step);
-    return;
+  if (delta_time == 0) {
+    debug("Received a DELTA step of zero, progressing time by %e."
+         , MINIMUM_DELTA);
+    delta_time = MINIMUM_DELTA;
   }
 
-  ssSetTNext(S, requested_time);
+  ssSetTNext(S, ssGetT(S) + (time_T) delta_time);
 }
 
 /* == FUNCTION mdlTerminate ===================================================
@@ -398,9 +382,9 @@ static void mdlTerminate(SimStruct *S) {
   }
 
   //-- Reset everything -----------------------------------------------------//
-  next_hit        = 1e-1; 
+  delta_time      = MINIMUM_DELTA;
   sim_running     = false;
-  model_updated   = false;
+  free(intermediate);
   
   /* Close file descriptors, not terribly interested if this succeeds
    * or not as we're done anyway.
