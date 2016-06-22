@@ -40,7 +40,7 @@ int  Protocol_get_bytes(Protocol *, void *, int);
 
 /* Derived protocol operations: */
 int Protocol_handshake(Protocol *);
-int Protocol_send_data(Protocol *, double, const double *);
+int Protocol_send_data(Protocol *, const double *);
 int Protocol_get_data(Protocol *, double *, double *);
 
 /* Helpers: */

@@ -174,7 +174,7 @@ switchRoute =
 
 -- * Trigger
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- To be documented or killed with fire.
+-- Monitor changes in a discrete signal to call a @ClientServerOperation@. 
 
 -- | Trigger.
 data Trigger c a b = Trigger
