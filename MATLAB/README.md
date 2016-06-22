@@ -6,9 +6,8 @@ Utilities for connecting Simulink to ARSIM through the pipes interface.
 
 | File           | Comment                                                   |
 | -------------- | --------------------------------------------------------- | 
-| ACCDict.sldd   | Variable dictionary for the ACC demo.                     |
-| ACCModel.slx   | ACC demo model. Requires the ACC code to be built.        |
-| CarDict.sldd   | Variable dictionary for the ABS demo.                     |
+| ACC.slx        | ACC demo model. Requires the ACC code to be built.        |
+| CarDict.sldd   | Variable dictionary for the car demos.                    |
 | CarModel.slx   | ABS demo model. Requires the NewABS code to be built.     | 
 |                |                                                           |
 | makeMEX.m      | Make script for building the S-function.                  |
