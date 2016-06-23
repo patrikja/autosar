@@ -1358,7 +1358,7 @@ castValue x =
       failure = error "Supported types for export are Bool, Integer and Double."
   in maybe (maybe (maybe failure mkCDoubleEnum v1)
                                  mkCDoubleEnum v2)
-                                 mkCDoubleEnum v3
+                                 mkCDouble     v3
 
 -- | Convert a vector to a list of processes.
 vectorToProcs :: SV.Vector CDouble
@@ -1457,7 +1457,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
             RandState { prevIn = prev1, addrIn = addr_in } <- get
             let extProcs = vectorToProcs vec prev1 addr_in
                 newProcs = extProcs ++ procs
-
+                   
             -- Re-set the previous input to the current input. Not sure if
             -- we have to /copy/ these vectors (they are storable) or if GHC
             -- figures it out for us (i.e. will they just reassign the pointer?)
@@ -1477,8 +1477,6 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                    -- Produce an output vector.
                    let next   = mkCDouble dt
                        output = procsToVector procs1 prev2 addr_out
-
-                   logWrite $ "PROCS: " ++ show output
 
                    -- Re-set the previous output to the current output.
                    newPrevOut <- copyVector output
