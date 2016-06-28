@@ -67,9 +67,9 @@ type Pedal = Double
 
 -- | The PID controller requires a @(cruise, vehicle)@ velocity tuple and
 -- provides a throttle control.
-data PIDCtrl c = PIDCtrl
-  { pidInput  :: DataElement Unqueued (Velo, Velo) Required c
-  , pidOutput :: DataElement Unqueued Throttle     Provided c
+data PIDCtrl = PIDCtrl
+  { pidInput  :: DataElem Unqueued (Velo, Velo) Required
+  , pidOutput :: DataElem Unqueued Throttle     Provided
   }
 
 -- | The PID controller produces a linear combination of Propotional-, 
@@ -89,10 +89,10 @@ pidController :: Time
               -- ^ I-step time scale
               -> Double
               -- ^ Scale factor K
-              -> Atomic c (PIDCtrl c)
+              -> AUTOSAR PIDCtrl
               -- ^ Throttle control (output)
-pidController st dt it scale =
-  do state <- interRunnableVariable (0.0, 0.0)
+pidController st dt it scale = atomic $ do
+     state <- interRunnableVariable (0.0, 0.0)
 
      pidInput  <- requiredPort
      pidOutput <- providedPort 
@@ -110,7 +110,7 @@ pidController st dt it scale =
               newOut = scale * (newInp + prevSum + dt / st * step) 
           rteIrvWrite state (newInp, newSum) 
           rteWrite pidOutput newOut
-     return PIDCtrl {..} 
+     return $ sealBy PIDCtrl pidInput pidOutput
 
 -- * Target vehicle sensor
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -119,9 +119,9 @@ pidController st dt it scale =
 -- well as distance to the object ahead. 
 
 -- | Radar controller exports.
-data RadarCtrl c = RadarCtrl
-  { distance :: DataElement Unqueued Distance Required c
-  , relative :: DataElement Unqueued Velo     Provided c
+data RadarCtrl = RadarCtrl
+  { distance :: DataElem Unqueued Distance Required
+  , relative :: DataElem Unqueued Velo     Provided
   }
 
 -- | The radar controller simulates a target vehicle sensor. By reading the
@@ -130,9 +130,9 @@ data RadarCtrl c = RadarCtrl
 -- vehicle. The component is parametric in the sample time resolution.
 radarCtrl :: Time 
           -- ^ Sample time resolution
-          -> Atomic c (RadarCtrl c)
-radarCtrl dt =
-  do state    <- interRunnableVariable 0.0
+          -> AUTOSAR RadarCtrl
+radarCtrl dt = atomic $ do
+     state    <- interRunnableVariable 0.0
      distance <- requiredPort
      relative <- providedPort
      comSpec relative (InitValue 0.0)
@@ -143,7 +143,7 @@ radarCtrl dt =
           let ds = (d1 - d0) / dt
           rteWrite relative ds
           rteIrvWrite state d1
-     return RadarCtrl {..}
+     return $ sealBy RadarCtrl distance relative
 
 -- * Throttle control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -152,8 +152,8 @@ radarCtrl dt =
 -- of saturation/normalisation of the signal to the @[0, 1]@ range.
 
 -- | Vehicle throttle controller.
-throttleCtrl :: Atomic c (Feedthrough c Throttle Throttle)
-throttleCtrl = feedthrough return 0.0
+throttleCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
+throttleCtrl = feedthrough id 0.0
 
 -- * Brake control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -162,8 +162,8 @@ throttleCtrl = feedthrough return 0.0
 -- some sort of saturation/normalisation of the signal to the @[0, 1]@ range.
 
 -- | Vehicle brake controller.
-brakeCtrl :: Atomic c (Feedthrough c Pedal Pedal)
-brakeCtrl = feedthrough return 0.0
+brakeCtrl :: AUTOSAR (Feedthrough Pedal Pedal)
+brakeCtrl = feedthrough id 0.0
 
 -- * Vehicle module
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -264,8 +264,8 @@ toBool 0 = False
 toBool _ = True
 
 -- | Create a control switch from a @Double@ input.
-converter :: Atomic c (Feedthrough c Double Bool)
-converter = feedthrough (return . toControl) True 
+converter :: AUTOSAR (Feedthrough Double Bool)
+converter = feedthrough toControl True 
   where
     toControl 0 = False 
     toControl _ = True

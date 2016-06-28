@@ -281,14 +281,15 @@ data ARInstr c a where
     ModProcess              :: (Proc -> Proc) -> ARInstr c ()
     NewProbe                :: String -> (Label -> Maybe Value) -> ARInstr c ()
     NewInit                 :: Address -> Value -> ARInstr c ()
-    NewComponent            :: AR c a -> ARInstr c a  -- Too strong requirement on the argument.
+    NewComponent            :: AR d a -> ARInstr c a  -- Too strong requirement on the argument.
     NewConnection           :: Conn -> ARInstr c ()
 
 type AR c a                 = Program (ARInstr c) a
 
+data Open c
 data Closed
 
-type Atomic c a             = AR c a
+type Atomic c a             = AR (Open c) a
 type AUTOSAR a              = AR Closed a
 
 runAR                       :: AR c a -> SimState -> (a,SimState)

@@ -94,9 +94,9 @@ sequencer setup step ctrl = do
 
 -- | The `Feedthrough` component requires an input and provides an output from
 -- which modified data is available.
-data Feedthrough c a b = Feedthrough
-  { feedIn  :: DataElement Unqueued a Required c
-  , feedOut :: DataElement Unqueued b Provided c
+data Feedthrough a b = Feedthrough
+  { feedIn  :: DataElem Unqueued a Required
+  , feedOut :: DataElem Unqueued b Provided
   }
 
 -- | Feedthrough component.
@@ -105,21 +105,21 @@ data Feedthrough c a b = Feedthrough
 --  
 -- * Initial value not useful anymore.
 feedthrough :: (Data a, Data b)
-            => (a -> RTE c b)
+            => (a -> b)
             -- ^ Monadic signal manipulation
             -> b 
             -- ^ Initial value for output
-            -> Atomic c (Feedthrough c a b)
-feedthrough act init = 
-  do feedIn  <- requiredPort
+            -> AUTOSAR (Feedthrough a b)
+feedthrough f init = atomic $ do
+     feedIn  <- requiredPort
      feedOut <- providedPort
      comSpec feedOut (InitValue init)
 
      -- Perform some sort of normalisation here
      runnable (MinInterval 0) [DataReceivedEvent feedIn] $
        do Ok t <- rteRead feedIn
-          rteWrite feedOut =<< act t
-     return Feedthrough {..}
+          rteWrite feedOut (f t)
+     return $ sealBy Feedthrough feedIn feedOut
 
 -- * Signal routing
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -129,19 +129,19 @@ feedthrough act init =
 -- NOTE: Unsure if we have to constantly call @rteRead@ on both inputs.
 
 -- | A two input switch with a control operation.
-data Switch c a = Switch 
-  { switchLeft  :: DataElement Unqueued  a       Required c
-  , switchRight :: DataElement Unqueued  a       Required c
-  , switchOut   :: DataElement Unqueued  a       Provided c
-  , switchOp    :: ClientServerOperation Bool () Provided c
+data Switch a = Switch 
+  { switchLeft  :: DataElem Unqueued  a   Required
+  , switchRight :: DataElem Unqueued  a   Required
+  , switchOut   :: DataElem Unqueued  a   Provided
+  , switchOp    :: ClientServerOp Bool () Provided
   }
 
 -- | Two input switch. By default, the @switchLeft@ input is passed through.
 -- Calling the control operation @switchOp@ with @False@ sets input to
 -- @switchRight@.
-switchRoute :: Data a => Atomic c (Switch c a)
-switchRoute = 
-  do switchLeft  <- requiredPort
+switchRoute :: Data a => AUTOSAR (Switch a)
+switchRoute = atomic $ do
+     switchLeft  <- requiredPort
      switchRight <- requiredPort
      switchOut   <- providedPort
      switchOp    <- providedPort
@@ -170,16 +170,16 @@ switchRoute =
           unless flag $ void $ rteWrite switchOut val
           rteExit lock
      
-     return Switch {..}
+     return $ sealBy Switch switchLeft switchRight switchOut switchOp
 
 -- * Trigger
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Monitor changes in a discrete signal to call a @ClientServerOperation@. 
 
 -- | Trigger.
-data Trigger c a b = Trigger
-  { input :: DataElement Unqueued  a    Required c
-  , op    :: ClientServerOperation b () Required c 
+data Trigger a b = Trigger
+  { input :: DataElem Unqueued a Required
+  , op    :: ClientServerOp b () Required 
   }
 
 -- | Let the changes in a discrete signal trigger a call to a  
@@ -192,9 +192,9 @@ trigger :: (Data a, Data b, Eq a)
         -- ^ Mapping 
         -> a
         -- ^ Initial value
-        -> Atomic c (Trigger c a b)
-trigger step f init = 
-  do state <- interRunnableVariable init
+        -> AUTOSAR (Trigger a b)
+trigger step f init = atomic $ do
+     state <- interRunnableVariable init
      input <- requiredPort
      op    <- requiredPort 
      
@@ -205,5 +205,5 @@ trigger step f init =
             do rteCall op (f v1)
                rteIrvWrite state v1
                return ()
-     return Trigger {..}
+     return $ sealBy Trigger input op
 
