@@ -177,15 +177,15 @@ brakeCtrl = feedthrough return 0.0
 -- | IO module for a vehicle using the ACC system.
 data IOModule = IOModule
   { -- Inputs (from real world)
-    cruise      :: DataElem Unqueued Velo     Provided
-  , velocity    :: DataElem Unqueued Velo     Provided
-  , dist        :: DataElem Unqueued Distance Provided
-  , throttleIn  :: DataElem Unqueued Throttle Provided
-  , brakeIn     :: DataElem Unqueued Pedal    Provided
-  , onOff       :: DataElem Unqueued Double   Provided
+    cruise      :: DataElem Unqueued Velo     Required
+  , velocity    :: DataElem Unqueued Velo     Required
+  , dist        :: DataElem Unqueued Distance Required
+  , throttleIn  :: DataElem Unqueued Throttle Required
+  , brakeIn     :: DataElem Unqueued Pedal    Required
+  , onOff       :: DataElem Unqueued Double   Required
     -- Outputs
-  , throttleOut :: DataElem Unqueued Throttle Required
-  , brakeOut    :: DataElem Unqueued Pedal    Required
+  , throttleOut :: DataElem Unqueued Throttle Provided
+  , brakeOut    :: DataElem Unqueued Pedal    Provided
   }
 
 instance External IOModule where
@@ -208,29 +208,13 @@ vehicleIO = composition $
      -- by the target vehicle sensor and the ACC ECU.
      let timeStep = 1e-2
     
-     -- Required ports
-     brakeOut    <- requiredPort
-     throttleOut <- requiredPort
-
-     -- Provided ports
-     brakeIn     <- providedPort
-     cruise      <- providedPort
-     dist        <- providedPort
-     onOff       <- providedPort
-     throttleIn  <- providedPort 
-     velocity    <- providedPort 
-     comSpec brakeIn    (InitValue 0.0)
-     comSpec cruise     (InitValue 0.0) 
-     comSpec dist       (InitValue 0.0)
-     comSpec onOff      (InitValue 0.0)
-     comSpec throttleIn (InitValue 0.0)
-     comSpec velocity   (InitValue 0.0)
-
      -- Expose subsystems 
      accECU <- cruiseCtrl timeStep
      radar  <- radarCtrl  timeStep
      brakes <- brakeCtrl
      engine <- throttleCtrl
+
+     connect (relative radar) (target accECU)
 
      -- Two-way switches for bypassing ACC. 
      -- TODO: Use /one/ bypass switch.
@@ -241,8 +225,7 @@ vehicleIO = composition $
      -- TODO: Simplify.
      brakesBypassTrigger <- trigger timeStep toBool 0
      engineBypassTrigger <- trigger timeStep toBool 0
-     connect onOff (input brakesBypassTrigger)
-     connect onOff (input engineBypassTrigger)
+     
      connect (switchOp bypassBrakes) (op brakesBypassTrigger)
      connect (switchOp bypassEngine) (op engineBypassTrigger)
 
@@ -250,19 +233,6 @@ vehicleIO = composition $
      -- TODO: Simplify.
      connect (brkCtrl accECU) (switchLeft bypassBrakes)
      connect (thrCtrl accECU) (switchLeft bypassEngine)
-     connect brakeIn          (switchRight bypassBrakes)
-     connect throttleIn       (switchRight bypassEngine)
-
-     connect (switchOut bypassBrakes) brakeOut
-     connect (switchOut bypassEngine) throttleOut
-
-     -- Remaining connections 
-     connect dist             (distance radar)
-     connect velocity         (vhVel accECU)
-     connect cruise           (crVel accECU)
-     connect (feedOut engine) throttleOut 
-     connect (feedOut brakes) brakeOut
-     connect (relative radar) (target accECU)
 
      -- PID setup
      let sampleTime = 1e-2   -- P-thing sample scale
@@ -276,7 +246,18 @@ vehicleIO = composition $
      connect (ctrlIn accECU) (pidInput pidCtrl) 
      connect (pidOutput pidCtrl) (ctrlOut accECU)  
 
-     return $ seal IOModule {..}
+     -- Remaining connections 
+     brakeOut    <- delegateP [switchOut bypassBrakes, feedOut brakes]
+     throttleOut <- delegateP [switchOut bypassEngine, feedOut engine]
+
+     onOff       <- delegateR [input brakesBypassTrigger, input engineBypassTrigger]
+     brakeIn     <- delegateR [switchRight bypassBrakes]
+     throttleIn  <- delegateR [switchRight bypassEngine]
+     dist        <- delegateR [distance radar]
+     velocity    <- delegateR [vhVel accECU]
+     cruise      <- delegateR [crVel accECU]
+
+     return $ IOModule {..}
 
 toBool :: Double -> Bool
 toBool 0 = False
@@ -327,7 +308,7 @@ data CruiseCtrl = CruiseCtrl
 
 -- | The cruise control apparatus.
 cruiseCtrl :: Time -> AUTOSAR CruiseCtrl
-cruiseCtrl resolution = composition $ 
+cruiseCtrl resolution = atomic $ 
   do -- Vehicle information
      crVel <- requiredPort
      vhVel <- requiredPort
@@ -364,5 +345,5 @@ cruiseCtrl resolution = composition $
             do printlog "ACC" $ "throttle: " ++ show ctrl
                rteWrite thrCtrl ctrl
                rteWrite brkCtrl 0
-     return $ seal CruiseCtrl {..}
+     return $ sealBy CruiseCtrl crVel vhVel ctrlIn ctrlOut target thrCtrl brkCtrl
 
