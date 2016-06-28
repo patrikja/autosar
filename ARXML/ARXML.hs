@@ -268,13 +268,13 @@ makePortInstanceSR top tname delems =
         ) $$
         txt "delegateP ps = do" $$
         nest 4 (
-            vmap (\d -> fname d <+> txt "<-" <+> txt "delegateP" <+> 
+            vmap (\d -> fname d <+> txt "<-" <+> txt "providedDelegate" <+> 
                         brackets (txt " v |" <+> txt tname <> braces (fname d <+> equals <+> txt "v") <+> txt "<- ps ")) delems $$
             txt "return" <+> txt tname <> txt "{..}"
         ) $$
         txt "delegateR ps = do" $$
         nest 4 (
-            vmap (\d -> fname d <+> txt "<-" <+> txt "delegateR" <+> 
+            vmap (\d -> fname d <+> txt "<-" <+> txt "requiredDelegate" <+> 
                         brackets (txt " v |" <+> txt tname <> braces (fname d <+> equals <+> txt "v") <+> txt "<- ps ")) delems $$
             txt "return" <+> txt tname <> txt "{..}"
         )
@@ -351,9 +351,9 @@ convertInterfaceTerm top name ports =
 convertSignature top tname node =
     case tagOf node of
         "R-PORT-PROTOTYPE" ->
-            fname <+> txt "::" <+> rTRef <+> txt "Required" <+> txt "()"
+            fname <+> txt "::" <+> rTRef <+> txt "Required" <+> txt "Closed"
         "P-PORT-PROTOTYPE" ->
-            fname <+> txt "::" <+> pTRef <+> txt "Provided" <+> txt "()"
+            fname <+> txt "::" <+> pTRef <+> txt "Provided" <+> txt "Closed"
         _ ->
             empty
     where
@@ -458,18 +458,18 @@ convertSel tag1 tag2 node =
 convertDelegationConns top tname nodes = vmap (convertDelegation top tname) (MMap.assocs connmap)
     where connmap = MMap.fromList (map (extractDelegationConn top) nodes)
 
-convertDelegation top tname (outer, [single]) = 
-    txt "let" <+> convertFieldname top tname outer <+> equals <+> single
-convertDelegation top tname (outer, multiple) =
-    convertFieldname top tname outer <+> txt "<- delegate" <+> brackets (commasep id multiple)
+convertDelegation top tname (Right outer, multiple) =
+    convertFieldname top tname outer <+> txt "<- requiredDelegate" <+> brackets (commasep id multiple)
+convertDelegation top tname (Left outer, multiple) =
+    convertFieldname top tname outer <+> txt "<- providedDelegate" <+> brackets (commasep id multiple)
 
 extractDelegationConn top node =
     case (optChild "R-PORT-IN-COMPOSITION-INSTANCE-REF" inner,
           optChild "P-PORT-IN-COMPOSITION-INSTANCE-REF" inner) of
         (Just rnode, _) ->
-            (outer, convertSel "TARGET-R-PORT-REF" "CONTEXT-COMPONENT-REF" rnode)
+            (Right outer, convertSel "TARGET-R-PORT-REF" "CONTEXT-COMPONENT-REF" rnode)
         (_, Just pnode) ->
-            (outer, convertSel "TARGET-P-PORT-REF" "CONTEXT-COMPONENT-REF" pnode)
+            (Left outer, convertSel "TARGET-P-PORT-REF" "CONTEXT-COMPONENT-REF" pnode)
   where
     inner = child "INNER-PORT-IREF" node
     outer = lastPathVal "OUTER-PORT-REF" node

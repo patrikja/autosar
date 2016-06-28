@@ -324,24 +324,16 @@ initialize sys              = (a, st { procs = map (apInit (conns st) (initvals 
 
 
 class Port p where
-    connect  :: p Provided Closed -> p Required Closed -> AUTOSAR ()
-    delegateP :: [p Provided Closed] -> AUTOSAR (p Provided Closed)
-    delegateR :: [p Required Closed] -> AUTOSAR (p Required Closed)
-    providedPort  :: Atomic c (p Provided c)
-    requiredPort  :: Atomic c (p Required c)
+    providedPort     :: Atomic c (p Provided c)
+    requiredPort     :: Atomic c (p Required c)
+    connect          :: p Provided Closed -> p Required Closed -> AUTOSAR ()
+    providedDelegate :: [p Provided Closed] -> AUTOSAR (p Provided Closed)
+    requiredDelegate :: [p Required Closed] -> AUTOSAR (p Required Closed)
 
 class ComSpec p where
     type ComSpecFor p :: *
     comSpec :: p c -> ComSpecFor p -> Atomic c ()
 
-class Delegate p r where
-    delegate :: Port p => [p r Closed] -> AUTOSAR (p r Closed)
-
-instance Delegate p Provided where
-    delegate = delegateP
-
-instance Delegate p Required where
-    delegate = delegateR
 
 instance Data a => ComSpec (DataElement Unqueued a Provided) where
     type ComSpecFor (DataElement Unqueued a Provided) = InitValue a
@@ -358,21 +350,21 @@ instance Data a => ComSpec (DataElement Unqueued a Required) where
 
 
 instance Data a => Port (DataElement Unqueued a) where
-    connect (DE a) (DE b) = newConnection (a,b)
-    delegateP ps = do
-        a <- newAddress
-        mapM newConnection [ (p,a) | DE p <- ps ]
-        return (DE a)
-    delegateR ps = do
-        a <- newAddress
-        mapM newConnection [ (a,p) | DE p <- ps ]
-        return (DE a)
     providedPort = do
         a <- newAddress
         return (DE a)
     requiredPort = do
         a <- newAddress
         newProcess (DElem a False NO_DATA)
+        return (DE a)
+    connect (DE a) (DE b) = newConnection (a,b)
+    providedDelegate ps = do
+        a <- newAddress
+        mapM newConnection [ (p,a) | DE p <- ps ]
+        return (DE a)
+    requiredDelegate ps = do
+        a <- newAddress
+        mapM newConnection [ (a,p) | DE p <- ps ]
         return (DE a)
 
 instance Data a => ComSpec (DataElement Queued a Required) where
@@ -384,17 +376,17 @@ instance Data a => ComSpec (DataElement Queued a Required) where
         f p                     = p
 
 instance Port (DataElement Queued a) where
+    providedPort = do a <- newAddress; return (DE a)
+    requiredPort = do a <- newAddress; newProcess (QElem a 10 []); return (DE a)
     connect (DE a) (DE b) = newConnection (a,b)
-    delegateP ps = do
+    providedDelegate ps = do
         a <- newAddress
         mapM newConnection [ (p,a) | DE p <- ps ]
         return (DE a)
-    delegateR ps = do
+    requiredDelegate ps = do
         a <- newAddress
         mapM newConnection [ (a,p) | DE p <- ps ]
         return (DE a)
-    providedPort = do a <- newAddress; return (DE a)
-    requiredPort = do a <- newAddress; newProcess (QElem a 10 []); return (DE a)
 
 instance ComSpec (ClientServerOperation a b Provided) where
     type ComSpecFor (ClientServerOperation a b Provided) = QueueLength Int
@@ -404,19 +396,19 @@ instance ComSpec (ClientServerOperation a b Provided) where
         return ()
 
 instance Port (ClientServerOperation a b) where
-    connect (OP a) (OP b) = newConnection (a,b)
-    delegateP ps = do
-        a <- newAddress
-        mapM newConnection [ (p,a) | OP p <- ps ]
-        return (OP a)
-    delegateR ps = do
-        a <- newAddress
-        mapM newConnection [ (a,p) | OP p <- ps ]
-        return (OP a)
     providedPort = do a <- newAddress; return (OP a)
     requiredPort = do a <- newAddress;
                       newProcess (Op a []);
                       return (OP a)
+    connect (OP a) (OP b) = newConnection (a,b)
+    providedDelegate ps = do
+        a <- newAddress
+        mapM newConnection [ (p,a) | OP p <- ps ]
+        return (OP a)
+    requiredDelegate ps = do
+        a <- newAddress
+        mapM newConnection [ (a,p) | OP p <- ps ]
+        return (OP a)
 
 
 connectEach :: Port p => [p Provided Closed] -> [p Required Closed] -> AUTOSAR ()

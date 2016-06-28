@@ -282,13 +282,13 @@ instance Port ValvePort where
         connect a b = do
             connect (relief a) (relief b)
             connect (pressure a) (pressure b)
-        delegateP ps = do
-            relief <- delegateP [ v | ValvePort{ relief = v } <- ps ]
-            pressure <- delegateP [ v | ValvePort{ pressure = v } <- ps ]
+        providedDelegate ps = do
+            relief <- providedDelegate [ v | ValvePort{ relief = v } <- ps ]
+            pressure <- providedDelegate [ v | ValvePort{ pressure = v } <- ps ]
             return ValvePort{..}
-        delegateR ps = do
-            relief <- delegateR [ v | ValvePort{ relief = v } <- ps ]
-            pressure <- delegateR [ v | ValvePort{ pressure = v } <- ps ]
+        requiredDelegate ps = do
+            relief <- requiredDelegate [ v | ValvePort{ relief = v } <- ps ]
+            pressure <- requiredDelegate [ v | ValvePort{ pressure = v } <- ps ]
             return ValvePort{..}
 
 -- Elected to put some index information here for convenience when performing
@@ -310,7 +310,7 @@ wheel_ctrl i = composition $ do
         when (i==2) $ do
             probeWrite "relief 2"    relief
             probeWrite "pressure 2"  pressure
-        accel <- delegate [accel_p, accel_r]
+        accel <- requiredDelegate [accel_p, accel_r]
         let valve = ValvePort{..}
             slip = slipstream ctrl
         return $ WheelCtrl valve accel slip i
