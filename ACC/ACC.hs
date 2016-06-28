@@ -247,15 +247,15 @@ vehicleIO = composition $
      connect (pidOutput pidCtrl) (ctrlOut accECU)  
 
      -- Remaining connections 
-     brakeOut    <- delegateP [switchOut bypassBrakes, feedOut brakes]
-     throttleOut <- delegateP [switchOut bypassEngine, feedOut engine]
+     brakeOut    <- providedDelegate [switchOut bypassBrakes, feedOut brakes]
+     throttleOut <- providedDelegate [switchOut bypassEngine, feedOut engine]
 
-     onOff       <- delegateR [input brakesBypassTrigger, input engineBypassTrigger]
-     brakeIn     <- delegateR [switchRight bypassBrakes]
-     throttleIn  <- delegateR [switchRight bypassEngine]
-     dist        <- delegateR [distance radar]
-     velocity    <- delegateR [vhVel accECU]
-     cruise      <- delegateR [crVel accECU]
+     onOff       <- requiredDelegate [input brakesBypassTrigger, input engineBypassTrigger]
+     brakeIn     <- requiredDelegate [switchRight bypassBrakes]
+     throttleIn  <- requiredDelegate [switchRight bypassEngine]
+     dist        <- requiredDelegate [distance radar]
+     velocity    <- requiredDelegate [vhVel accECU]
+     cruise      <- requiredDelegate [crVel accECU]
 
      return $ IOModule {..}
 
