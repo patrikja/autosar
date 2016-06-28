@@ -74,24 +74,18 @@ data PIDCtrl = PIDCtrl
 
 -- | The PID controller produces a linear combination of Propotional-, 
 -- Integrating and Differentiating gain. The component requires the previous
--- state of the variables and is thus stateful. The function is parametric in 
--- sample-, integration- and differentiation time (scales), as well as a scale
--- parameter (fixed).
---
--- The system is designed to use queued inputs (although with a unit queue
--- length) to enable that the system triggers on input events and lies dormant
--- otherwise (i.e. no change in input).
+-- state of the variables and is thus stateful.
 pidController :: Time 
               -- ^ Sample time
               -> Time
-              -- ^ D-step time scale
+              -- ^ Derivative time 
               -> Time
-              -- ^ I-step time scale
+              -- ^ Integral time
               -> Double
-              -- ^ Scale factor K
+              -- ^ Proportional scale 
               -> AUTOSAR PIDCtrl
               -- ^ Throttle control (output)
-pidController st dt it scale = atomic $ do
+pidController dt td ti k = atomic $ do
      state <- interRunnableVariable (0.0, 0.0)
 
      pidInput  <- requiredPort
@@ -102,14 +96,14 @@ pidController st dt it scale = atomic $ do
 
      runnable (MinInterval 0) [DataReceivedEvent pidInput] $
        do Ok (ctrl, feedback)   <- rteRead pidInput
-          Ok (prevInp, prevSum) <- rteIrvRead state
+          Ok (prevErr, prevInt) <- rteIrvRead state
          
-          let newInp = ctrl - feedback
-              step   = newInp - prevInp
-              newSum = prevSum + st / it * newInp
-              newOut = scale * (newInp + prevSum + dt / st * step) 
-          rteIrvWrite state (newInp, newSum) 
-          rteWrite pidOutput newOut
+          let err        = ctrl - feedback
+              derivative = (err - prevErr) / dt
+              integral   = prevInt + dt / ti * err
+              output     = k * (err + integral + td * derivative) 
+          rteIrvWrite state (err, integral) 
+          rteWrite pidOutput output
      return $ sealBy PIDCtrl pidInput pidOutput
 
 -- * Target vehicle sensor
@@ -235,12 +229,11 @@ vehicleIO = composition $
      connect (thrCtrl accECU) (switchLeft bypassEngine)
 
      -- PID setup
-     let sampleTime = 1e-2   -- P-thing sample scale
-         diffTime   = 0      -- D-thing sample scale
-         intTime    = 1      -- I-thing sample scale
-         scale      = 2      -- Output scale
+     let diffTime = 5e-3 
+         intTime  = 100
+         scale    = 3e-2
 
-     pidCtrl <- pidController sampleTime diffTime intTime scale
+     pidCtrl <- pidController timeStep diffTime intTime scale
 
      -- Connect PID
      connect (ctrlIn accECU) (pidInput pidCtrl) 
@@ -257,7 +250,7 @@ vehicleIO = composition $
      velocity    <- requiredDelegate [vhVel accECU]
      cruise      <- requiredDelegate [crVel accECU]
 
-     return $ IOModule {..}
+     return IOModule {..}
 
 toBool :: Double -> Bool
 toBool 0 = False
