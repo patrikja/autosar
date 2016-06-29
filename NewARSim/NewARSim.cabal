@@ -36,6 +36,8 @@ library
   build-depends:
     base == 4.*,
     containers,
+    filepath,
+    process,
     easyplot,
     exceptions,
     mtl,

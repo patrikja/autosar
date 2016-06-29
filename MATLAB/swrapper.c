@@ -62,6 +62,8 @@ char   hs_output_fifo[] = "/tmp/outfifo"; // PARAMETER?
 double delta_time       = MINIMUM_DELTA;
 double *intermediate;
 
+void init_protocol(SimStruct *S);
+
 /* == FUNCTION init_simulator =================================================
  * Sets up input and output FIFOs and waits for port width information from
  * the simulator.
@@ -78,138 +80,154 @@ void init_simulator(SimStruct *S)
   if (!sim_running) {
     //-- Open FIFOs ---------------------------------------------------------//
     
-    if (mkfifo(hs_input_fifo, 0666) < 0) {
-      ssSetErrorStatus(S, "Error creating Haskell input FIFO.");
-      return;
-    }
+    bool arsim_driver = (getenv("ARSIM_DRIVER") != NULL);
 
-    if (mkfifo(hs_output_fifo, 0666) < 0) {
-      ssSetErrorStatus(S, "Error creating Haskell output FIFO.");
-      return;
-    }
+    if(!arsim_driver) {
+      if (mkfifo(hs_input_fifo, 0666) < 0) {
+        ssSetErrorStatus(S, "Error creating Haskell input FIFO.");
+        return;
+      }
 
-    //-- Get simulator path and attempt system call -------------------------//
+      if (mkfifo(hs_output_fifo, 0666) < 0) {
+        ssSetErrorStatus(S, "Error creating Haskell output FIFO.");
+        return;
+      }
 
-    size_t buflen = mxGetN(ssGetSFcnParam(S, 0)) * sizeof(mxChar) + 1;
-    path = malloc(buflen);
-    if (mxGetString(ssGetSFcnParam(S, 0), path, buflen)) {
-      ssSetErrorStatus(S, "Error getting path string parameter.");
-      return;
-    }
- 
-    /* Check that path exists, and that it points to something
-     * that is an executable regular file (i.e. not a directory).
-     */
-    struct stat sb;
-    bool is_exec = stat(path, &sb) == 0 
-                && sb.st_mode & S_IXUSR 
-                && S_ISREG(sb.st_mode);
-  
-    if (!is_exec) {
-      ssSetErrorStatus(S, "Path does not point to a valid executable file.");  
-      return;
-    }
+      //-- Get simulator path and attempt system call -------------------------//
 
-    char *name = basename(path);
-    if (name == NULL) {
-      ssSetErrorStatus(S, "Call to basename() failed.");
-      return;
-    }
-    char *const argv[] = {name, hs_input_fifo, hs_output_fifo, NULL};
+      size_t buflen = mxGetN(ssGetSFcnParam(S, 0)) * sizeof(mxChar) + 1;
+      path = malloc(buflen);
+      if (mxGetString(ssGetSFcnParam(S, 0), path, buflen)) {
+        ssSetErrorStatus(S, "Error getting path string parameter.");
+        return;
+      }
    
-    pid_t child = fork();
-    
-    if (child < 0) {
-      ssSetErrorStatus(S, "Call to fork() failed.");
-      return;
-    }
-
-    if (child > 0) {
-
-      /* Open file descriptors. 
-       * 
-       * NOTE: This must be done /after/ the fork, or there'll be issues with
-       * the forked process. Likely, these things are inherited.
+      /* Check that path exists, and that it points to something
+       * that is an executable regular file (i.e. not a directory).
        */
-      hs_input_fd  = open(hs_input_fifo, O_WRONLY);
-      hs_output_fd = open(hs_output_fifo, O_RDONLY);
-      if (hs_input_fd < 0 || hs_output_fd < 0) {
-        ssSetErrorStatus(S, "Error opening file descriptor.");
+      struct stat sb;
+      bool is_exec = stat(path, &sb) == 0 
+                  && sb.st_mode & S_IXUSR 
+                  && S_ISREG(sb.st_mode);
+    
+      if (!is_exec) {
+        ssSetErrorStatus(S, "Path does not point to a valid executable file.");  
         return;
       }
 
-      //-- Init protocol struct and call handshake procedure ----------------// 
-      protocol = Protocol_init(hs_input_fd, hs_output_fd);
-      if (protocol == NULL) {
-        ssPrintf("Protocol_init returned NULL pointer.\n");
-        ssSetErrorStatus (S, "Protocol_init: PROTOCOL_MEM_ERROR");
+      char *name = basename(path);
+      if (name == NULL) {
+        ssSetErrorStatus(S, "Call to basename() failed.");
         return;
       }
+      char *const argv[] = {name, hs_input_fifo, hs_output_fifo, NULL};
+     
+      pid_t child = fork();
       
-      switch(Protocol_handshake(protocol)) {
-        case PROTOCOL_MEM_ERROR:
-          free(protocol);
-          ssSetErrorStatus(S, "Protocol_handshake: PROTOCOL_MEM_ERROR");
-          return;
-        case MEM_ERROR:
-          free(protocol);
-          ssSetErrorStatus(S, "Protocol_handshake: MEM_ERROR");
-          return;
-        case PROTOCOL_ERROR:
-          free(protocol);
-          ssSetErrorStatus(S, "Protocol_handshake: PROTOCOL_ERROR");
-          return;
-        case PROTOCOL_SUCCESS:
-        default: ;
+      if (child < 0) {
+        ssSetErrorStatus(S, "Call to fork() failed.");
+        return;
       }
 
-      /* Set mask port labels. 
-       * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-       *
-       * XXX NOTE:
-       *     Decided on a fixed command size of 256 until I figure this out. If
-       *     a 256-byte string is used the null-termination imposed by calloc
-       *     will fail and we'll get a segfault.
-       * XXX
-       */
-      const char *block_label = ssGetPath(S);
+      if (child > 0) {
+        init_protocol(S);
 
-      for (uint8_t i = 0; i < protocol->p_input_labels; i++) {
-        char *cmd = calloc(256, sizeof(char));
-        sprintf(cmd, "setMaskLabel('%s', '%s', %u, '%s', %u);", 
-                block_label, protocol->p_input_labels_str[i], i + 1,
-                "input", i == 0);
-        mexEvalString(cmd);
-        free(cmd);
       }
       
-      for (uint8_t i = 0; i < protocol->p_output_labels; i++) {
-        char *cmd = calloc(256, sizeof(char));
-        sprintf(cmd, "setMaskLabel('%s', '%s', %u, '%s', %u);", 
-                block_label, protocol->p_output_labels_str[i], i + 1,
-                "output", 0);
-        mexEvalString(cmd);
-        free(cmd);
-      }
-
-      /* - Set up some intermediate storage (MATLAB crux). 
-       * - Run the simulator one step (need some outputs to be ready since
-       *   Simulink updates the model in a backwards order).
-       *
-       * TODO: Error handling for calloc
-       */
-      intermediate = calloc(protocol->p_input_width, sizeof(double));
-      Protocol_send_data(protocol, intermediate);
-
-      sim_running = true;
+      if (child == 0) execv(path, argv); 
+    } else {
+      init_protocol(S);
     }
-    
-    if (child == 0) execv(path, argv); 
   
   }
 
   return; 
 }
+
+void init_protocol(SimStruct *S) 
+{
+  /* Open file descriptors. 
+   * 
+   * NOTE: This must be done /after/ the fork, or there'll be issues with
+   * the forked process. Likely, these things are inherited.
+   */
+  hs_input_fd  = open(hs_input_fifo, O_WRONLY);
+  hs_output_fd = open(hs_output_fifo, O_RDONLY);
+  if (hs_input_fd < 0 || hs_output_fd < 0) {
+    ssSetErrorStatus(S, "Error opening file descriptor.");
+    return;
+  }
+
+  //-- Init protocol struct and call handshake procedure ----------------// 
+  protocol = Protocol_init(hs_input_fd, hs_output_fd);
+  if (protocol == NULL) {
+    ssPrintf("Protocol_init returned NULL pointer.\n");
+    ssSetErrorStatus (S, "Protocol_init: PROTOCOL_MEM_ERROR");
+    return;
+  }
+  
+  switch(Protocol_handshake(protocol)) {
+    case PROTOCOL_MEM_ERROR:
+      free(protocol);
+      ssSetErrorStatus(S, "Protocol_handshake: PROTOCOL_MEM_ERROR");
+      return;
+    case MEM_ERROR:
+      free(protocol);
+      ssSetErrorStatus(S, "Protocol_handshake: MEM_ERROR");
+      return;
+    case PROTOCOL_ERROR:
+      free(protocol);
+      ssSetErrorStatus(S, "Protocol_handshake: PROTOCOL_ERROR");
+      return;
+    case PROTOCOL_SUCCESS:
+    default: ;
+  }
+
+  /* Set mask port labels. 
+   * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   *
+   * XXX NOTE:
+   *     Decided on a fixed command size of 256 until I figure this out. If
+   *     a 256-byte string is used the null-termination imposed by calloc
+   *     will fail and we'll get a segfault.
+   * XXX
+   */
+  const char *block_label = ssGetPath(S);
+
+#ifdef MATLAB_MEX_FILE
+/* This code adds labels to the model and prevents
+* generated C code from compiling */
+  for (uint8_t i = 0; i < protocol->p_input_labels; i++) {
+    char *cmd = calloc(256, sizeof(char));
+    sprintf(cmd, "setMaskLabel('%s', '%s', %u, '%s', %u);", 
+            block_label, protocol->p_input_labels_str[i], i + 1,
+            "input", i == 0);
+    mexEvalString(cmd);
+    free(cmd);
+  }
+  
+  for (uint8_t i = 0; i < protocol->p_output_labels; i++) {
+    char *cmd = calloc(256, sizeof(char));
+    sprintf(cmd, "setMaskLabel('%s', '%s', %u, '%s', %u);", 
+            block_label, protocol->p_output_labels_str[i], i + 1,
+            "output", 0);
+    mexEvalString(cmd);
+    free(cmd);
+  }
+#endif
+
+  /* - Set up some intermediate storage (MATLAB crux). 
+   * - Run the simulator one step (need some outputs to be ready since
+   *   Simulink updates the model in a backwards order).
+   *
+   * TODO: Error handling for calloc
+   */
+  intermediate = calloc(protocol->p_input_width, sizeof(double));
+  Protocol_send_data(protocol, intermediate);
+
+  sim_running = true;
+}
+
 
 /* == FUNCTION mdlInitializeSizes =============================================
  * Initialize IO sizes for the S-Function port interface.
