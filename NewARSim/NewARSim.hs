@@ -68,11 +68,13 @@ import           Foreign.Ptr
 import           Foreign.Storable
 import           System.Environment
 import           System.Exit
+import           System.FilePath (FilePath)
 import           System.IO
 import           System.IO.Error
 import           System.IO.Unsafe
 import           System.Random
 import           System.Posix
+import           System.Process (ProcessHandle, spawnProcess, terminateProcess)
 import qualified Unsafe.Coerce
 import           Test.QuickCheck hiding (collect)
 import           Test.QuickCheck.Property (unProperty)
@@ -1553,6 +1555,19 @@ simulateUsingExternal sys = exceptionHandler $
                       "FIFOs."
            runWithFIFOs "/tmp/infifo" "/tmp/outfifo" sys
 
+-- | Run the simulation with external software (i.e. Simulink) by
+-- starting the external component from Haskell, and clean up afterwards.
+simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO ()
+simulateDriveExternal ext sys = exceptionHandler $
+  do pext <- spawnProcess ext []
+     args <- getArgs
+     case args of
+      [inFifo, outFifo] -> runWithFIFOs inFifo outFifo sys
+      _ ->
+        do logWrite $ "Wrong number of arguments. Proceeding with default " ++
+                      "FIFOs."
+           runWithFIFOs "/tmp/infifo" "/tmp/outfifo" sys
+     terminateProcess pext
 
 -- | The external simulation entry-point. Given two file descriptors for
 -- input/output FIFOs we can start the simulation of the AUTOSAR program.
