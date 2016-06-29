@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE RecordWildCards    #-}
 
 -- | Generic components / skeletons. 
 -- 
@@ -106,7 +105,7 @@ data Feedthrough a b = Feedthrough
 -- * Initial value not useful anymore.
 feedthrough :: (Data a, Data b)
             => (a -> b)
-            -- ^ Monadic signal manipulation
+            -- ^ Signal manipulation
             -> b 
             -- ^ Initial value for output
             -> AUTOSAR (Feedthrough a b)
