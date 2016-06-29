@@ -12,6 +12,7 @@ build-type:          Simple
 extra-source-files:  
     ChangeLog.md
   , Generic.hs
+  , Gearbox.hs
 
 cabal-version:       >=1.10
 

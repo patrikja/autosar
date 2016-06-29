@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | Adaptive Cruise Control (ACC) component in the AUTOSAR monad.
 --
@@ -42,6 +42,7 @@ module ACC
 
 import Control.Monad
 import Generic
+import Gearbox
 import NewARSim      hiding (void)
 
 -- * Types 
@@ -122,6 +123,8 @@ data RadarCtrl = RadarCtrl
 -- distance to the target vehicle from the environment (for instance Simulink),
 -- @radarCtrl@ computes the relative velocity between the vehicle and the target
 -- vehicle. The component is parametric in the sample time resolution.
+--
+-- TODO: This is not right
 radarCtrl :: Time 
           -- ^ Sample time resolution
           -> AUTOSAR RadarCtrl
@@ -132,32 +135,31 @@ radarCtrl dt = atomic $ do
      comSpec relative (InitValue 0.0)
 
      runnable (MinInterval 0) [TimingEvent dt] $ 
-       do Ok d1 <- rteRead distance
-          Ok d0 <- rteIrvRead state
-          let ds = (d1 - d0) / dt
-          rteWrite relative ds
-          rteIrvWrite state d1
+       do -- Ok d1 <- rteRead distance
+          res <- rteRead distance
+          case res of 
+            Ok d1 -> do 
+              Ok d0 <- rteIrvRead state
+              let ds = (d1 - d0) / dt
+              rteWrite relative ds
+              rteIrvWrite state d1
+            _ -> rteWrite relative 0.0
      return $ sealBy RadarCtrl distance relative
 
 -- * Throttle control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- This component is here in case the ACC component is extended. Right now it
--- just acts as a feedthrough for throttle. It could optionally apply some sort
--- of saturation/normalisation of the signal to the @[0, 1]@ range.
 
--- | Vehicle throttle controller.
+-- | Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
+-- range.
 throttleCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
-throttleCtrl = feedthrough id 0.0
+throttleCtrl = feedthrough (max (-1) . min 2) 0.0
 
 -- * Brake control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- This component is here in case the ACC component is extended. Right now it
--- just acts as a feedthrough for pedal application. It could optionally apply 
--- some sort of saturation/normalisation of the signal to the @[0, 1]@ range.
 
--- | Vehicle brake controller.
+-- | Vehicle brake controller. Limits throughput signal to the @[0, 1]@ range.
 brakeCtrl :: AUTOSAR (Feedthrough Pedal Pedal)
-brakeCtrl = feedthrough id 0.0
+brakeCtrl = feedthrough (min 1) 0.0
 
 -- * Vehicle module
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -177,9 +179,11 @@ data IOModule = IOModule
   , throttleIn  :: DataElem Unqueued Throttle Required
   , brakeIn     :: DataElem Unqueued Pedal    Required
   , onOff       :: DataElem Unqueued Double   Required
+  , rpmIn       :: DataElem Unqueued Double   Required -- Engine RPM
     -- Outputs
   , throttleOut :: DataElem Unqueued Throttle Provided
   , brakeOut    :: DataElem Unqueued Pedal    Provided
+  , gearOut     :: DataElem Unqueued Integer  Provided -- Gear signal
   }
 
 instance External IOModule where
@@ -190,10 +194,14 @@ instance External IOModule where
     , relabel "THR_IN" $ fromExternal (throttleIn iom)
     , relabel "BRK_IN" $ fromExternal (brakeIn    iom)
     , relabel "ONOFF"  $ fromExternal (onOff      iom)
+    , relabel "RPM"    $ fromExternal (rpmIn      iom)
     ]
   
-  toExternal iom = relabel "THR_OUT" (toExternal (throttleOut iom)) ++ 
-                   relabel "BRK_OUT" (toExternal (brakeOut iom))
+  toExternal iom = concat
+    [ relabel "THR_OUT" (toExternal (throttleOut iom))
+    , relabel "BRK_OUT" (toExternal (brakeOut    iom))
+    , relabel "GEAR"    (toExternal (gearOut     iom))
+    ]
 
 -- | Vehicle IO module.
 vehicleIO :: AUTOSAR IOModule
@@ -216,15 +224,12 @@ vehicleIO = composition $
      bypassEngine <- switchRoute
 
      -- Connect switch control operations to triggers on @onOff@.
-     -- TODO: Simplify.
      brakesBypassTrigger <- trigger timeStep toBool 0
      engineBypassTrigger <- trigger timeStep toBool 0
-     
      connect (switchOp bypassBrakes) (op brakesBypassTrigger)
      connect (switchOp bypassEngine) (op engineBypassTrigger)
 
      -- Connect switch ports
-     -- TODO: Simplify.
      connect (brkCtrl accECU) (switchLeft bypassBrakes)
      connect (thrCtrl accECU) (switchLeft bypassEngine)
 
@@ -232,16 +237,21 @@ vehicleIO = composition $
      let diffTime = 5e-3 
          intTime  = 100
          scale    = 3e-2
-
      pidCtrl <- pidController timeStep diffTime intTime scale
-
-     -- Connect PID
-     connect (ctrlIn accECU) (pidInput pidCtrl) 
+     connect (ctrlIn accECU)     (pidInput pidCtrl) 
      connect (pidOutput pidCtrl) (ctrlOut accECU)  
 
+     -- Gear controller setup
+     gearCtrl <- gearController timeStep
+     gearOut  <- providedDelegate [gearSignal gearCtrl]
+     rpmIn    <- requiredDelegate [engineRPM gearCtrl]
+     
+
      -- Remaining connections 
-     brakeOut    <- providedDelegate [switchOut bypassBrakes, feedOut brakes]
-     throttleOut <- providedDelegate [switchOut bypassEngine, feedOut engine]
+     connect (switchOut bypassBrakes) (feedIn brakes) 
+     connect (switchOut bypassEngine) (feedIn engine) 
+     brakeOut    <- providedDelegate [feedOut brakes]
+     throttleOut <- providedDelegate [feedOut engine]
 
      onOff       <- requiredDelegate [input brakesBypassTrigger, input engineBypassTrigger]
      brakeIn     <- requiredDelegate [switchRight bypassBrakes]
@@ -255,13 +265,6 @@ vehicleIO = composition $
 toBool :: Double -> Bool
 toBool 0 = False
 toBool _ = True
-
--- | Create a control switch from a @Double@ input.
-converter :: AUTOSAR (Feedthrough Double Bool)
-converter = feedthrough toControl True 
-  where
-    toControl 0 = False 
-    toControl _ = True
 
 -- * Adaptive Cruise Control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -321,14 +324,16 @@ cruiseCtrl resolution = atomic $
 
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
-     -- *** TODO ***
-     --
-     -- * ...
+     -- TODO: Target speed not relative to vehicle 
      runnable (MinInterval 0) [TimingEvent resolution] $
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
+          -- Ok r <- rteRead target
 
-          rteWrite ctrlIn (c, v) 
+          -- Try to override cruise velocity when relative velocity to
+          -- target is lower
+          -- rteWrite ctrlIn (min c (v + r), v)
+          rteWrite ctrlIn (c, v)
           Ok ctrl <- rteRead ctrlOut
           if ctrl < 0 then
             do printlog "ACC" $ "brakes: " ++ show (-ctrl)
