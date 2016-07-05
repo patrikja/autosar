@@ -1166,7 +1166,6 @@ writeStatus status fd = liftIO $
                DIE -> 1
      unless (bc == 1) $ fail $
        "writeStatus: tried to write 1 byte, but succeeded with " ++ show bc
-     logWrite $ "writeStatus: Wrote " ++ show bc ++ " bytes."
 
 -- | Read a status from the input file descriptor.
 readStatus :: MonadIO m => Fd -> m Status
@@ -1288,7 +1287,6 @@ sendCDouble x fd = liftIO $
           unless (bc == sizeOfDouble) $ fail $
             "sendCDouble: Tried sending " ++ show sizeOfDouble ++ 
             " bytes but succeeded with " ++ show bc ++ " bytes."
-          logWrite $ "sendCDouble: Wrote " ++ show bc ++ " bytes."
           return ()
 
 -- | @'receiveCDouble' fd@ reads a double from the file descriptor @fd@.
@@ -1310,7 +1308,6 @@ sendVector sv fd = liftIO $
              unless (fromIntegral bc == busWidth) $
                fail $ "sendVector: tried sending " ++ show busWidth ++
                       " bytes but succeeded with " ++ show bc ++ " bytes."
-             logWrite $ "sendVector: Wrote " ++ show bc ++ " bytes."
 
 -- | @'receiveVector' fd width@ reads @width@ doubles from the file descriptor
 -- @fd@ and returns a storable vector.
@@ -1426,7 +1423,7 @@ simulationExt fds sys idx_in idx_out =
           , addrOut = Map.fromList idx_out
           }
 
-     let procs1        = procs state1
+     let procs1        = procs state1 
          (res, state1) = initialize sys
          a `conn` b    = (a, b) `elem` conns state1 || a==b
          outs          = [ Output a (toValue (0.0 :: Double)) 
@@ -1452,7 +1449,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
             RandState { prevIn = prev1, addrIn = addr_in } <- get
             let extProcs = vectorToProcs vec prev1 addr_in
                 newProcs = extProcs ++ procs
-                   
+           
             -- Re-set the previous input to the current input. Not sure if
             -- we have to /copy/ these vectors (they are storable) or if GHC
             -- figures it out for us (i.e. will they just reassign the pointer?)
@@ -1478,11 +1475,9 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                    modify $ \st -> st { prevOut = newPrevOut }
 
                    -- Signal OK and then data.
-                   logWrite "Sending status: OK"
                    writeStatus OK fdOutput
-                   logWrite $ "Sending DELTA: " ++ show next
-                   when (next == 0) $ logWrite  
-                     "************* WARNING: ZERO DELTA STEP *************"
+                   when (next < 1e-3) $ logWrite $
+                     "Warning: Small delta step of " ++ show next ++ " sent."
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
