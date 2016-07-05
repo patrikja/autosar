@@ -1,9 +1,9 @@
 module Main where
 
 import NewARSim
-import NewABS
+import NewABS2
 import System.Random
 
 main :: IO ()
-main = simulateUsingExternal abs_system
+main = simulateUsingExternal absSystem
 
