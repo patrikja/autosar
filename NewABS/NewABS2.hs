@@ -55,6 +55,7 @@ type Slip  = Double
 type Accel = Double
 type Velo  = Double
 type Valve = Bool
+type Index = Int
 
 -- * PID controller
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -69,6 +70,8 @@ data PIDCtrl = PIDCtrl
 -- | The PID controller produces a linear combination of Propotional-, 
 -- Integrating and Differentiating gain. The component requires the previous
 -- state of the variables and is thus stateful.
+--
+-- NOTE: Derivatives get harsh over time, should perhaps filter inputs?
 pidController :: Time 
               -- ^ Sample time
               -> Time
@@ -214,7 +217,7 @@ data WheelCtrl = WheelCtrl
 wheelCtrl :: Index -> AUTOSAR WheelCtrl
 wheelCtrl i = composition $ 
   do bang <- bangBangCtrl
-     pid  <- pidController 1e-4 3e-3 1e324 7
+     pid  <- pidController 1e-4 2e-3 1e324 7
 
      connect (pidIn bang)    (pidInput pid)
      connect (pidOutput pid) (pidOut bang)
