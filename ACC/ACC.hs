@@ -14,18 +14,14 @@
 --
 -- *** TODO *** 
 --
---  * Fix the bug in the S-function when one output causes termination. Not sure
---    why this happens, but it likely has to do with the protocol (ARSim seems
---    to think it has received a @DIE@ message from C). Touching up the
---    communications protocol should be done in any case.
---
 --  * Override cruise speed when target vehicle has a lower relative speed.
+--  * Let radar ignore targets exceeding some threshold distance.
+--  * Implement some sort of panic brake logic that goes into play when
+--    cruise speed is overridden. When changing cruise speeds, we should refrain
+--    from using brakes as much as possible.
+--  * External connections get @NO_DATA@ early on. This is not supposed to
+--    happen (there should always be a ZERO input at the very least).
 --
---  * System does not work :-)
---
--- *** NOTES ***
---
---  * Logging slows down simulation considerably. Avoid @printlog@.
 module ACC 
   ( -- * Cruise control
     CruiseCtrl(..)
@@ -44,6 +40,7 @@ import Control.Monad
 import Generic
 import Gearbox
 import NewARSim      hiding (void)
+import Target
 
 -- * Types 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -56,9 +53,6 @@ type Velo = Double
 
 -- | Throttle application. Unitless/fraction.
 type Throttle = Double
-
--- | Some distance measure.
-type Distance = Double
 
 -- | Brake pedal application. Unitless/fraction.
 type Pedal = Double
@@ -152,7 +146,7 @@ radarCtrl dt = atomic $ do
 -- | Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
 -- range.
 throttleCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
-throttleCtrl = feedthrough (max (-1) . min 2) 0.0
+throttleCtrl = feedthrough (max (-1) . min 1) 0.0
 
 -- * Brake control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -175,7 +169,7 @@ data IOModule = IOModule
   { -- Inputs (from real world)
     cruise      :: DataElem Unqueued Velo     Required
   , velocity    :: DataElem Unqueued Velo     Required
-  , dist        :: DataElem Unqueued Distance Required
+--   , dist        :: DataElem Unqueued Distance Required
   , throttleIn  :: DataElem Unqueued Throttle Required
   , brakeIn     :: DataElem Unqueued Pedal    Required
   , onOff       :: DataElem Unqueued Double   Required
@@ -190,7 +184,7 @@ instance External IOModule where
   fromExternal iom = concat 
     [ relabel "CRUISE" $ fromExternal (cruise     iom)
     , relabel "VELO"   $ fromExternal (velocity   iom)
-    , relabel "TARGET" $ fromExternal (dist       iom)
+--     , relabel "TARGET" $ fromExternal (dist       iom)
     , relabel "THR_IN" $ fromExternal (throttleIn iom)
     , relabel "BRK_IN" $ fromExternal (brakeIn    iom)
     , relabel "ONOFF"  $ fromExternal (onOff      iom)
@@ -245,7 +239,13 @@ vehicleIO = composition $
      gearCtrl <- gearController timeStep
      gearOut  <- providedDelegate [gearSignal gearCtrl]
      rpmIn    <- requiredDelegate [engineRPM gearCtrl]
-     
+
+     -- Target vehicle setup. Spawn a moving target 19 seconds in, running at
+     -- 20 m/s, 100 meters ahead, alive for 30 seconds.
+     moving <- movingTarget 19 20 100 30
+     target <- targetCtrl timeStep
+     connect (getStatus moving)      (targetOp target)
+     connect (targetDistance target) (distance radar)
 
      -- Remaining connections 
      connect (switchOut bypassBrakes) (feedIn brakes) 
@@ -256,7 +256,7 @@ vehicleIO = composition $
      onOff       <- requiredDelegate [input brakesBypassTrigger, input engineBypassTrigger]
      brakeIn     <- requiredDelegate [switchRight bypassBrakes]
      throttleIn  <- requiredDelegate [switchRight bypassEngine]
-     dist        <- requiredDelegate [distance radar]
+--      dist        <- requiredDelegate [distance radar]
      velocity    <- requiredDelegate [vhVel accECU]
      cruise      <- requiredDelegate [crVel accECU]
 
@@ -324,16 +324,19 @@ cruiseCtrl resolution = atomic $
 
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
-     -- TODO: Target speed not relative to vehicle 
+     -- TODO: * Target speed not relative to vehicle 
+     --       * Override cruise speed
+     --       * Implement some sort of panic braking rule.
+     --
      runnable (MinInterval 0) [TimingEvent resolution] $
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
-          -- Ok r <- rteRead target
+          Ok r <- rteRead target
 
           -- Try to override cruise velocity when relative velocity to
           -- target is lower
-          -- rteWrite ctrlIn (min c (v + r), v)
-          rteWrite ctrlIn (c, v)
+          rteWrite ctrlIn (min c (v + r), v)
+          -- rteWrite ctrlIn (c, v)
           Ok ctrl <- rteRead ctrlOut
           if ctrl < 0 then
             do printlog "ACC" $ "brakes: " ++ show (-ctrl)
