@@ -29,9 +29,9 @@
 %%%%% Combining reductions
 begingroup(CombRed).
 
-step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, say(A,L),  P_2 ), step( Q_1, hear(A,L), Q_2 ).
-step( par(P_1,Q_1), say(A,L),  par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, say(A,L),  Q_2 ).
-step( par(P_1,Q_1), hear(A,L), par(P_2,Q_2) ) :- step( P_1, hear(A,L), P_2 ), step( Q_1, hear(A,L), Q_2 ).
+step( par(P_1,Q_1), say(A,D),  par(P_2,Q_2) ) :- step( P_1, say(A,D),  P_2 ), step( Q_1, hear(A,D), Q_2 ).
+step( par(P_1,Q_1), say(A,D),  par(P_2,Q_2) ) :- step( P_1, hear(A,D), P_2 ), step( Q_1, say(A,D),  Q_2 ).
+step( par(P_1,Q_1), hear(A,D), par(P_2,Q_2) ) :- step( P_1, hear(A,D), P_2 ), step( Q_1, hear(A,D), Q_2 ).
 step( par(P_1,Q_1), delta(T),  par(P_2,Q_2) ) :- step( P_1, delta(T),  P_2 ), step( Q_1, delta(T),  Q_2 ).
 
 endgroup(CombRed).
@@ -45,8 +45,8 @@ begingroup(ExclusiveAreas).
 step( rinst(r(R,I), C, Xs, rte_Enter(X,K)),              say(x(X,I),enter),             rinst(r(R,I), C, cons(X,Xs), ap(K,ok)) ).
 step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),exit),              rinst(r(R,I), C, Xs, ap(K,ok))         ).
 
-step( excl(x(X,I), free),                                hear(x(X,I),enter),            excl(x(X,I), taken)                    ).
-step( excl(x(X,I), taken),                               hear(x(X,I),exit),             excl(x(X,I), free)                     ).
+step( excl(x(X,I), false),                               hear(x(X,I),enter),            excl(x(X,I), true)                     ).
+step( excl(x(X,I), true),                                hear(x(X,I),exit),             excl(x(X,I), false)                    ).
 
 endgroup(ExclusiveAreas).
 
@@ -70,7 +70,7 @@ step( rinst(r(R,I), C, Xs, rte_Receive(e(E,P),K)),       say(ep(E,P,I),rcv(V)), 
 step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,Res)),      rinst(r(R,I), C, Xs, ap(K,Res))       ).
 
 step( qelem(ep(E,P,I), N, cons(V,Vs)),                   hear(ep(E,P,I),rcv(V)),         qelem(ep(E,P,I), N, Vs)               ).
-step( qelem(ep(E,P,I), N, eps),                          hear(ep(E,P,I),rcv(no_data)),   qelem(ep(E,P,I), N, eps)              ).
+step( qelem(ep(E,P,I), N, eps),                          hear(ep(E,P,I),rcv(nodata)),    qelem(ep(E,P,I), N, eps)              ).
 step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,ok)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
     connect(A,ep(E,P,I)), less(length(Vs),N).
 step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,limit)),           qelem(ep(E,P,I), N, Vs)               ) :-
@@ -78,15 +78,12 @@ step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,limit)),  
 step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),           qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
     connect(A,ep(E,P,I)), less(length(Vs),N).
 
-% dataReceived(e(E,P)) is a static property of this runnable
-%   from pending it will move on to spawn an rinst which will execute some "data handler" code
-
-step( runnable(r(R,I), K, T, _, N),                      hear(A,snd(_,ok)),              runnable(r(R,I), K, T, pending, N)    ) :-
+step( runnable(r(R,I), T, _, N),                         hear(A,snd(_,ok)),              runnable(r(R,I), T, pending, N)       ) :-
     connect(A,ep(E,P,I)),
-    member(dataReceived(e(E,P)),events(r(R,I))).
-step( runnable(r(R,I), K, T, Act, N),                    hear(A,snd(_,limit)),           runnable(r(R,I), K, T, Act, N)        ) :-   % ???
+    dataReceivedEvent(r(R,I),e(E,P)).
+step( runnable(r(R,I), T, Act, N),                       hear(A,snd(_,limit)),           runnable(r(R,I), T, Act, N)           ) :-   % ???
     connect(A,ep(E,P,I)),
-    member(dataReceived(e(E,P)),events(r(R,I))).
+    dataReceivedEvent(r(R,I),e(E,P)).
 
 endgroup(SendingReceiving).
 
@@ -101,15 +98,15 @@ step( delem(ep(E,P,I), _, V),                            hear(ep(E,P,I),rd(V)), 
 step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),                  delem(ep(E,P,I), true, V)             ) :-
     connect(A,ep(E,P,I)).
 
-step( runnable(r(R,I), K, T, _, N),                      hear(A,wr(_)),                  runnable(r(R,I), K, T, pending, N)    ) :-
+step( runnable(r(R,I), T, _, N),                         hear(A,wr(_)),                  runnable(r(R,I), T, pending, N)       ) :-
     connect(A,ep(E,P,I)),
-    member(dataReceived(e(E,P)),events(r(R,I))).
+    dataReceivedEvent(r(R,I),e(E,P)).
 
 step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
 step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,ok))        ).
 
 step( delem(ep(E,P,I), U, V),                            hear(ep(E,P,I),up(U)),          delem(ep(E,P,I), U, V)                ).
-step( delem(ep(E,P,I), _U, _),                           hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-
+step( delem(ep(E,P,I), _, _),                            hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-
     connect(A,ep(E,P,I)).
 
 endgroup(ReadingWriting).
@@ -119,33 +116,35 @@ endgroup(ReadingWriting).
 begingroup(CallServer).
 
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))                      ) :-
-    member(sync(o(O,P)),serverCallPoint(r(R,I))).
+    synchronousServerCallPoint(r(R,I),o(O,P)).
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, ap(K,Res))                                 ) :-
-    member(async(o(O,P)),serverCallPoint(r(R,I))).
+    asynchronousServerCallPoint(r(R,I),o(O,P)).
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, Xs, ap(K,Res))                                 ).
 
-step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(V,ok)),             runnable(r(R,I), K, T, serving(seq(Cs,A),seq(Vs,V)), N)         ) :-
-    connect(A,op(O,P,I)),
-    member(operationInvoked(o(O,P)),events(r(R,I))),
-    ~member(A,Cs).
-step( runnable(r(R,I), K, T, serving(Cs,Vs), N),    hear(A,call(_,limit)),          runnable(r(R,I), K, T, serving(Cs,Vs), N)                       ) :-
-    connect(A,op(O,P,I)),
-    member(operationInvoked(o(O,P)),events(r(R,I))),
+step( runnable(r(R,I), T, serving(Cs,Vs), N),       hear(A,call(V,ok)),             runnable(r(R,I), T, serving(seq(Cs,A),seq(Vs,V)), N)            ) :-
+    connect(op(O,P,I),A),
+    operationInvokedEvent(r(R,I),o(O,P)),
+    notmember(A,Cs).
+step( runnable(r(R,I), T, serving(Cs,Vs), N),       hear(A,call(_,limit)),          runnable(r(R,I), T, serving(Cs,Vs), N)                       ) :-
+    connect(op(O,P,I),A),
+    operationInvokedEvent(r(R,I),o(O,P)),
     member(A,Cs).
 
 endgroup(CallServer).
 
-%%%%% Obtaining a server result
+%%%%% Returning a server result
 
 begingroup(ServerResult).
 
-step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, Xs, ap(K,V))                                   ).
-step( rinst(A, op(O,P,I), eps, return(V)),          say(op(O,P,I),ret(V)),          rinst(A, nil, eps, return(void))                                ).
+step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, Xs, ap(K,V))                                   ) :-
+    notequal(V,nodata).
+step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(nodata)),     rinst(r(R,I), C, Xs, ap(K,V))                                   ) :-
+    asynchronousServerCallResultPoint(r(R,I),o(O,P)).
+step( rinst(A, op(O,P,I), eps, return(V)),          say(op(O,P,I),ret(V)),          rinst(A, void, eps, return(void))                                ).
 
 step( opres(op(O,P,I), cons(V,Vs)),                 hear(op(O,P,I),res(V)),         opres(op(O,P,I), Vs)                                            ).
 step( opres(op(O,P,I), Vs),                         hear(op(O,P,I),ret(V)),         opres(op(O,P,I), seq(Vs,V))                                     ).
-step( opres(op(O,P,I), eps),                        hear(op(O,P,I),res(no_data)),   opres(op(O,P,I), eps)                                           ) :-
-    async_result(op(O,P,I)).
+step( opres(op(O,P,I), eps),                        hear(op(O,P,I),res(nodata)),    opres(op(O,P,I), eps)                                           ).
 
 endgroup(ServerResult).
 
@@ -153,23 +152,27 @@ endgroup(ServerResult).
 
 begingroup(SpawnTerminate).
 
-step( rinst(A, nil, eps, return(_)),                          say(A,term),    zero                                                                  ).
-step( runnable(A, K, T, Act, N),                              hear(A,term),   runnable(A, K, T, Act, minus(N,1))                                    ).
-step( runnable(A, K, 0, pending, 0),                          say(A,new),     par( runnable(A, K, T, idle, 1),
-                                                                                   rinst(A, nil, eps, ap(K,void)) )                                 ) :-
-    minimumStartInterval(A,T).
-step( runnable(A, K, 0, pending, N),                          say(A,new),     par( runnable(A, K, T, idle, plus(N,1)),
-                                                                                   rinst(A, nil, eps, ap(K,void)) )                                 ) :-
+step( rinst(A, void, eps, return(_)),                         say(A,term),    zero                                                                  ).
+step( runnable(A, T, Act, N),                                 hear(A,term),   runnable(A, T, Act, minus(N,1))                                       ).
+step( runnable(A, 0, pending, 0),                             say(A,new),     par( runnable(A, T, idle, 1),
+                                                                                   rinst(A, void, eps, ap(K,void)) )                                 ) :-
+    minimumStartInterval(A,T),
+    implementation(A,K).
+step( runnable(A, 0, pending, N),                             say(A,new),     par( runnable(A, T, idle, plus(N,1)),
+                                                                                   rinst(A, void, eps, ap(K,void)) )                                 ) :-
     canBeInvokedConcurrently(A),
-    minimumStartInterval(A,T).
+    minimumStartInterval(A,T),
+    implementation(A,K).
 
-step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), 0),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), 1),
+step( runnable(A, 0, serving(cons(C,Cs),cons(V,Vs)), 0),      say(A,new),     par( runnable(A, T, serving(Cs,Vs), 1),
                                                                                    rinst(A, C, eps, ap(K,V)) )                                      ) :-
-    minimumStartInterval(A,T).
-step( runnable(A, K, 0, serving(cons(C,Cs),cons(V,Vs)), N),   say(A,new),     par( runnable(A, K, T, serving(Cs,Vs), plus(N,1)),
+    minimumStartInterval(A,T),
+    implementation(A,K).
+step( runnable(A, 0, serving(cons(C,Cs),cons(V,Vs)), N),      say(A,new),     par( runnable(A, T, serving(Cs,Vs), plus(N,1)),
                                                                                    rinst(A, C, eps, ap(K,V)) )                                      ) :-
     canBeInvokedConcurrently(A),
-    minimumStartInterval(A,T).
+    minimumStartInterval(A,T),
+    implementation(A,K).
 
 endgroup(SpawnTerminate).
 
@@ -178,12 +181,12 @@ endgroup(SpawnTerminate).
 begingroup(PassingTime).
 
 step( timer(A, T_p, 0),            say(A,tick),    timer(A, T_p, T_p)                 ).
-step( runnable(A, K, T, _, N),     hear(A,tick),   runnable(A, K, T, pending, N)      ).
+step( runnable(A, T, _, N),        hear(A,tick),   runnable(A, T, pending, N)         ).
 
 % The "time left" state V is always decreasing in delta(T) steps, and never negative.
 step( timer(A, T_p, V),            delta(T),       timer(A, T_p, minus(V,T))          ) :-   lesseq(T,V).
-step( runnable(A, K, V, Act, N),   delta(T),       runnable(A, K, minus(V,T), Act, N) ) :-   lesseq(T,V).
-step( runnable(A, K, 0, Act, N),   delta(_),       runnable(A, K, 0, Act, N)          ).
+step( runnable(A, V, Act, N),      delta(T),       runnable(A, minus(V,T), Act, N)    ) :-   lesseq(T,V).
+step( runnable(A, 0, Act, N),      delta(_),       runnable(A, 0, Act, N)             ).
 step( rinst(A, C, Xs, Code),       delta(_),       rinst(A, C, Xs, Code)              ).
 step( excl(A, V),                  delta(_),       excl(A, V)                         ).
 step( irv(A, V),                   delta(_),       irv(A, V)                          ).
@@ -199,11 +202,11 @@ begingroup(IgnoreBroadcast).
 
 step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)                ).
 step( timer(B, T_p, T),            hear(_,_),      timer(B, T_p, T)                  ).
-step( runnable(B, K, T, Act, N),   hear(A,_),      runnable(B, K, T, Act, N)         ) :-   ~equal(A,B).
-step( excl(B, V),                  hear(A,_),      excl(B, V)                        ) :-   ~equal(A,B).
-step( irv(B, V),                   hear(A,_),      irv(B, V)                         ) :-   ~equal(A,B).
-step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                   ) :-   ~equal(A,B), ~connect(A,B).
-step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                    ) :-   ~equal(A,B), ~connect(A,B).
-step( opres(B, Vs),                hear(A,_),      opres(B, Vs)                      ) :-   ~equal(A,B), ~connect(A,B).
+step( runnable(B, T, Act, N),      hear(A,_),      runnable(B, T, Act, N)            ) :-   notequal(A,B).
+step( excl(B, V),                  hear(A,_),      excl(B, V)                        ) :-   notequal(A,B).
+step( irv(B, V),                   hear(A,_),      irv(B, V)                         ) :-   notequal(A,B).
+step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                   ) :-   notconnect(A,B).
+step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                    ) :-   notconnect(A,B).
+step( opres(B, Vs),                hear(A,_),      opres(B, Vs)                      ) :-   notequal(A,B).
 
 endgroup(IgnoreBroadcast).
