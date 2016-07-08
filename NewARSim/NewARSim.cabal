@@ -37,6 +37,7 @@ library
     base == 4.*,
     containers,
     filepath,
+    directory,
     process,
     easyplot,
     exceptions,
