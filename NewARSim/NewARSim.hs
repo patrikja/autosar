@@ -53,7 +53,7 @@ import           Control.Monad.State.Lazy   hiding (void)
 import           Data.Char                         (ord, chr)
 import           Data.List
 import           Data.Map                          (Map)
-import qualified Data.Map                        as Map
+import qualified Data.Map.Strict                 as Map
 import           Data.Set                          (Set)
 import qualified Data.Set                        as Set
 import           Data.Maybe
@@ -691,10 +691,6 @@ minstart s      = case invocation s of
 trig :: ConnRel -> Address -> Static c -> Bool
 trig conn a s   = or [ a `conn` b | b <- triggers s ]
 
--- Based on a connection relation @conn@, a label and a process, @mayHear@
--- produces a label. Through (mayHear conn) we create a binary operation which
--- is folded over a list of processes. Note that @VETO@ annihilates all elements
--- in the structure.
 mayHear :: ConnRel -> Label -> Proc -> Label
 mayHear conn VETO _                                             = VETO
 mayHear conn (ENTER a)       (Excl b Free)     | a==b           = ENTER a --
@@ -775,16 +771,11 @@ respond _    []     label = label
 respond conn (p:ps) label = respond conn ps acc 
   where acc = mayHear conn label p
 
--- | @'step' conn procs@ produces a list of scheduling options, i.e. progresses
--- the simulation by one step.
 step :: ConnRel -> [Proc] -> [SchedulerOption]
 step conn procs = explore conn [] labels procs  
   where 
     labels  = map (respond conn procs . maySay) procs
 
--- | @'explore' conn _ ls ps@ explores all scheduling options given the
--- connection relation @conn@, a list of labels @ls@ and a list of processes
--- @ps@.
 explore :: ConnRel -> [Proc] -> [Label] -> [Proc] -> [SchedulerOption]
 explore conn pre (VETO:labels) (p:post) = explore conn (p:pre) labels post
 explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels post
@@ -794,20 +785,27 @@ explore conn pre (l:labels)    (p:post) = commit : explore conn (p:pre) labels p
 explore conn _ _ _                      = []
 
 
--- The simulator proper ---------------------------------------------------------------------------------------
+-- * The simulator proper 
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-type Logs                   = [(ProbeID,Value)]
+type Logs = [(ProbeID,Value)]
 
-type SchedulerOption        = (Label, Either Address (Address, Int), Logs, [Proc])
-data Transition             = Trans { transChoice :: Int
-                                    , transLabel  :: Label
-                                    , transActive :: Either Address (Address, Int) -- The address of the active process
-                                    , transLogs   :: Logs
-                                    , transProcs  :: [Proc]}
-  deriving (Show)
+type SchedulerOption = (Label, Either Address (Address, Int), Logs, [Proc])
 
-type Scheduler m            = [SchedulerOption] -> m (Maybe Transition)
-type Trace                  = (SimState, [Transition])
+-- Transitions no longer carry processes, since we do not re-use them. This
+-- reduces memory usage.
+data Transition = Trans 
+  { transChoice :: Int
+  , transLabel  :: Label
+  , transActive :: Either Address (Address, Int) 
+  -- ^ The address of the active process
+  , transLogs   :: Logs
+  } deriving Show
+
+-- A scheduler now returns processes separate from the transition.
+
+type Scheduler m = [SchedulerOption] -> m (Maybe (Transition, [Proc]))
+type Trace = (SimState, [Transition])
 
 traceLabels :: Trace -> [Label]
 traceLabels = map transLabel . traceTrans
@@ -873,11 +871,15 @@ simulate sched conn procs =
      case next of
        Nothing ->
          return []
-       Just trans@Trans{transProcs = procs1} ->
+       Just (trans, procs1) ->
          (trans:) <$> simulate sched conn procs1
 
 -- Progresses simulation until there are no more transition alternatives.
-simulate1 :: Monad m => Scheduler m -> ConnRel -> [Proc] -> m (Maybe Transition)
+simulate1 :: Monad m 
+          => Scheduler m 
+          -> ConnRel 
+          -> [Proc] 
+          -> m (Maybe (Transition, [Proc]))
 simulate1 sched conn procs
   | null alts               = return Nothing
   | otherwise               = maximumProgress sched alts
@@ -894,26 +896,29 @@ maximumProgress sched alts
         isDelta (DELTA _, _,_,_) = True
         isDelta _                = False
 
-trivialSched                :: Scheduler Identity
-trivialSched alts           = return (Just $ Trans 0 label active logs procs)
-  where (label,active,logs,procs)  = head alts
+trivialSched :: Scheduler Identity
+trivialSched alts = return $ Just (Trans 0 label active logs, procs)
+  where 
+    (label, active, logs, procs) = head alts
 
-roundRobinSched             :: Scheduler (State Int)
-roundRobinSched alts        = do m <- get
-                                 let n = (m+1) `mod` length alts
-                                     (label,active,logs,procs) = alts!!n
-                                 put n
-                                 return (Just $ Trans n label active logs procs)
+roundRobinSched :: Scheduler (State Int)
+roundRobinSched alts = 
+  do m <- get
+     let n = (m+1) `mod` length alts
+         (label, active, logs, procs) = alts !! n
+     put n
+     return $ Just (Trans n label active logs, procs)
 
-randomSched                 :: Scheduler (State StdGen)
-randomSched alts            = do n <- state next
-                                 let (label,active,logs,procs) = alts!!(n `mod` length alts)
-                                 return (Just $ Trans n label active logs procs)
+randomSched :: Scheduler (State StdGen)
+randomSched alts = 
+  do n <- state next
+     let (label, active, logs, procs) = alts !! (n `mod` length alts)
+     return $ Just (Trans n label active logs, procs)
 
 genSched :: Scheduler Gen
 genSched alts = do
   ((label, active, logs, procs), n) <- elements $ zip alts [0..]
-  return $ Just $ Trans n label active logs procs
+  return $ Just (Trans n label active logs, procs)
 
 data SchedChoice            where
   TrivialSched        :: SchedChoice
@@ -972,7 +977,7 @@ replaySched ls = do
                 (lab `similarLabel` tlab) && (addr `siblingTo` taddr)] of
         []     -> replaySched ls -- If nothing matches, then just drop the event.
                                  -- Another option would be to save the event for later.
-        ((lab, addr, logs, procs), n):xs -> return $ Just $ Trans n lab addr logs procs
+        ((lab, addr, logs, procs), n):xs -> return $ Just (Trans n lab addr logs, procs)
 
 similarLabel :: Label -> Label -> Bool
 similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
@@ -1405,7 +1410,7 @@ ioRandomSched alts =
  do (n, g) <- (next . gen) <$> get
     modify (\st -> st { gen = g})
     let (label, active, logs, procs) = alts !! (n `mod` length alts)
-    return (Just $ Trans n label active logs procs)
+    return $ Just (Trans n label active logs, procs)
 
 -- | Initialize the simulator with an initial state and run it. This provides
 -- the same basic functionality as 'simulation'.
@@ -1504,7 +1509,7 @@ simulate1Ext sched conn procs acc
        case mtrans of
          -- The trace finished - should we return a Just here?
          Nothing -> return $ error "The trace finished. I don't know what to do."
-         Just (trans@Trans{ transProcs = procs1 }) ->
+         Just (trans, procs1) ->
            case transLabel trans of
              DELTA dt -> return $ Just (dt, procs1, trans:acc)
              _        -> simulate1Ext sched conn procs1 (trans:acc)
