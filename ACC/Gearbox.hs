@@ -5,10 +5,8 @@
 -- signal. This module is intended to control the transmission by providing
 -- gear selection signals based on the engine rpm differences over time.
 --
--- TODO: * Re-use Johan's sequencer for gear-switch timer.
---       * Shifting is slightly odd at the moment, but works under "normal"
---         conditions; a 1 second delay is enforced between each consecutive
---         shift, to let the engine revs adjust.
+-- TODO: The state machine could also read an acceleration estimate and provide
+--       more natural shifting that is based on acceleration as well.
 module Gearbox 
   ( GearCtrl(..)
   , gearController
@@ -46,7 +44,6 @@ gearController resolution =
      gears <- interRunnableVariable initialGear
      timer <- interRunnableVariable (False, 0.0)
 
-     -- TODO: Can re-use sequencer for the gear-switch timer!
      runnable (MinInterval 0) [TimingEvent resolution] $
        do res <- rteRead engineRPM
           case res of 
@@ -99,7 +96,7 @@ setGear rpm1 rpm0 gear
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Simple rev-limiting logic.
 --
--- TODO: Re-use Johan's sequencer for timer.
+-- TODO: Finish.
 
 data RevLimit = RevLimit
   { rpmIn          :: DataElem Unqueued Double Required
@@ -115,3 +112,4 @@ revLimit :: Time
          -- ^ RPM limit
          -> AUTOSAR RevLimit
 revLimit resolution limit = undefined
+

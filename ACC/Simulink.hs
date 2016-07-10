@@ -1,7 +1,7 @@
 -- | External simulation of the ACC component using Simulink (or similar). 
 module Main where
 
-import ACC 
+import Vehicle
 import Control.Monad
 import NewARSim 
 
