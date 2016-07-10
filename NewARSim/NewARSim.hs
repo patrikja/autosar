@@ -69,12 +69,13 @@ import           Foreign.Storable
 import           System.Environment
 import           System.Exit
 import           System.FilePath (FilePath)
+import           System.Directory (removeFile)
 import           System.IO
 import           System.IO.Error
 import           System.IO.Unsafe
 import           System.Random
-import           System.Posix
-import           System.Process (ProcessHandle, spawnProcess, terminateProcess)
+import           System.Posix hiding (getEnvironment)
+import           System.Process (ProcessHandle, createProcess, env, proc, terminateProcess)
 import qualified Unsafe.Coerce
 import           Test.QuickCheck hiding (collect)
 import           Test.QuickCheck.Property (unProperty)
@@ -1543,6 +1544,15 @@ simulateStandalone :: Time             -- ^ Time limit
                    -> IO a
 simulateStandalone time f sched = f . limitTime time . execSim sched
 
+{- There are two ways to run the Simulink model. One way is to run the simulation
+ - from Simulink directly (for example by using the MATLAB gui). In this case
+ - it's the Simulink C stub that creates named pipes and launches the
+ - Haskell AUTOSAR simulator (handled by simulateUsingExternal).
+ - The second way is to run the Haskell 'driver', which sets up the
+ - environment (the named pipes) and launches the Simulink model (simulateDriveExternal).
+ - The Simulink C stub realizes that it should not set up the environment
+ - by looking at the environment variable ARSIM_DRIVER. -}
+
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
 simulateUsingExternal :: External a => AUTOSAR a -> IO ()
@@ -1559,15 +1569,21 @@ simulateUsingExternal sys = exceptionHandler $
 -- starting the external component from Haskell, and clean up afterwards.
 simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO ()
 simulateDriveExternal ext sys = exceptionHandler $
-  do pext <- spawnProcess ext []
-     args <- getArgs
-     case args of
-      [inFifo, outFifo] -> runWithFIFOs inFifo outFifo sys
-      _ ->
-        do logWrite $ "Wrong number of arguments. Proceeding with default " ++
-                      "FIFOs."
-           runWithFIFOs "/tmp/infifo" "/tmp/outfifo" sys
-     terminateProcess pext
+  do args <- getArgs
+     (inFifo, outFifo) <- case args of
+       [inFifo, outFifo] -> return (inFifo, outFifo)
+       _ ->
+          do logWrite $ "Wrong number of arguments. Proceeding with default " ++
+                        "FIFOs."
+             return ("/tmp/infifo", "/tmp/outfifo")
+     bracket (createNamedPipe inFifo accessModes)
+             (const $ removeFile inFifo) $ \_ -> do
+       bracket (createNamedPipe outFifo accessModes)
+               (const $ removeFile outFifo) $ \_ -> do
+         cur_env <- getEnvironment
+         let procSpec = (proc ext []) { env = Just $ cur_env ++ [("ARSIM_DRIVER", "")] }
+         bracket (createProcess procSpec) (\ (_, _, _, h) -> terminateProcess h) $ \_ -> do
+           runWithFIFOs inFifo outFifo sys
 
 -- | The external simulation entry-point. Given two file descriptors for
 -- input/output FIFOs we can start the simulation of the AUTOSAR program.

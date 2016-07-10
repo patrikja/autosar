@@ -6,8 +6,12 @@
 #ifdef NDEBUG
 #define debug(M, ...) 
 #else
+#ifdef MATLAB_MEX_FILE
 #define debug(M, ...) fprintf( stderr, "[DEBUG] %s:%u: " M "\n" \
                              , __func__, __LINE__, ##__VA_ARGS__)
+#else
+#define debug(M, ...) 
+#endif
 #endif
 
 #define error(E, M, ...) { fprintf( stderr, "[ERROR] %s:%u: " M "\n"    \

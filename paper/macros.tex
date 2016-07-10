@@ -6,7 +6,7 @@
 \newcommand{\V}[1]{\ensuremath{\lowercase{\mathit{#1}}}}
 %{ Not used in semantics.tex
 \newcommand{\Code} {\V{Code}}
-\newcommand{\Cont} {\V{Cont}}  %TODO: Sometimes just K is used - check for consistency.
+\newcommand{\Cont} {\V{K}}
 \newcommand{\State}{\V{State}}
 \newcommand{\Act}  {\V{Act}}
 \newcommand{\Upd}  {\V{Upd}}
@@ -18,7 +18,7 @@
 \newcommand{\kw}[1]{\textbf{#1}}
 \newcommand{\Tserving} [2]{\kw{serving}(#1,#2)}
 
-\newcommand{\Trunnable}[5]{\kw{runnable}(#1,#2,#3,#4,#5)}
+\newcommand{\Trunnable}[4]{\kw{runnable}(#1,#2,#3,#4)}
 \newcommand{\Trinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
 \newcommand{\Texcl}    [2]{\kw{excl}(#1,#2)}
 \newcommand{\Tirv}     [2]{\kw{irv}(#1,#2)}
@@ -46,16 +46,16 @@
 \newcommand{\Return}    [1]{\text{return}(#1)}
 
 \newcommand{\red} [1]{\,\xrightarrow{#1}\,}
-\newcommand{\say} [2]{\ensuremath{#1 \,!\, #2}}
+\newcommand{\say} [2]{\ensuremath{#1 \mspace{1mu}!\mspace{1mu} #2}}
 %\newcommand{\say}  [2]{#1\mathrel{\,!\,}#2}
-\newcommand{\hear}[2]{\ensuremath{#1 \,?\, #2}}
+\newcommand{\hear}[2]{\ensuremath{#1 \mspace{1mu}?\mspace{1mu} #2}}
 
 % ----------------------------------------------------------------
 
 \newcommand{\plusplus}{\mathbin{+\!\!+}}
 
 \newcommand{\Tvar}  [1]{\V{#1}}
-\newcommand{\Tatom} [1]{\text{#1}}
+\newcommand{\Tatom} [1]{\kw{#1}}
 
 \newcommand{\Tpending}      {\kw{pending}}
 \newcommand{\Tidle}         {\kw{idle}}
@@ -94,7 +94,7 @@
 \newcommand{\Ttrue}         {\Tatom{true}}
 \newcommand{\Tinvalid}      {\Tatom{invalid}}
 \newcommand{\Tnil}          {\Tatom{nil}}
-\newcommand{\Tvoid}         {\Tatom{void}}
+\newcommand{\Tvoid}         {\kw{void}}
 \newcommand{\Tenter}        {\Tatom{enter}}
 \newcommand{\Texit}         {\Tatom{exit}}
 \newcommand{\Tinv}          {\Tatom{inv}}
@@ -109,11 +109,12 @@
 \newcommand{\Pif}{\text{if}}
 
 \newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2\\}
-\newcommand{\Pcomma}{,}
+%\newcommand{\Pcomma}{,}
+\newcommand\Pcomma{\;\,\text{and}\;\,}
 %\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
 \newcommand{\Pcontline}[1]{\\ #1}
-\newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2.}\\}
-\newcommand{\Pfact}[1]{#1.\\}
+\newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2}\\}
+\newcommand{\Pfact}[1]{#1\\}
 \newcommand{\Pnegate}[1]{\neg(#1)}
 
 \newcommand{\Opar}{\ensuremath{\mathbin{\,\rule[-0.5ex]{0.25ex}{2.4ex}\,}}}
@@ -128,6 +129,7 @@
 \newcommand{\Ts}    [2]{\emph{#2.#1}}
 \newcommand{\Te}    [2]{\emph{#2.#1}}
 \newcommand{\To}    [2]{\emph{#2.#1}}
+\newcommand{\Tp}    [2]{\emph{#2.#1}}
 \newcommand{\Tep}   [3]{\emph{#3.#2.#1}}
 \newcommand{\Top}   [3]{\emph{#3.#2.#1}}
 
@@ -138,23 +140,24 @@
 \newcommand{\Tsnoc}{\Tseq}
 \newcommand{\Tseq}          [2]{#1{:}#2}
 
-\newcommand{\Tasyncresult}  [1]{\mathrm{async\_result}(#1)}
-\newcommand{\Tasync}        [1]{\mathrm{async}(#1)}
-\newcommand{\Tsync}         [1]{\mathrm{sync}(#1)}
 %\newcommand{\Tconnect}      [2]{\mathrm{connect}(#1,#2)}
 \newcommand{\Tconnect}      [2]{\ensuremath{#1 \Rightarrow #2}}
-\newcommand{\Tevents}       [1]{\mathrm{events}(#1)}
+\newcommand{\Tnotconnect}   [2]{\ensuremath{#1 \nRightarrow #2}}
 
 %%% static properties
-\newcommand{\TcanBeInvokedConcurrently}    [1]{\mathrm{canBeInvokedConcurrently}(#1)}
-\newcommand{\TminimumStartInterval}        [2]{\mathrm{minimumStartInterval}(#1,#2)}
-\newcommand{\TdataReceived}                [1]{\mathrm{dataReceived}(#1)}
+\newcommand{\TcanBeInvokedConcurrently}    [1]{\emph{canBeInvokedConcurrently}(#1)}
+\newcommand{\TminimumStartInterval}        [2]{\emph{minimumStartInterval}(#1,#2)}
+\newcommand{\Timplementation}              [2]{\emph{implementation}(#1,#2)}
 
-\newcommand{\ToperationInvoked}[1]{\mathrm{operationInvoked}(#1)}
+\newcommand{\TdataReceivedEvent}           [2]{\emph{DataReceivedEvent}(#1,#2)}
+\newcommand{\ToperationInvokedEvent}[2]{\emph{OperationInvokedEvent}(#1,#2)}
+\newcommand{\TtimingEvent}          [2]{\emph{TimingEvent}(#1,#2)}
+\newcommand{\TinitEvent}          [1]{\emph{InitEvent}(#1)}
 
-\newcommand{\TserverCallPoint}[1]{\mathrm{serverCallPoint}(#1)}
-\newcommand{\Ttiming}       [1]{\mathrm{timing}(#1)}
-
+\newcommand{\TsynchronousServerCallPoint}[2]{\emph{synchronousServerCallPoint}(#1,#2)}
+\newcommand{\TasynchronousServerCallPoint}[2]{\emph{asynchronousServerCallPoint}(#1,#2)}
+\newcommand{\TasynchronousServerCallResultPoint}[2]{\emph{asynchronousServerCallResultPoint}(#1,#2)}
+\newcommand{\TinitValue}[2]{\emph{initValue}(#1,#2)}
 
 %%% operators
 \newcommand{\Tless}         [2]{#1<#2}
@@ -162,13 +165,15 @@
 \newcommand{\Tminus}        [2]{{#1}-{#2}}
 \newcommand{\Tplus}         [2]{{#1}+{#2}}
 \newcommand{\Tequal}        [2]{{#1}={#2}}
+\newcommand{\Tnotequal}     [2]{{#1}\neq{#2}}
 \newcommand{\Tmember}       [2]{#1 \in #2}
+\newcommand{\Tnotmember}    [2]{#1 \notin #2}
 \newcommand{\Tlength}       [1]{|#1|}
 
 %%% payload
 \newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
 \newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
-\newcommand{\Tirvr}         [1]{\mathrm{irvr}(\!#1)}
+\newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
 \newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
 \newcommand{\Trcv}          [1]{\mathrm{rcv}(#1)}
 \newcommand{\Trd}           [1]{\mathrm{rd}(#1)}

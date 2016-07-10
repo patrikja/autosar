@@ -80,6 +80,14 @@ void init_simulator(SimStruct *S)
   if (!sim_running) {
     //-- Open FIFOs ---------------------------------------------------------//
     
+    /* There are two ways to run the Simulink model. One way is to run the simulation
+     * from Simulink directly (for example by using the MATLAB gui). In this case
+     * it's the Simulink C stub that creates named pipes and launches the
+     * Haskell AUTOSAR simulator. The second way is to run the Haskell
+     * 'driver', which sets up the environment (the named pipes) and
+     * launches the Simulink model. The Simulink C stub realizes that it
+     * should not set up the environment by looking at the environment variable
+     * ARSIM_DRIVER.*/
     bool arsim_driver = (getenv("ARSIM_DRIVER") != NULL);
 
     if(!arsim_driver) {
@@ -404,18 +412,22 @@ static void mdlTerminate(SimStruct *S) {
   sim_running     = false;
   free(intermediate);
   
-  /* Close file descriptors, not terribly interested if this succeeds
-   * or not as we're done anyway.
-   */
-  close(hs_input_fd);
-  close(hs_output_fd);
+  bool arsim_driver = (getenv("ARSIM_DRIVER") != NULL);
 
-  unlink(hs_input_fifo);
-  unlink(hs_output_fifo);
+  if(!arsim_driver) {
+    /* Close file descriptors, not terribly interested if this succeeds
+     * or not as we're done anyway.
+     */
+    close(hs_input_fd);
+    close(hs_output_fd);
+
+    unlink(hs_input_fifo);
+    unlink(hs_output_fifo);
 
 #ifndef NDEBUG
-  ssPrintf("= Unlinked FIFOs and reset model.\n");
+    ssPrintf("= Unlinked FIFOs and reset model.\n");
 #endif
+  }
 
 }
 
