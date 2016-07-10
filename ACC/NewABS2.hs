@@ -30,22 +30,21 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module NewABS2
   ( -- * ABS system
-    absSystem
+    ABS(..)
+  , absSystem
     -- * Valve ports
   , ValvePort(..)  , ValveP
     -- * Wheel ports
   , WheelPorts(..)
-    -- * Misc. types
-  , Velo, Accel
   ) where
 
 import Control.Monad
 import Data.List
 import NewARSim
+import PID
 import System.Random
 
 -- * Types
@@ -57,51 +56,14 @@ type Velo  = Double
 type Valve = Bool
 type Index = Int
 
--- * PID controller
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
--- | The PID controller requires a @(cruise, vehicle)@ velocity tuple and
--- provides a throttle control.
-newtype PIDCtrl = PIDCtrl
-  { pidOp :: ClientServerOp (Double, Double) Double Provided }
-
--- | The PID controller produces a linear combination of Propotional-, 
--- Integrating and Differentiating gain. The component requires the previous
--- state of the variables and is thus stateful.
---
--- NOTE: Derivatives get harsh over time, should perhaps filter inputs?
-pidController :: Time 
-              -- ^ Sample time
-              -> Time
-              -- ^ Derivative time 
-              -> Time
-              -- ^ Integral time
-              -> Double
-              -- ^ Proportional scale 
-              -> AUTOSAR PIDCtrl
-              -- ^ Throttle control (output)
-pidController dt td ti k = atomic $ do
-     state <- interRunnableVariable (0.0, 0.0)
-     pidOp <- providedPort
-     serverRunnable (MinInterval 0) [OperationInvokedEvent pidOp] $
-       \(ctrl, feedback) -> do
-          Ok (prevErr, prevInt) <- rteIrvRead state
-         
-          let err        = ctrl - feedback
-              derivative = (err - prevErr) / dt
-              integral   = prevInt + dt / ti * err
-              output     = k * (err + integral + td * derivative) 
-          rteIrvWrite state (err, integral) 
-          return output
-     return $ sealBy PIDCtrl pidOp
-
 -- * Bang-bang controller
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 data BangBang = BangBang
-  { valves  :: ValveP                                 Provided
-  , slips   :: DataElem Unqueued Slip                 Required 
-  , pidCall :: ClientServerOp (Double, Double) Double Required
+  { valves :: ValveP                         Provided
+  , slips  :: DataElem Unqueued Slip         Required 
+  , pidIn  :: DataElem Unqueued (Slip, Slip) Provided
+  , pidOut :: DataElem Unqueued Slip         Required
   }
 
 -- | Bang-bang controller using pulse width modulation control. Makes use of 
@@ -111,8 +73,11 @@ bangBangCtrl :: AUTOSAR BangBang
 bangBangCtrl = atomic $ 
   do valvePort <- providedPort
      slips     <- requiredPort 
-     pidCall   <- requiredPort
+     pidIn     <- providedPort
+     pidOut    <- requiredPort
      comSpec valvePort (InitValue (False, True))
+     comSpec pidIn     (InitValue (0.0, 0.0))
+     comSpec pidOut    (InitValue 0.0)
 
      carrier <- interRunnableVariable (0 :: Int)
   
@@ -121,7 +86,8 @@ bangBangCtrl = atomic $
      runnable (MinInterval 0) [TimingEvent 0.001] $
        do Ok c  <- rteIrvRead carrier
           Ok s0 <- rteRead slips
-          Ok s <- rteCall pidCall (0.2, s0)
+          rteWrite pidIn (0.2, s0)
+          Ok s  <- rteRead pidOut
 
           -- Control signal modulation
           -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,7 +108,7 @@ bangBangCtrl = atomic $
 
           rteIrvWrite carrier ((c + 1) `mod` width)
 
-     return $ sealBy BangBang valvePort slips pidCall
+     return $ sealBy BangBang valvePort slips pidIn pidOut
 
 -- * Valve ports
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -204,10 +170,11 @@ data WheelCtrl = WheelCtrl
 wheelCtrl :: Index -> AUTOSAR WheelCtrl
 wheelCtrl i = composition $ 
   do bang <- bangBangCtrl
-     pid  <- pidController 1e-4 1e-2 (1/0) 6
-     
-     connect (pidOp pid) (pidCall bang)
+     pid  <- pidController 1e-4 2e-3 1e324 7
 
+     connect (pidIn bang)    (pidInput pid)
+     connect (pidOutput pid) (pidOut bang)
+     
      valve <- providedDelegate [valves bang]
      slip  <- requiredDelegate [slips bang]
 
@@ -219,150 +186,37 @@ wheelCtrl i = composition $
 
 -- * Main loop
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Performs vehicle velocity and slip estimation.
+-- Uses the velocity and slip estimation algorithms and reports slip estimates
+-- to the ABS controller. 
 
 -- | The main loop component requires a longitudal accelerometer (which is
 -- external to the current setup), as well as wheel velocity measurements (also
--- assumed external).
+-- assumed external), and provides wheel slip estimates.
 data MainLoop = MainLoop 
   { velosIn  :: [DataElem Unqueued Velo Required]
     -- ^ Wheel velocities
   , slipsOut :: [DataElem Unqueued Slip Provided] 
     -- ^ Wheel slips
-  , accelIn  :: DataElem Unqueued Double Required
-    -- ^ Longtitudal accelerometer
+  , velo     :: DataElem Unqueued Velo Required
+    -- ^ Vehicle velocity estimate
   }
 
 -- | The main loop of the ABS algorithm approximates wheel slip ratios and sends
 -- these to the PWM.
---
--- The algorithm used assumes that the first two wheel velocity inputs come from
--- the non-driving wheels of the vehicle, and that a longtitudal accelerometer
--- is mounted on the unit. The slip calculation algorithm is borrowed from 
--- Active Braking Control Systems: Design for Vehicles by Savaresi and Tanelli,
--- chapter 5.
 mainLoop :: AUTOSAR MainLoop
 mainLoop = atomic $ 
   do velosIn  <- replicateM 4 requiredPort
      slipsOut <- replicateM 4 providedPort
-     accelIn  <- requiredPort 
+     velo     <- requiredPort
       
      mapM_ (`comSpec` InitValue 0.0) slipsOut
-     mapM_ (`comSpec` InitValue 0.0) velosIn
-     comSpec accelIn (InitValue 0.0)
       
-     let deltaT = 1e-3
-         memory = 100
-    
-     -- Keep acceleration memory for backwards integration phase.
-     accMem  <- interRunnableVariable (replicate memory 0.0)
-     avgMem  <- interRunnableVariable (replicate memory 0.0)
-     veloMem <- interRunnableVariable 0.0 
-     state   <- interRunnableVariable S0
-
-     runnable (MinInterval 0) [TimingEvent deltaT] $ 
-       do velos  <- mapM (fmap fromOk . rteRead) velosIn
-          Ok acc <- rteRead accelIn
-          Ok s0  <- rteIrvRead state
-          Ok v0  <- rteIrvRead veloMem
-          Ok as  <- rteIrvRead accMem
-          Ok avs <- rteIrvRead avgMem
-           
-          -- Velocity estimation
-          -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          -- Assume that accelerometer input is filtered. This could be 
-          -- done here, provided that we implement a FIR filter.
-          --
-          -- For low speeds or states with very little acceleration,
-          -- approximate the vehicle speed as the average of the wheel
-          -- speeds. For high acceleration, use the average of the non-
-          -- driving wheels. For hard braking, use the back integration
-          -- algorithm with the on-board accelerometer.
-          let vAvg   = sum velos / fromIntegral (length velos) 
-              nonDr  = take 2 velos
-              vNd    = sum nonDr / fromIntegral (length nonDr) 
-
-              -- Get next state
-              s1 = stateTrans vAvg acc s0
-
-              -- Compute vehicle velocity estimate.
-              -- If the state transition was from S0 to S1, we've gone from
-              -- soft to hard deceleration and should perform backwards 
-              -- integration for @memory@ steps. If the state transition was
-              -- from S1 to SM2, we ignore it since we're reaching a full stop
-              -- doing hard braking.
-              v1 = case s1 of
-                     SM2 | s0 /= S1  -> vAvg
-                         | otherwise -> v0 + acc * deltaT 
-                     SM1             -> vNd
-                     S0              -> vAvg
-                     S1  | s0 == S1  -> v0  + acc * deltaT
-                         | otherwise -> v0' + acc * deltaT
-                         where
-                           v0' = foldl (\v a -> v + a * deltaT) 
-                                       (last avs) 
-                                       (reverse as)
-
-          -- Write memo-variables
-          rteIrvWrite accMem  (acc:init as)
-          rteIrvWrite veloMem v1
-          rteIrvWrite avgMem  (vAvg:init avs)
-
-          rteIrvWrite state s1
-
+     runnable (MinInterval 0) [DataReceivedEvent velo] $
+       do velos <- mapM (fmap fromOk . rteRead) velosIn
+          Ok v1 <- rteRead velo
           forM (velos `zip` slipsOut) $ \(v, p) -> rteWrite p (slipRatio v1 v)
 
-     return $ sealBy MainLoop velosIn slipsOut accelIn
-
--- * Slip estimation
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- To generate a good estimate of wheel slip when all wheels are locked (or
--- nearing lock-up at the same speed), velocity estimation is done by
--- integrating the vehicle acceleration. To simplify this, the vehicle is kept
--- in one of four states, where
---
---  SM2  ->  Vehicle is moving at low speed
---  SM1  ->  Vehicle is accelerating
---  S0   ->  Vehicle is moving at constant speed or braking very lightly
---  S1   ->  Vehicle is braking hard
---
---  Velocity estimations will differ depending on the state which the vehicle
---  is in.
-
--- | Vehicle state machine.
-data CState = SM2 | SM1 | S0 | S1
-  deriving (Data, Eq, Typeable)
-
--- | Vehicle state machine transitions.
-stateTrans :: Double -- ^ Average velocity
-           -> Double -- ^ Longtitudal acceleration
-           -> CState -- ^ Input state
-           -> CState
-stateTrans v a state =
-  case state of
-    SM2 | v <= vMin + hv  -> SM2
-        | a >= delta      -> SM1
-        | a >= -beta      -> S0
-        | otherwise       -> S1
-    SM1 | v <= vMin       -> SM2
-        | a >= delta      -> SM1
-        | a >= -beta      -> S0
-        | otherwise       -> S1
-    S0  | v <= vMin       -> SM2
-        | a >= delta      -> SM1
-        | a >= -beta      -> S0
-        | otherwise       -> S1
-    S1  | v <= vMin       -> SM2
-        | a >= delta      -> SM1
-        | a >= -beta + ha -> S0
-        | otherwise       -> S1
-  where
-    vMin   = 0.5              -- Low velocity threshold
-    hv     = 0.2              -- Velocity hysteresis
-    ha     = 0.1              -- Acceleration hysteresis
-    beta   = 0.8              -- Deceleration threshold
-    delta  = 0.1              -- Acceleration threshold
-
+     return $ sealBy MainLoop velosIn slipsOut velo
 
 fromOk (Ok v) = v
 
@@ -372,6 +226,7 @@ fromOk (Ok v) = v
 slipRatio :: Double -> Double -> Double
 slipRatio 0  _ = 0
 slipRatio v0 v = 1 - v/v0
+
 
 -- * ABS system
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -387,7 +242,12 @@ data WheelPorts = WheelPorts
   , wportIdx :: Int
   }
 
-newtype ABS = ABS (DataElem Unqueued Double Required, [WheelPorts])
+data ABS = ABS 
+  { absVeloIn  :: DataElem Unqueued Double Required
+    -- ^ Velocity estimate
+  , wheelPorts :: [WheelPorts]
+    -- ^ Wheelports
+  }
 
 -- | The ABS system connects the @mainLoop@ component for each wheel with a
 -- wheel controller. Each controller is also connected to the carrier wave
@@ -395,7 +255,7 @@ newtype ABS = ABS (DataElem Unqueued Double Required, [WheelPorts])
 absSystem :: AUTOSAR ABS
 absSystem = composition $ 
   do -- Main loop
-     MainLoop velosIn slipsOut accelIn <- mainLoop
+     MainLoop velosIn slipsOut veloIn <- mainLoop
      
      -- Wheel controllers
      wheelCtrls <- forM [1..4] wheelCtrl
@@ -406,12 +266,7 @@ absSystem = composition $
      let vs = map valve wheelCtrls
          ss = map slip  wheelCtrls
          is = map index wheelCtrls
-     return $ ABS (accelIn, zipWith3 WheelPorts velosIn vs is)
-
-instance External ABS where
-  toExternal   (ABS (_, ws)) = toExternal ws
-  fromExternal (ABS (a, ws)) = 
-    relabel "ACCEL" (toExternal a) ++ fromExternal ws
+     return $ ABS veloIn (zipWith3 WheelPorts velosIn vs is)
 
 instance External WheelPorts where
   toExternal   (WheelPorts _ r idx) = addNum idx $ toExternal r 

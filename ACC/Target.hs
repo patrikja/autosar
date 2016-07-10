@@ -2,14 +2,12 @@ module Target
   ( -- * Magic moving target
     MovingTarget(..)
   , movingTarget
-    -- * A target we can hook up to
-  , TargetCtrl(..)
-  , targetCtrl
     -- * Types
   , Distance
   ) where
 
 import Control.Monad
+import Data.Maybe           (fromMaybe)
 import NewARSim      hiding (void)
 
 -- | Some distance measure.
@@ -19,12 +17,14 @@ type Distance = Double
 -- set distance ahead, travelling at a set speed, for some duration.
 
 newtype MovingTarget = MovingTarget 
-  { getStatus :: ClientServerOp () (Maybe Distance) Provided }
+  { targetStatus :: DataElem Unqueued (Maybe Distance) Provided }
 
 -- | @'movingTarget' t0 v s0 dur@ creates a moving target which mystically appears
 -- @s0@ meters ahead of the caller at time @t0@, travelling at a speed of @v@ 
 -- m/s, and exists for a duration @dur@ before it magically disappears.
-movingTarget :: Time
+movingTarget :: Time 
+             -- ^ Sample time
+             -> Time
              -- ^ Time of appearance (s)
              -> Double
              -- ^ Velocity (m/s)
@@ -33,63 +33,24 @@ movingTarget :: Time
              -> Time
              -- ^ Lifetime
              -> AUTOSAR MovingTarget
-movingTarget t0 v s0 dur = atomic $
-  do position  <- interRunnableVariable s0
-     time      <- interRunnableVariable 0
-     lock      <- exclusiveArea
-     getStatus <- providedPort
+movingTarget deltaT t0 v s0 dur = atomic $
+  do position     <- interRunnableVariable s0
+     time         <- interRunnableVariable 0
+     targetStatus <- providedPort
+     comSpec targetStatus (InitValue Nothing)
 
-     -- Keep track of time
-     -- TODO: Desireable to have this thing "sleep" until we reach @t0@.
-     --       Very much desirable to turn it off entierly when we reach 
-     --       @t0 + dur@.
-     let dt = 1e-1
-     runnable (MinInterval 0) [TimingEvent dt] $
-       do rteEnter lock
-          Ok t <- rteIrvRead time
-
-          -- When we're in the working range, do stuff.
-          when (t >= t0 && t < t0 + dur) $
-            do Ok s <- rteIrvRead position
-               rteIrvWrite position (s + v * dt)
-               return ()
-
-          -- Update time
-          rteIrvWrite time (t + dt)
-          rteExit lock
-          return ()
-         
-     -- Serve requests for actual distance. If the vehicle is not there,
-     -- all we get is @Nothing@.
-     serverRunnable (MinInterval 0) [OperationInvokedEvent getStatus] $ \_ ->
-       do rteEnter lock
-          Ok t <- rteIrvRead time
+     runnable (MinInterval 0) [TimingEvent deltaT] $
+       do Ok t <- rteIrvRead time
           Ok s <- rteIrvRead position
-          rteExit lock
-
-          if t >= t0 && t < t0 + dur then
-            return $ Just s
-          else
-            return Nothing
-     return $ sealBy MovingTarget getStatus 
-
-data TargetCtrl = TargetCtrl
-  { targetOp       :: ClientServerOp () (Maybe Distance) Required
-  , targetDistance :: DataElem Unqueued Distance Provided 
-  }
-
-targetCtrl :: Time -> AUTOSAR TargetCtrl
-targetCtrl resolution = atomic $
-  do let farAway = 500
-     targetOp       <- requiredPort
-     targetDistance <- providedPort
-     comSpec targetDistance (InitValue farAway)
-
-     runnable (MinInterval 0) [TimingEvent 1e-1] $ 
-       do Ok res <- rteCall targetOp ()
-          case res of
-            Just s' -> rteWrite targetDistance s'
-            Nothing -> rteWrite targetDistance farAway
           
-     return $ sealBy TargetCtrl targetOp targetDistance
+          let status = if t >= t0 && t < t0 + dur then
+                         Just (s + v * deltaT)
+                       else
+                         Nothing
+
+          rteIrvWrite position     (fromMaybe s status)
+          rteIrvWrite time         (t + deltaT)
+          rteWrite    targetStatus status
+         
+     return $ sealBy MovingTarget targetStatus 
 

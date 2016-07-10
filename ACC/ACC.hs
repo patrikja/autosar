@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 -- | Adaptive Cruise Control (ACC) component in the AUTOSAR monad.
 --
 -- The system includes a simulated target vehicle sensor, a PID controller for 
@@ -14,337 +12,153 @@
 --
 -- *** TODO *** 
 --
---  * Override cruise speed when target vehicle has a lower relative speed.
---  * Let radar ignore targets exceeding some threshold distance.
---  * Implement some sort of panic brake logic that goes into play when
---    cruise speed is overridden. When changing cruise speeds, we should refrain
---    from using brakes as much as possible.
---  * External connections get @NO_DATA@ early on. This is not supposed to
---    happen (there should always be a ZERO input at the very least).
+--  * External connections get @NO_DATA@? Can be fixed by comSpec:ing incoming
+--    connections with InitValue, but that should not be necessary? Eliminated
+--    if we use DataReceivedEvents for components where possible. 
+--    XXX Scheduling? XXX
 --
+--  * Implement panic braking logic? Could re-use ABS state-machine from
+--    NewABS2 (make vehicle state /global/.)
+--
+
+{-# LANGUAGE RecordWildCards #-}
+
 module ACC 
-  ( -- * Cruise control
-    CruiseCtrl(..)
-  , cruiseCtrl
-    -- * Vehicle IO module
-  , IOModule(..)
-  , vehicleIO
+  ( -- * ACC system
+    ACCSystem(..)
+  , accSystem
     -- * Types
-  , Velo, Throttle, Distance
-    -- * PID controller
-  , PIDCtrl(..)
-  , pidController
+  , Velo, Throttle
   ) where
 
 import Control.Monad
 import Generic
-import Gearbox
 import NewARSim      hiding (void)
-import Target
+import PID
 
 -- * Types 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- These are essentially unitless (in the sense that it does not matter), so
--- long as all values come from sources of the same unit. For simplicity, use SI
--- units (i.e. m/s for velocity, rad/s for angular velocity, etc, etc).
 
--- | (Vehicle) velocity.
-type Velo = Double
-
--- | Throttle application. Unitless/fraction.
+type Distance = Double
+type Velo     = Double
 type Throttle = Double
 
--- | Brake pedal application. Unitless/fraction.
-type Pedal = Double
-
--- * PID controller
+-- * ACC composition
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--- | The PID controller requires a @(cruise, vehicle)@ velocity tuple and
--- provides a throttle control.
-data PIDCtrl = PIDCtrl
-  { pidInput  :: DataElem Unqueued (Velo, Velo) Required
-  , pidOutput :: DataElem Unqueued Throttle     Provided
-  }
-
--- | The PID controller produces a linear combination of Propotional-, 
--- Integrating and Differentiating gain. The component requires the previous
--- state of the variables and is thus stateful.
-pidController :: Time 
-              -- ^ Sample time
-              -> Time
-              -- ^ Derivative time 
-              -> Time
-              -- ^ Integral time
-              -> Double
-              -- ^ Proportional scale 
-              -> AUTOSAR PIDCtrl
-              -- ^ Throttle control (output)
-pidController dt td ti k = atomic $ do
-     state <- interRunnableVariable (0.0, 0.0)
-
-     pidInput  <- requiredPort
-     pidOutput <- providedPort 
-     comSpec pidOutput (InitValue 0.0)
-
-     probeWrite "PID OUT" pidOutput
-
-     runnable (MinInterval 0) [DataReceivedEvent pidInput] $
-       do Ok (ctrl, feedback)   <- rteRead pidInput
-          Ok (prevErr, prevInt) <- rteIrvRead state
-         
-          let err        = ctrl - feedback
-              derivative = (err - prevErr) / dt
-              integral   = prevInt + dt / ti * err
-              output     = k * (err + integral + td * derivative) 
-          rteIrvWrite state (err, integral) 
-          rteWrite pidOutput output
-     return $ sealBy PIDCtrl pidInput pidOutput
-
--- * Target vehicle sensor
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- A basic simulated radar. The system is intended to simulate the distance to
--- some moving object ahead of the vehicle, and report both relative speed as
--- well as distance to the object ahead. 
-
--- | Radar controller exports.
-data RadarCtrl = RadarCtrl
-  { distance :: DataElem Unqueued Distance Required
-  , relative :: DataElem Unqueued Velo     Provided
-  }
-
--- | The radar controller simulates a target vehicle sensor. By reading the
--- distance to the target vehicle from the environment (for instance Simulink),
--- @radarCtrl@ computes the relative velocity between the vehicle and the target
--- vehicle. The component is parametric in the sample time resolution.
---
--- TODO: This is not right
-radarCtrl :: Time 
-          -- ^ Sample time resolution
-          -> AUTOSAR RadarCtrl
-radarCtrl dt = atomic $ do
-     state    <- interRunnableVariable 0.0
-     distance <- requiredPort
-     relative <- providedPort
-     comSpec relative (InitValue 0.0)
-
-     runnable (MinInterval 0) [TimingEvent dt] $ 
-       do -- Ok d1 <- rteRead distance
-          res <- rteRead distance
-          case res of 
-            Ok d1 -> do 
-              Ok d0 <- rteIrvRead state
-              let ds = (d1 - d0) / dt
-              rteWrite relative ds
-              rteIrvWrite state d1
-            _ -> rteWrite relative 0.0
-     return $ sealBy RadarCtrl distance relative
-
--- * Throttle control
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
--- | Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
--- range.
-throttleCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
-throttleCtrl = feedthrough (max (-1) . min 1) 0.0
-
--- * Brake control
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
--- | Vehicle brake controller. Limits throughput signal to the @[0, 1]@ range.
-brakeCtrl :: AUTOSAR (Feedthrough Pedal Pedal)
-brakeCtrl = feedthrough (min 1) 0.0
-
--- * Vehicle module
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- A collection of modules for import/export from/to Simulink. The external
--- software should provide brake and throttle inputs, desired cruise speed, an
--- on/off signal for the cruise control system, the current vehicle speed, and
--- traffic input (distance to the target vehicle/object ahead).
---
--- The AUTOSAR system provides throttle and brake pedal outputs.
-
--- | IO module for a vehicle using the ACC system.
-data IOModule = IOModule
-  { -- Inputs (from real world)
-    cruise      :: DataElem Unqueued Velo     Required
-  , velocity    :: DataElem Unqueued Velo     Required
---   , dist        :: DataElem Unqueued Distance Required
-  , throttleIn  :: DataElem Unqueued Throttle Required
-  , brakeIn     :: DataElem Unqueued Pedal    Required
-  , onOff       :: DataElem Unqueued Double   Required
-  , rpmIn       :: DataElem Unqueued Double   Required -- Engine RPM
+data ACCSystem = ACCSystem
+  { -- Inputs
+    accCruise   :: DataElem Unqueued Velo             Required
+  , accVeloIn   :: DataElem Unqueued Velo             Required
+  , accTarget   :: DataElem Unqueued (Maybe Distance) Required
     -- Outputs
-  , throttleOut :: DataElem Unqueued Throttle Provided
-  , brakeOut    :: DataElem Unqueued Pedal    Provided
-  , gearOut     :: DataElem Unqueued Integer  Provided -- Gear signal
+  , accThrottle :: DataElem Unqueued Throttle         Provided
+  , accBrake    :: DataElem Unqueued Throttle         Provided
   }
 
-instance External IOModule where
-  fromExternal iom = concat 
-    [ relabel "CRUISE" $ fromExternal (cruise     iom)
-    , relabel "VELO"   $ fromExternal (velocity   iom)
---     , relabel "TARGET" $ fromExternal (dist       iom)
-    , relabel "THR_IN" $ fromExternal (throttleIn iom)
-    , relabel "BRK_IN" $ fromExternal (brakeIn    iom)
-    , relabel "ONOFF"  $ fromExternal (onOff      iom)
-    , relabel "RPM"    $ fromExternal (rpmIn      iom)
-    ]
-  
-  toExternal iom = concat
-    [ relabel "THR_OUT" (toExternal (throttleOut iom))
-    , relabel "BRK_OUT" (toExternal (brakeOut    iom))
-    , relabel "GEAR"    (toExternal (gearOut     iom))
-    ]
-
--- | Vehicle IO module.
-vehicleIO :: AUTOSAR IOModule
-vehicleIO = composition $
+-- | Adaptive Cruise Control system.
+accSystem :: Time -> AUTOSAR ACCSystem
+accSystem timeStep = composition $
   do -- Sample time resolution of the entire system. Inherited 
      -- by the target vehicle sensor and the ACC ECU.
-     let timeStep = 1e-2
     
-     -- Expose subsystems 
      accECU <- cruiseCtrl timeStep
-     radar  <- radarCtrl  timeStep
-     brakes <- brakeCtrl
-     engine <- throttleCtrl
 
-     connect (relative radar) (target accECU)
+     -- PD controller
+     -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     -- Create a PD controller for the ACC. Parameters are 
+     -- found by trial-and-error.
+     pidCtrl <- pdController (timeStep / 10) 5e-3 3e-2
+     
+     -- Connections
+     connect (pidOutput pidCtrl)   (ctrlOut accECU)  
+     connect (ctrlIn accECU)       (pidInput pidCtrl) 
+     
+     accCruise <- requiredDelegate [crVel accECU]
+     accVeloIn <- requiredDelegate [vhVel accECU]
+     accTarget <- requiredDelegate [target accECU]
 
-     -- Two-way switches for bypassing ACC. 
-     -- TODO: Use /one/ bypass switch.
-     bypassBrakes <- switchRoute
-     bypassEngine <- switchRoute
-
-     -- Connect switch control operations to triggers on @onOff@.
-     brakesBypassTrigger <- trigger timeStep toBool 0
-     engineBypassTrigger <- trigger timeStep toBool 0
-     connect (switchOp bypassBrakes) (op brakesBypassTrigger)
-     connect (switchOp bypassEngine) (op engineBypassTrigger)
-
-     -- Connect switch ports
-     connect (brkCtrl accECU) (switchLeft bypassBrakes)
-     connect (thrCtrl accECU) (switchLeft bypassEngine)
-
-     -- PID setup
-     let diffTime = 5e-3 
-         intTime  = 100
-         scale    = 3e-2
-     pidCtrl <- pidController timeStep diffTime intTime scale
-     connect (ctrlIn accECU)     (pidInput pidCtrl) 
-     connect (pidOutput pidCtrl) (ctrlOut accECU)  
-
-     -- Gear controller setup
-     gearCtrl <- gearController timeStep
-     gearOut  <- providedDelegate [gearSignal gearCtrl]
-     rpmIn    <- requiredDelegate [engineRPM gearCtrl]
-
-     -- Target vehicle setup. Spawn a moving target 19 seconds in, running at
-     -- 20 m/s, 100 meters ahead, alive for 30 seconds.
-     moving <- movingTarget 19 20 100 30
-     target <- targetCtrl timeStep
-     connect (getStatus moving)      (targetOp target)
-     connect (targetDistance target) (distance radar)
-
-     -- Remaining connections 
-     connect (switchOut bypassBrakes) (feedIn brakes) 
-     connect (switchOut bypassEngine) (feedIn engine) 
-     brakeOut    <- providedDelegate [feedOut brakes]
-     throttleOut <- providedDelegate [feedOut engine]
-
-     onOff       <- requiredDelegate [input brakesBypassTrigger, input engineBypassTrigger]
-     brakeIn     <- requiredDelegate [switchRight bypassBrakes]
-     throttleIn  <- requiredDelegate [switchRight bypassEngine]
---      dist        <- requiredDelegate [distance radar]
-     velocity    <- requiredDelegate [vhVel accECU]
-     cruise      <- requiredDelegate [crVel accECU]
-
-     return IOModule {..}
-
-toBool :: Double -> Bool
-toBool 0 = False
-toBool _ = True
+     accThrottle <- providedDelegate [thrCtrl accECU]
+     accBrake    <- providedDelegate [brkCtrl accECU]
+     
+     return ACCSystem {..}
 
 -- * Adaptive Cruise Control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- The adaptive cruise-control consists of a PID regulator for achieving the
--- desired cruise velocity during operations, an exported on/off operation, and
--- a radar component input which is assumed to provide the distance and relative
--- speed of some large enough object ahead of the vehicle. The on/off operation 
--- enables or bypasses the system.
+-- The adaptive cruise-control consists of a PD controller for achieving the
+-- desired cruise velocity during operations, a radar component input which is 
+-- assumed to provide the relative speed of some large enough object ahead of 
+-- the vehicle. 
 --
--- When enabled, the system tries to maintain the desired cruise speed if no
--- obstacles are encountered. If the PID-controller output is negative and of a
--- large enough magnitude, the system applies brake pressure. If the system
--- detects a object on the radar with relative speed falling short of the
--- desired cruise speed, the system will provide the PID controller with this
--- speed instead. If the relative speed falls below some threshold the system is
--- allowed to panic brake.
---
--- The system thus acts as a feedthrough for throttle and brake pressure, and
--- requires radar input, desired cruise velocity as well as vehicle velocity.
+-- TODO: Read vehicle velocity from NewABS2 estimation algorithm.
+--       Allow panic braking (apply NewABS2 state machine to target vehicle?)
 
--- | The ACC unit requires a target vehicle sensor, a braking controller, a
--- throttle controller, vehicle information (speed) and some user input modules;
--- i.e. a bypass switch and brake/throttle inputs.
+-- | The ACC unit requires a target vehicle sensor, a set (cruise) speed, a 
+-- controller of some sort for controlling vehicle speed, and access to brakes 
+-- and throttle.
 data CruiseCtrl = CruiseCtrl
   { -- Vehicle information
     crVel   :: DataElem Unqueued Velo         Required
   , vhVel   :: DataElem Unqueued Velo         Required
-    -- PID
+    -- Controller
   , ctrlIn  :: DataElem Unqueued (Velo, Velo) Provided  
   , ctrlOut :: DataElem Unqueued Throttle     Required
     -- Target vehicle sensor
-  , target  :: DataElem Unqueued Velo         Required
+  , target  :: DataElem Unqueued (Maybe Velo) Required
     -- Car subsystems
   , thrCtrl :: DataElem Unqueued Throttle     Provided
-  , brkCtrl :: DataElem Unqueued Pedal        Provided
+  , brkCtrl :: DataElem Unqueued Throttle     Provided
   }
 
 -- | The cruise control apparatus.
-cruiseCtrl :: Time -> AUTOSAR CruiseCtrl
-cruiseCtrl resolution = atomic $ 
-  do -- Vehicle information
-     crVel <- requiredPort
-     vhVel <- requiredPort
-
-     -- PID 
+cruiseCtrl :: Time 
+           -- ^ Sample time
+           -> AUTOSAR CruiseCtrl
+cruiseCtrl deltaT = atomic $ 
+  do crVel   <- requiredPort
+     vhVel   <- requiredPort
+     target  <- requiredPort
+     
      ctrlIn  <- providedPort
      ctrlOut <- requiredPort
 
-     -- Target vehicle sensor
-     target <- requiredPort
-
-     -- Car subsystems 
      brkCtrl <- providedPort
      thrCtrl <- providedPort
      comSpec brkCtrl (InitValue 0.0)
      comSpec thrCtrl (InitValue 0.0)
-
+     
+     comSpec crVel  (InitValue 0.0)
+     comSpec vhVel  (InitValue 0.0)
+     comSpec target (InitValue Nothing)
+  
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
      -- TODO: * Target speed not relative to vehicle 
      --       * Override cruise speed
-     --       * Implement some sort of panic braking rule.
+     --       * Implement some sort of panic braking rule 
+     --         (use ABS state machine?)
      --
-     runnable (MinInterval 0) [TimingEvent resolution] $
+     runnable (MinInterval 0) [TimingEvent deltaT] $
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
-          Ok r <- rteRead target
-
-          -- Try to override cruise velocity when relative velocity to
-          -- target is lower
-          rteWrite ctrlIn (min c (v + r), v)
-          -- rteWrite ctrlIn (c, v)
+         
+          -- Try to override cruise speed when there is a target with a speed
+          -- slower than cruise speed.
+          --
+          -- TODO: Chatter, speed is absolute, not relative, fix above.
+          Ok rel <- rteRead target
+          case rel of 
+            Nothing -> rteWrite ctrlIn (c, v)
+            Just r  -> rteWrite ctrlIn (0, v)
+         
+          -- Read control signal and redirect depending of sign.
           Ok ctrl <- rteRead ctrlOut
           if ctrl < 0 then
-            do printlog "ACC" $ "brakes: " ++ show (-ctrl)
-               rteWrite thrCtrl 0
+            do rteWrite thrCtrl 0
                rteWrite brkCtrl (-ctrl)
           else 
-            do printlog "ACC" $ "throttle: " ++ show ctrl
-               rteWrite thrCtrl ctrl
+            do rteWrite thrCtrl ctrl
                rteWrite brkCtrl 0
+                
      return $ sealBy CruiseCtrl crVel vhVel ctrlIn ctrlOut target thrCtrl brkCtrl
 
