@@ -21,12 +21,10 @@ import NewARSim
 -- Integrating and Differentiating gain. A few useful special cases (PI-, PD-)
 -- are exported as well.
 
--- | The PID controller requires a @(Set, Input)@ tuple and provides a control
--- signal.
-data PIDCtrl = PIDCtrl
-  { pidInput  :: DataElem Unqueued (Double, Double) Required
-  , pidOutput :: DataElem Unqueued Double           Provided
-  }
+-- | The PID controller requires a @(cruise, vehicle)@ velocity tuple and
+-- provides a throttle control.
+newtype PIDCtrl = PIDCtrl
+  { pidOp :: ClientServerOp (Double, Double) Double Provided }
 
 -- | Create a PID controller.
 pidController :: Time 
@@ -38,24 +36,21 @@ pidController :: Time
               -> Double
               -- ^ Proportional scale 
               -> AUTOSAR PIDCtrl
-pidController deltaT td ti k = atomic $ do
+              -- ^ Throttle control (output)
+pidController dt td ti k = atomic $ do
      state <- interRunnableVariable (0.0, 0.0)
-
-     pidInput  <- requiredPort
-     pidOutput <- providedPort 
-     comSpec pidOutput (InitValue 0.0)
-
-     runnable (MinInterval 0) [DataReceivedEvent pidInput] $
-       do Ok (ctrl, feedback)   <- rteRead pidInput
+     pidOp <- providedPort
+     serverRunnable (MinInterval 0) [OperationInvokedEvent pidOp] $
+       \(ctrl, feedback) -> do
           Ok (prevErr, prevInt) <- rteIrvRead state
          
           let err        = ctrl - feedback
-              derivative = (err - prevErr) / deltaT
-              integral   = prevInt + deltaT / ti * err
+              derivative = (err - prevErr) / dt
+              integral   = prevInt + dt / ti * err
               output     = k * (err + integral + td * derivative) 
           rteIrvWrite state (err, integral) 
-          rteWrite pidOutput output
-     return $ sealBy PIDCtrl pidInput pidOutput
+          return output
+     return $ sealBy PIDCtrl pidOp
 
 -- | Create a PD controller (proportional and derivative control).
 pdController :: Time 

@@ -71,8 +71,7 @@ accSystem timeStep = composition $
      pidCtrl <- pdController (timeStep / 10) 5e-3 3e-2
      
      -- Connections
-     connect (pidOutput pidCtrl)   (ctrlOut accECU)  
-     connect (ctrlIn accECU)       (pidInput pidCtrl) 
+     connect (pidOp pidCtrl) (ctrl accECU)  
      
      accCruise <- requiredDelegate [crVel accECU]
      accVeloIn <- requiredDelegate [vhVel accECU]
@@ -98,16 +97,15 @@ accSystem timeStep = composition $
 -- and throttle.
 data CruiseCtrl = CruiseCtrl
   { -- Vehicle information
-    crVel   :: DataElem Unqueued Velo         Required
-  , vhVel   :: DataElem Unqueued Velo         Required
+    crVel   :: DataElem Unqueued Velo               Required
+  , vhVel   :: DataElem Unqueued Velo               Required
     -- Controller
-  , ctrlIn  :: DataElem Unqueued (Velo, Velo) Provided  
-  , ctrlOut :: DataElem Unqueued Throttle     Required
+  , ctrl    :: ClientServerOp (Velo, Velo) Throttle Required
     -- Target vehicle sensor
-  , target  :: DataElem Unqueued (Maybe Velo) Required
+  , target  :: DataElem Unqueued (Maybe Velo)       Required
     -- Car subsystems
-  , thrCtrl :: DataElem Unqueued Throttle     Provided
-  , brkCtrl :: DataElem Unqueued Throttle     Provided
+  , thrCtrl :: DataElem Unqueued Throttle           Provided
+  , brkCtrl :: DataElem Unqueued Throttle           Provided
   }
 
 -- | The cruise control apparatus.
@@ -118,9 +116,7 @@ cruiseCtrl deltaT = atomic $
   do crVel   <- requiredPort
      vhVel   <- requiredPort
      target  <- requiredPort
-     
-     ctrlIn  <- providedPort
-     ctrlOut <- requiredPort
+     ctrl    <- requiredPort
 
      brkCtrl <- providedPort
      thrCtrl <- providedPort
@@ -147,18 +143,17 @@ cruiseCtrl deltaT = atomic $
           --
           -- TODO: Chatter, speed is absolute, not relative, fix above.
           Ok rel <- rteRead target
-          case rel of 
-            Nothing -> rteWrite ctrlIn (c, v)
-            Just r  -> rteWrite ctrlIn (0, v)
+          Ok sig <- case rel of 
+                      Nothing -> rteCall ctrl (c, v)
+                      Just r  -> rteCall ctrl (0, v)
          
           -- Read control signal and redirect depending of sign.
-          Ok ctrl <- rteRead ctrlOut
-          if ctrl < 0 then
+          if sig < 0 then
             do rteWrite thrCtrl 0
-               rteWrite brkCtrl (-ctrl)
+               rteWrite brkCtrl (-sig)
           else 
-            do rteWrite thrCtrl ctrl
+            do rteWrite thrCtrl sig
                rteWrite brkCtrl 0
                 
-     return $ sealBy CruiseCtrl crVel vhVel ctrlIn ctrlOut target thrCtrl brkCtrl
+     return $ sealBy CruiseCtrl crVel vhVel ctrl target thrCtrl brkCtrl
 
