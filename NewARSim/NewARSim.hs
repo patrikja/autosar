@@ -1561,7 +1561,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
             RandState { prevIn = prev1, addrIn = addr_in } <- get
             let extProcs = vectorToProcs vec prev1 addr_in
                 newProcs = pmapUpdate procs extProcs 
-           
+            
             -- Re-set the previous input to the current input. Not sure if
             -- we have to /copy/ these vectors (they are storable) or if GHC
             -- figures it out for us (i.e. will they just reassign the pointer?)
@@ -1577,7 +1577,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
 
               Just (dt, procs1, ts) ->
                 do RandState { addrOut = addr_out, prevOut = prev2 } <- get
-
+                  
                    -- Produce an output vector.
                    let next   = mkCDouble dt
                        procs2 = pmapUpdate procs procs1
@@ -1609,7 +1609,7 @@ simulate1Ext :: Scheduler RandStateIO
              -> ConnRel
              -> ProcMap
              -> [Transition]
-             -> RandStateIO (Maybe (Time, [Update Proc], [Transition]))
+             -> RandStateIO (Maybe (Time, ProcMap, [Transition]))
 simulate1Ext sched conn procs acc
   | null alts = return Nothing
   | otherwise =
@@ -1618,11 +1618,12 @@ simulate1Ext sched conn procs acc
          -- The trace finished - should we return a Just here?
          Nothing -> return $ error "The trace finished. I don't know what to do."
          Just (trans, procs1) ->
-           case transLabel trans of
-             DELTA dt -> 
-               return $ Just (dt, procs1, trans:acc)
-             _ -> 
-               simulate1Ext sched conn (pmapUpdate procs procs1) (trans:acc)
+           case pmapUpdate procs procs1 of 
+             procs2 -> case transLabel trans of
+               DELTA dt -> 
+                 return $ Just (dt, procs2, trans:acc)
+               _ -> 
+                 simulate1Ext sched conn procs2 (trans:acc)
   where
     alts = step conn procs
 

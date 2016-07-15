@@ -60,10 +60,9 @@ type Index = Int
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 data BangBang = BangBang
-  { valves :: ValveP                         Provided
-  , slips  :: DataElem Unqueued Slip         Required 
-  , pidIn  :: DataElem Unqueued (Slip, Slip) Provided
-  , pidOut :: DataElem Unqueued Slip         Required
+  { valves  :: ValveP                             Provided
+  , slips   :: DataElem Unqueued Slip             Required 
+  , pidCall :: ClientServerOp (Slip, Slip) Double Required
   }
 
 -- | Bang-bang controller using pulse width modulation control. Makes use of 
@@ -73,21 +72,17 @@ bangBangCtrl :: AUTOSAR BangBang
 bangBangCtrl = atomic $ 
   do valvePort <- providedPort
      slips     <- requiredPort 
-     pidIn     <- providedPort
-     pidOut    <- requiredPort
+     pidCall   <- requiredPort
      comSpec valvePort (InitValue (False, True))
-     comSpec pidIn     (InitValue (0.0, 0.0))
-     comSpec pidOut    (InitValue 0.0)
 
      carrier <- interRunnableVariable (0 :: Int)
   
      let width = 20
      -- Run on a 1 ms resolution
-     runnable (MinInterval 0) [TimingEvent 0.001] $
+     runnable (MinInterval 0) [TimingEvent 1e-3] $
        do Ok c  <- rteIrvRead carrier
           Ok s0 <- rteRead slips
-          rteWrite pidIn (0.2, s0)
-          Ok s  <- rteRead pidOut
+          Ok s  <- rteCall pidCall (0.2, s0)
 
           -- Control signal modulation
           -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -108,7 +103,7 @@ bangBangCtrl = atomic $
 
           rteIrvWrite carrier ((c + 1) `mod` width)
 
-     return $ sealBy BangBang valvePort slips pidIn pidOut
+     return $ sealBy BangBang valvePort slips pidCall
 
 -- * Valve ports
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -172,8 +167,7 @@ wheelCtrl i = composition $
   do bang <- bangBangCtrl
      pid  <- pidController 1e-4 2e-3 1e324 7
 
-     connect (pidIn bang)    (pidInput pid)
-     connect (pidOutput pid) (pidOut bang)
+     connect (pidOp pid) (pidCall bang)
      
      valve <- providedDelegate [valves bang]
      slip  <- requiredDelegate [slips bang]
