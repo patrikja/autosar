@@ -21,14 +21,6 @@
  * simulation. This is done in init_simulator() which is called from
  * mdlInitializeSizes.
  *
- * KNOWN ISSUES
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *   o  There is an issue when simulating systems with a unit
- *      (output) port width, causing ARSIM to interpret the
- *      first data transfer as a request to halt simulation.
- *      The handshake and transfer protocols (or perhaps the 
- *      magic numbers involved) should be revised to prevent
- *      this.
  */
 #include <fcntl.h>
 #include <errno.h>
@@ -44,7 +36,7 @@
 #include "protocol.h"
 
 #define S_FUNCTION_NAME swrapper
-#define S_FUNCTION_LEVEL 2       // Leave this as 2
+#define S_FUNCTION_LEVEL 2
 #include "simstruc.h"
 
 #define MINIMUM_DELTA 1e-6
@@ -249,9 +241,13 @@ void init_protocol(SimStruct *S)
 static void mdlInitializeSizes(SimStruct *S)
 {
   // Easier to spot a restart this way.
-  fprintf(stderr, "******************************************"
-                  "******************************************\n\n");
-  
+  fprintf(stderr, 
+      "*****************************************"
+      "***************************************\n"
+      "* ARSim Simulink wrapper                 "
+      "                                      *\n"
+      "*****************************************"
+      "***************************************\n");
   debug("( trace )");
 
   ssSetNumSFcnParams(S, 1);
