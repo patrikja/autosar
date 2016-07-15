@@ -219,10 +219,12 @@ void init_protocol(SimStruct *S)
   /* - Set up some intermediate storage (MATLAB crux). 
    * - Run the simulator one step (need some outputs to be ready since
    *   Simulink updates the model in a backwards order).
-   *
-   * TODO: Error handling for calloc
    */
   intermediate = calloc(protocol->p_input_width, sizeof(double));
+  if (intermediate == NULL) {
+    ssSetErrorStatus(S, "Memory allocation error in init_simulator.");
+    return;
+  }
   Protocol_send_data(protocol, intermediate);
 
   sim_running = true;
@@ -393,7 +395,7 @@ static void mdlGetTimeOfNextVarHit(SimStruct *S)
 /* == FUNCTION mdlTerminate ===================================================
  * Called by Simulink whenever the simulation finishes. 
  *
- * Closes handles, unlinks FIFOs, resets model and checks errno.
+ * Closes handles, unlinks FIFOs and resets model.
  */
 static void mdlTerminate(SimStruct *S) {
   
@@ -419,10 +421,6 @@ static void mdlTerminate(SimStruct *S) {
 
     unlink(hs_input_fifo);
     unlink(hs_output_fifo);
-
-#ifndef NDEBUG
-    ssPrintf("= Unlinked FIFOs and reset model.\n");
-#endif
   }
 
 }
