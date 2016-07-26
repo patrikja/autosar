@@ -2,55 +2,67 @@ module Target
   ( -- * Magic moving target
     MovingTarget(..)
   , movingTarget
-    -- * Types
-  , Distance
   ) where
 
 import Control.Monad
 import Data.Maybe           (fromMaybe)
 import NewARSim      hiding (void)
 
--- | Some distance measure.
-type Distance = Double
+type Velo = Double
+type Dist = Double
 
 -- Model some sort of target vehicle which will appear very suddenly at some
--- set distance ahead, travelling at a set speed, for some duration.
+-- set distance ahead with a set relative speed to our vehicle. If someone gets
+-- imaginative later, this could be changed to something more complex.
 
-newtype MovingTarget = MovingTarget 
-  { targetStatus :: DataElem Unqueued (Maybe Distance) Provided }
+data MovingTarget = MovingTarget 
+  { targetStatus  :: DataElem Unqueued (Maybe (Dist, Velo)) Provided 
+  , inputVelocity :: DataElem Unqueued Dist                 Required
+  }
 
--- | @'movingTarget' t0 v s0 dur@ creates a moving target which mystically appears
--- @s0@ meters ahead of the caller at time @t0@, travelling at a speed of @v@ 
--- m/s, and exists for a duration @dur@ before it magically disappears.
+-- | TODO: If we feed this our vehicle velocity and a starting distance, we 
+-- could approximate when a crash occurs. 
 movingTarget :: Time 
              -- ^ Sample time
              -> Time
              -- ^ Time of appearance (s)
-             -> Double
-             -- ^ Velocity (m/s)
-             -> Distance
-             -- ^ Position at appearance (m)
+             -> Velo
+             -- ^ Velocity
+             -> Dist
+             -- ^ Starting distance relative to us
              -> Time
              -- ^ Lifetime
              -> AUTOSAR MovingTarget
 movingTarget deltaT t0 v s0 dur = atomic $
-  do position     <- interRunnableVariable s0
-     time         <- interRunnableVariable 0
-     targetStatus <- providedPort
+  do time  <- interRunnableVariable 0
+     dist  <- interRunnableVariable s0
+     count <- interRunnableVariable (0 :: Int)
+
+     inputVelocity <- requiredPort
+     targetStatus  <- providedPort
      comSpec targetStatus (InitValue Nothing)
 
      runnable (MinInterval 0) [TimingEvent deltaT] $
-       do Ok t <- rteIrvRead time
-          Ok s <- rteIrvRead position
-          
-          let status = if t >= t0 && t < t0 + dur then
-                         Just (s + v * deltaT)
-                       else
-                         Nothing
+       do Ok t  <- rteIrvRead time
+          Ok s  <- rteIrvRead dist
+          Ok vf <- rteRead inputVelocity
 
-          rteIrvWrite position     (fromMaybe s status)
-          rteIrvWrite time         (t + deltaT)
-          rteWrite    targetStatus status
+          let s1 = s + (v - vf) * deltaT
          
-     return $ sealBy MovingTarget targetStatus 
+          -- Some debug
+          when (s > 0 && s1 <= 0) $ printlog "Target" "Crash."
+
+          -- Log new distance only if we're in the correct interval
+          rteIrvWrite time (t + deltaT)
+          if t >= t0 && t < t0 + dur then do
+            Ok n <- rteIrvRead count
+            rteIrvWrite count ((n + 1) `mod` (truncate (1/deltaT/10)))
+            when (n == 0) $ printlog "Target" $ "Distance: " ++ show s1
+
+            rteWrite targetStatus $ Just (v, s1)
+            rteIrvWrite dist s1 
+          else
+            rteWrite targetStatus Nothing
+
+     return $ sealBy MovingTarget targetStatus inputVelocity
 

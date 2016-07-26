@@ -14,55 +14,41 @@ import Gearbox
 import Generic
 import NewARSim 
 import NewABS2
+import Revlimit
 import Target
 
--- * Target vehicle sensor
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- A basic simulated radar. The system is intended to simulate the distance to
--- some moving object ahead of the vehicle, and report both relative speed as
--- well as distance to the object ahead. 
-
--- | Radar controller exports.
-data RadarCtrl = RadarCtrl
-  { distance :: DataElem Unqueued (Maybe Distance) Required
-  , relative :: DataElem Unqueued (Maybe Velo)     Provided
-  }
-
--- | The radar controller simulates a target vehicle sensor. By reading the
--- distance to the target vehicle from the environment @radarCtrl@ computes the 
--- relative velocity between the vehicle and the target vehicle.
---
--- TODO: Reads the /absolute/ position of the vehicle, thus computes absolute
---       speed. Either clarify this or "fix" the MovingTarget code.
-radarCtrl :: Time 
-          -- ^ Sample time
-          -> AUTOSAR RadarCtrl
-radarCtrl deltaT = atomic $ do
-     state    <- interRunnableVariable 0.0
-     distance <- requiredPort
-     relative <- providedPort
-     comSpec relative (InitValue Nothing)
-
-     runnable (MinInterval 0) [TimingEvent deltaT] $ 
-       do Ok dist <- rteRead distance
-          case dist of 
-            Nothing -> rteWrite relative Nothing
-            Just d1 ->
-              do Ok d0 <- rteIrvRead state
-                 let deltaS = (d1 - d0) / deltaT
-                 rteWrite relative (Just deltaS)
-                 rteIrvWrite state d1
-          
-     return $ sealBy RadarCtrl distance relative
+type Dist = Double
 
 -- * Throttle control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--- | Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
--- range.
-throttleCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
-throttleCtrl = feedthrough (max (-1) . min 1) 0.0
+data ThrottleCtrl = ThrottleCtrl
+  { throttleCtrlIn  :: DataElem Unqueued Double Required
+  , throttleCtrlOut :: DataElem Unqueued Double Provided
+  , throttleCtrlRpm :: DataElem Unqueued Double Required
+  , throttleCtrlRev :: ClientServerOp (Double, Double) Double Required
+  }
 
+-- | Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
+-- range. Makes use of the rev-limiter.
+throttleCtrl :: Time -> AUTOSAR ThrottleCtrl 
+throttleCtrl deltaT = atomic $ do -- feedthrough (max (-1) . min 1) 0.0
+  thrIn  <- requiredPort
+  rpmIn  <- requiredPort
+  revLim <- requiredPort
+  thrOut <- providedPort
+
+  comSpec thrOut (InitValue 0.0)
+
+  runnable (MinInterval 0) [DataReceivedEvent thrIn] $ do
+    Ok thr0 <- rteRead thrIn
+    Ok rpm  <- rteRead rpmIn
+    Ok thr1 <- rteCall revLim (thr0, rpm)
+    rteWrite thrOut ((max (-1) . min 1) thr1)
+    return ()
+
+  return $ sealBy ThrottleCtrl thrIn thrOut rpmIn revLim
+  
 -- * Brake control
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -114,56 +100,44 @@ instance External IOModule where
 -- | Vehicle IO module.
 --
 -- TODO: Separate ACC subsystems from ABS subsystems.
---       Expose velocity-estimation as separate subsystem.
-vehicleIO :: AUTOSAR IOModule
-vehicleIO = composition $
+vehicleIO :: Time -> Dist -> Velo -> Time -> AUTOSAR IOModule
+vehicleIO time dist velo dur = composition $
   do let timeStep = 1e-2
      
      -- Car subsystems
      -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     radar  <- radarCtrl  timeStep
-     brakes <- brakeCtrl
-     engine <- throttleCtrl
-    
-     -- Gear controller
-     -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     -- Initiate a gear controller, for automatic shifting
-     -- of the Simulink transmission.
+     brakes   <- brakeCtrl
+     engine   <- throttleCtrl   timeStep
      gearCtrl <- gearController timeStep
-     gearOut  <- providedDelegate [gearSignal gearCtrl]
-     rpmIn    <- requiredDelegate [engineRPM gearCtrl]
-
-     -- Target vehicle setup 
-     -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     -- Spawn a moving target 9 seconds in, running at
-     -- 10 m/s, 100 meters ahead, alive for 10 seconds.
-     moving <- movingTarget timeStep 9 10 100 10
-
-     -- Velocity controller
-     -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     veloCtrl <- velocityCtrl timeStep
-
-     -- Adaptive Cruise Control
-     -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     acc <- accSystem timeStep 
-
+     veloCtrl <- velocityCtrl   timeStep
+     acc      <- accSystem      timeStep 
+     rpmLimit <- revLimit 5500
+     
+     moving   <- movingTarget timeStep time dist velo dur
+    
      -- Connections
-     connect (targetStatus moving) (distance radar)
-     connect (relative radar)      (accTarget acc)
+     connect (targetStatus moving) (accTarget acc)
      connect (velocity veloCtrl)   (accVeloIn acc)
+     connect (velocity veloCtrl)   (inputVelocity moving)
      connect (accBrake acc)        (feedIn brakes) 
-     connect (accThrottle acc)     (feedIn engine) 
+     connect (accThrottle acc)     (throttleCtrlIn engine) 
+     connect (revOp rpmLimit)      (throttleCtrlRev engine)
 
      -- Delegations
      brakeOut    <- providedDelegate [feedOut brakes]
-     throttleOut <- providedDelegate [feedOut engine]
+     throttleOut <- providedDelegate [throttleCtrlOut engine]
      cruise      <- requiredDelegate [accCruise acc]
      accelIn     <- requiredDelegate [accel  veloCtrl]
+     gearOut     <- providedDelegate [gearSignal gearCtrl]
+     rpmIn       <- requiredDelegate [ engineRPM gearCtrl
+                                     , throttleCtrlRpm engine
+                                     ]
      
      -- Connect wheels to ABS system /and/ velocity controller
      absCtrl <- absSystem 
      connect (velocity veloCtrl) (absVeloIn absCtrl)
 
+     -- Strip ports and wheels from ABS system.
      let ws = wheels veloCtrl `zip` map veloIn (wheelPorts absCtrl)
      wheelsIn  <- forM ws $ \(vc, wp) -> requiredDelegate [vc, wp]
      valvesOut <- forM (map valveOut (wheelPorts absCtrl)) $ \vp ->
@@ -227,7 +201,8 @@ velocityCtrl deltaT = atomic $
           -- Velocity estimation
           -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           -- Assume that accelerometer input is filtered. This could be 
-          -- done here, provided that we implement a FIR filter.
+          -- done here, provided that we implement a FIR filter (for instance
+          -- moving average).
           --
           -- For low speeds or states with very little acceleration,
           -- approximate the vehicle speed as the average of the wheel

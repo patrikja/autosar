@@ -1517,6 +1517,11 @@ ioRandomSched alts =
  do (n, g) <- (next . gen) <$> get
     modify (\st -> st { gen = g})
     let (label, active, logs, procs) = alts !! (n `mod` length alts)
+
+    -- Printing logs during external simulation should still be useful?
+    liftIO $ forM_ logs $ \(i, v) -> 
+      putStrLn $ "[LOG] " ++ i ++ ":" ++ show v
+
     return $ Just (Trans n label active logs, procs)
 
 -- | Initialize the simulator with an initial state and run it. This provides
