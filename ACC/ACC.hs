@@ -1,27 +1,9 @@
--- | Adaptive Cruise Control (ACC) component in the AUTOSAR monad.
+-- | Adaptive Cruise Control. 
 --
--- The system includes a simulated target vehicle sensor, a PID controller for 
--- regulating vehicle speed, and an ACC component which composes all inputs and
--- sub-systems.
---
--- The system requires access to the brake and throttle controlling subsystems 
--- of the car, as well as /some/ input of the distance to the target vehicle. An
--- on/off switch is provided by reading an external double input (which is 
--- converted to a @Bool@ and regarded as @True@ whenever non-zero). The on/off 
--- switch essentially enables or bypasses the system.
---
--- *** TODO *** 
---
---  * External connections get @NO_DATA@? Can be fixed by comSpec:ing incoming
---    connections with InitValue, but that should not be necessary? Eliminated
---    if we use DataReceivedEvents for components where possible. 
---    XXX Scheduling? XXX
---
---  * Implement panic braking logic? Could re-use ABS state-machine from
---    NewABS2 (make vehicle state /global/.)
---
+-- TODO: Fix panic braking.
 
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module ACC 
   ( -- * ACC system
@@ -32,14 +14,16 @@ module ACC
   ) where
 
 import Control.Monad
+import Data.Maybe
 import Generic
+import Revlimit 
 import NewARSim      hiding (void)
 import PID
 
 -- * Types 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-type Distance = Double
+type Dist     = Double
 type Velo     = Double
 type Throttle = Double
 
@@ -48,12 +32,12 @@ type Throttle = Double
 
 data ACCSystem = ACCSystem
   { -- Inputs
-    accCruise   :: DataElem Unqueued Velo             Required
-  , accVeloIn   :: DataElem Unqueued Velo             Required
-  , accTarget   :: DataElem Unqueued (Maybe Distance) Required
+    accCruise   :: DataElem Unqueued Velo Required
+  , accVeloIn   :: DataElem Unqueued Velo Required
+  , accTarget   :: DataElem Unqueued (Maybe (Velo, Dist)) Required
     -- Outputs
-  , accThrottle :: DataElem Unqueued Throttle         Provided
-  , accBrake    :: DataElem Unqueued Throttle         Provided
+  , accThrottle :: DataElem Unqueued Throttle Provided
+  , accBrake    :: DataElem Unqueued Throttle Provided
   }
 
 -- | Adaptive Cruise Control system.
@@ -68,10 +52,10 @@ accSystem timeStep = composition $
      -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
      -- Create a PD controller for the ACC. Parameters are 
      -- found by trial-and-error.
-     pidCtrl <- pdController (timeStep / 10) 5e-3 3e-2
-     
+     pidCtrl <- pdController (timeStep / 10) 5e-3 5e-2
+
      -- Connections
-     connect (pidOp pidCtrl) (ctrl accECU)  
+     connect (pidOp pidCtrl)    (ctrl accECU)
      
      accCruise <- requiredDelegate [crVel accECU]
      accVeloIn <- requiredDelegate [vhVel accECU]
@@ -88,24 +72,21 @@ accSystem timeStep = composition $
 -- desired cruise velocity during operations, a radar component input which is 
 -- assumed to provide the relative speed of some large enough object ahead of 
 -- the vehicle. 
---
--- TODO: Read vehicle velocity from NewABS2 estimation algorithm.
---       Allow panic braking (apply NewABS2 state machine to target vehicle?)
 
 -- | The ACC unit requires a target vehicle sensor, a set (cruise) speed, a 
 -- controller of some sort for controlling vehicle speed, and access to brakes 
 -- and throttle.
 data CruiseCtrl = CruiseCtrl
   { -- Vehicle information
-    crVel   :: DataElem Unqueued Velo               Required
-  , vhVel   :: DataElem Unqueued Velo               Required
+    crVel   :: DataElem Unqueued Velo Required
+  , vhVel   :: DataElem Unqueued Velo Required
     -- Controller
   , ctrl    :: ClientServerOp (Velo, Velo) Throttle Required
     -- Target vehicle sensor
-  , target  :: DataElem Unqueued (Maybe Velo)       Required
+  , target  :: DataElem Unqueued (Maybe (Velo, Dist)) Required
     -- Car subsystems
-  , thrCtrl :: DataElem Unqueued Throttle           Provided
-  , brkCtrl :: DataElem Unqueued Throttle           Provided
+  , thrCtrl :: DataElem Unqueued Throttle Provided
+  , brkCtrl :: DataElem Unqueued Throttle Provided
   }
 
 -- | The cruise control apparatus.
@@ -126,34 +107,48 @@ cruiseCtrl deltaT = atomic $
      comSpec crVel  (InitValue 0.0)
      comSpec vhVel  (InitValue 0.0)
      comSpec target (InitValue Nothing)
-  
+
+--      counter <- interRunnableVariable (0 :: Int)
+
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
-     -- TODO: * Target speed not relative to vehicle 
-     --       * Override cruise speed
-     --       * Implement some sort of panic braking rule 
-     --         (use ABS state machine?)
-     --
      runnable (MinInterval 0) [TimingEvent deltaT] $
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
-         
-          -- Try to override cruise speed when there is a target with a speed
-          -- slower than cruise speed.
-          --
-          -- TODO: Chatter, speed is absolute, not relative, fix above.
-          Ok rel <- rteRead target
-          Ok sig <- case rel of 
-                      Nothing -> rteCall ctrl (c, v)
-                      Just r  -> rteCall ctrl (0, v)
-         
-          -- Read control signal and redirect depending of sign.
-          if sig < 0 then
-            do rteWrite thrCtrl 0
-               rteWrite brkCtrl (-sig)
-          else 
-            do rteWrite thrCtrl sig
-               rteWrite brkCtrl 0
-                
+          Ok m <- rteRead target
+
+          let (vt, st) = fromMaybe (c, 100) m
+
+--           Ok n <- rteIrvRead counter
+--           rteIrvWrite counter ((n + 1) `mod` truncate (1 / deltaT / 10))
+-- 
+--           when (st + (vt - v) <= 0) $ printlog "ACC" "PANIC."
+
+          Ok sig <- if v > vt then 
+                      rteCall ctrl (0.9 * vt, v)
+                    else 
+                      rteCall ctrl (min c vt, v)
+
+          if sig < 0 then do
+            rteWrite thrCtrl 0
+            rteWrite brkCtrl $ if st + vt - v <= 1 then (-sig) else (-sig/2)
+          else do
+            rteWrite thrCtrl sig
+            rteWrite brkCtrl 0
+
      return $ sealBy CruiseCtrl crVel vhVel ctrl target thrCtrl brkCtrl
+
+-- countLog :: Int -> String -> RTE c ()
+-- countLog 0 str = printlog "ACC" str
+-- countLog n _   = return ()
+
+-- * Panic braking
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--   s_t = distance to target
+--   v_t = target velocity
+--   v   = vehicle velocity
+--   T   = some time measure
+--
+--   if s_t + T(v_t - v) falls below some threshold (for instance zero), for 
+--   some T, take control of brakes (i.e. panic brake).
 
