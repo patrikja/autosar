@@ -257,6 +257,8 @@ where \V{T_p} is the period of the event.
 
 \end{enumerate}
 
+The AUTOSAR naming scheme guarantees that all processes terms in such an initial composition will carry unique addresses, with exception of timer terms which share addresses with the runnables they belong to. We will later see how runnable instances reuse the address of their runnables in the same manner.
+
 Some further static model information will also be referenced by the transition rules. We refer to the connectors of a model using a binary relation $\Rightarrow$ on port addresses, where the arrow points in the \emph{provided-to-required} direction. We also assume that $\Rightarrow$ is transitively closed (i.e., it expresses end-to-end connectivity across \emph{Delegation-} as well as \emph{AssemblySwConnector}s), and that every connection $a \Rightarrow b$ is lifted to the \emph{DataElement}s and \emph{ClientServerOperation}s of the connected ports such that
 \[
 \begin{array}{lll}
@@ -270,6 +272,15 @@ We expect the implementation of a runnable to be available as a continuation fun
 We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\emph{DataReceivedEvent}(i.r, p.e)$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $p.e$ (in component $i$). Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
 
 \subsection{Exclusive areas}
+
+An exclusive area is the analogue of a binary semaphore, that can be acquired and released in an atomic fashion by competing runnable instances. Rule (1) states that a runnable instance executing $\Enter x k$ may successfully proceed to executing its continuation $k$ by broadcasting $\say{\Tx x i}{\Tenter}$ to its process environment. Rule (3) expresses that exclusive area $\Tx x i$ accepts hearing $\hear{\Tx x i}{\Tenter}$ if it is currently not taken; i.e., carries the boolean state $\Tfalse$. This makes it possible for a runnable instance and an exclusive area term to engage in a parallel transition:
+\begin{eqnarray}
+	\Tstep{\TparLong{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\TrteEnter{\Tvar{X}}{\Tvar{K}}}}
+				{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tfalse}}}
+	  	  {\say{\Tx x i}{\Tenter}}
+		  {\TparLong{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tcons{\Tvar{X}}{\Tvar{Xs}}}{\Tap{\Tvar{K}}{\Tok}}}
+		  {\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Ttrue}}}
+\end{eqnarray}
 
 
 \subsection{Inter-runnable variables}
