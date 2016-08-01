@@ -79,7 +79,7 @@
 
 \newcommand{\Treturn}       {\Return}
 
-\newcommand{\Tstep}      [3]{\ensuremath{#1 &\red{#2}& #3}}
+\newcommand{\Tstep}      [3]{#1 &\red{#2}& #3}
 \newcommand{\Tsay}          {\say}
 \newcommand{\Thear}         {\hear}
 \newcommand{\Tdelta}     [1]{\ensuremath{\delta(#1)}}
@@ -108,7 +108,7 @@
 %\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \newcommand{\Pif}{\text{if}}
 
-\newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2\\}
+\newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2 \nonumber\\}
 %\newcommand{\Pcomma}{,}
 \newcommand\Pcomma{\;\,\text{and}\;\,}
 %\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}

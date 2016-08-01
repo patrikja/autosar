@@ -323,29 +323,35 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \label{sec:Prolog}
 
 \subsection{Exclusive areas}
-\[ \begin{array}{r@{}c@{}l}      \ExclusiveAreas          \end{array} \]
+\begin{eqnarray}      \ExclusiveAreas          \notag \end{eqnarray}
+
 \subsection{Inter-runnable variables}
-\[ \begin{array}{r@{}c@{}l}      \InterrunnableVariables  \end{array} \]
+\begin{eqnarray}      \InterrunnableVariables  \notag \end{eqnarray}
+
 \subsection{Sending/receiving}
-\[ \begin{array}{r@{}c@{}l}      \SendingReceiving        \end{array} \]
+\begin{eqnarray}      \SendingReceiving        \notag \end{eqnarray}
+
 %TODO: RuleLong?
 \subsection{Reading/writing (unbuffered versions of rcv and snd)}
-\[ \begin{array}{r@{}c@{}lcl}    \ReadingWriting          \end{array} \]
+\begin{eqnarray}      \ReadingWriting          \notag \end{eqnarray}
+
 \subsection{Calling a server}
 
-\renewcommand\Pcomma{\\&&\text{and}\;\;}
+\renewcommand\Pcomma{\nonumber \\&&\text{and}\;\;}
 
-\[ \begin{array}{r@{}c@{}lcl}    \CallServer              \end{array} \]
+\begin{eqnarray}      \CallServer              \notag \end{eqnarray}
+
 \subsection{Passing back a server result}
-\[ \begin{array}{r@{}c@{}lcl}    \ServerResult            \end{array} \]
+\begin{eqnarray}      \ServerResult            \notag \end{eqnarray}
+
 \subsection{Spawning and terminating}
-\[ \begin{array}{r@{}c@{}lcl}    \SpawnTerminate          \end{array} \]
+\begin{eqnarray}      \SpawnTerminate          \notag \end{eqnarray}
+
 \subsection{Passing time}
-\[ \begin{array}{r@{}c@{}lcl}    \PassingTime             \end{array} \]
+\begin{eqnarray}      \PassingTime             \notag \end{eqnarray}
+
+%\renewcommand{\Prule}[2]{#1 & \Pif \;\; #2\\}
 \subsection{Ignoring broadcasts}
-{
-\renewcommand{\Prule}[2]{#1 & \Pif \;\; #2\\}
-\[ \begin{array}{r@{}c@{}lcll}    \IgnoreBroadcast         \end{array} \]
-}
+\begin{eqnarray}      \IgnoreBroadcast         \notag \end{eqnarray}
 
 \end{document}
