@@ -1,7 +1,12 @@
 -- | Automatic transmission for Simulink 4-speed gearbox.
 --
--- TODO: Does not allow us to skip several gears, or go from neutral to a
--- feasible gear at high speeds.
+-- TODO: 
+--  * Does not allow us to skip several gears, or go from neutral to a
+--    feasible gear at high speeds.
+--  * The torque converter allows us to brake to full stop w/o halting engine;
+--    can remove neutral gear.
+--
+--
 module Gearbox 
   ( GearCtrl(..)
   , gearController
@@ -70,6 +75,7 @@ nextGear :: (Eq a, Ord a, Num a) => Double -> Double -> a -> a
 nextGear rpm1 rpm0 gear 
   |     revUp && shiftUpI   &&     neutral          = 1
   |     revUp && shiftUp    && not high             = gear + 1
+  |     revUp && shiftUp2   && gear < 3             = gear + 2
   | not revUp && shiftDown  && not (low || neutral) = gear - 1
   | not revUp && shiftDownI && low                  = -1
   | otherwise                                       = gear
@@ -78,8 +84,9 @@ nextGear rpm1 rpm0 gear
     neutral    = gear == -1
     low        = gear == 1
     high       = gear == 4
-    shiftUp    = rpm1 >  3000
-    shiftDown  = rpm1 <  2000
+    shiftUp2   = rpm1 >  3000
+    shiftUp    = rpm1 >  2500
+    shiftDown  = rpm1 <  1700
     shiftUpI   = rpm1 >  1100
     shiftDownI = rpm1 <  900
 
