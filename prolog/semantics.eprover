@@ -42,11 +42,11 @@ begingroup(ExclusiveAreas).
 % Strict stack-based locking enforced: reduction gets stuck otherwise
 %   (TODO: comment about flagging error on attempted "bad" rte_Exit?)
 
-step( rinst(r(R,I), C, Xs, rte_Enter(X,K)),              say(x(X,I),enter),             rinst(r(R,I), C, cons(X,Xs), ap(K,ok)) ).
-step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),exit),              rinst(r(R,I), C, Xs, ap(K,ok))         ).
+step( rinst(r(R,I), C, Xs, rte_Enter(X,K)),              say(x(X,I),ent),             rinst(r(R,I), C, cons(X,Xs), ap(K,void)) ).
+step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),ex),              rinst(r(R,I), C, Xs, ap(K,void))         ).
 
-step( excl(x(X,I), false),                               hear(x(X,I),enter),            excl(x(X,I), true)                     ).
-step( excl(x(X,I), true),                                hear(x(X,I),exit),             excl(x(X,I), false)                    ).
+step( excl(x(X,I), false),                               hear(x(X,I),ent),            excl(x(X,I), true)                       ).
+step( excl(x(X,I), true),                                hear(x(X,I),ex),             excl(x(X,I), false)                      ).
 
 endgroup(ExclusiveAreas).
 
@@ -55,7 +55,7 @@ endgroup(ExclusiveAreas).
 begingroup(InterrunnableVariables).
 
 step( rinst(r(R,I), C, Xs, rte_IrvRead(S,K)),            say(s(S,I),irvr(V)),           rinst(r(R,I), C, Xs, ap(K,V))          ).
-step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,V,K)),         say(s(S,I),irvw(V)),           rinst(r(R,I), C, Xs, ap(K,ok))         ).
+step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,V,K)),         say(s(S,I),irvw(V)),           rinst(r(R,I), C, Xs, ap(K,void))       ).
 
 step( irv(s(S,I), V),                                    hear(s(S,I),irvr(V)),          irv(s(S,I), V)                         ).
 step( irv(s(S,I), _),                                    hear(s(S,I),irvw(V)),          irv(s(S,I), V)                         ).
@@ -67,23 +67,25 @@ endgroup(InterrunnableVariables).
 begingroup(SendingReceiving).
 
 step( rinst(r(R,I), C, Xs, rte_Receive(e(E,P),K)),       say(ep(E,P,I),rcv(V)),          rinst(r(R,I), C, Xs, ap(K,V))         ).
-step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,Res)),      rinst(r(R,I), C, Xs, ap(K,Res))       ).
+step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,eps)),      rinst(r(R,I), C, Xs, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,As)),       rinst(r(R,I), C, Xs, ap(K,limit))     ) :-
+    notequal(As,eps).
 
 step( qelem(ep(E,P,I), N, cons(V,Vs)),                   hear(ep(E,P,I),rcv(V)),         qelem(ep(E,P,I), N, Vs)               ).
 step( qelem(ep(E,P,I), N, eps),                          hear(ep(E,P,I),rcv(nodata)),    qelem(ep(E,P,I), N, eps)              ).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,ok)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
-    connect(A,ep(E,P,I)), less(length(Vs),N).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,limit)),           qelem(ep(E,P,I), N, Vs)               ) :-
-    connect(A,ep(E,P,I)), equal(length(Vs),N).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,limit)),           qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
-    connect(A,ep(E,P,I)), less(length(Vs),N).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,As)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
+    connect(A,ep(E,P,I)), less(length(Vs),N), notmember(ep(E,P,I),As).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,As)),              qelem(ep(E,P,I), N, Vs)               ) :-
+    connect(A,ep(E,P,I)), equal(length(Vs),N), member(ep(E,P,I),As).
 
-step( runnable(r(R,I), T, _, N),                         hear(A,snd(_,ok)),              runnable(r(R,I), T, pending, N)       ) :-
+step( runnable(r(R,I), T, _, N),                         hear(A,snd(_,As)),              runnable(r(R,I), T, pending, N)       ) :-
     connect(A,ep(E,P,I)),
-    dataReceivedEvent(r(R,I),e(E,P)).
-step( runnable(r(R,I), T, Act, N),                       hear(A,snd(_,limit)),           runnable(r(R,I), T, Act, N)           ) :-   % ???
+    dataReceivedEvent(r(R,I),e(E,P)),
+    notmember(ep(E,P,I),As).
+step( runnable(r(R,I), T, Act, N),                       hear(A,snd(_,As)),              runnable(r(R,I), T, Act, N)           ) :-
     connect(A,ep(E,P,I)),
-    dataReceivedEvent(r(R,I),e(E,P)).
+    dataReceivedEvent(r(R,I),e(E,P)),
+    member(ep(E,P,I),As).
 
 endgroup(SendingReceiving).
 
@@ -92,7 +94,7 @@ endgroup(SendingReceiving).
 begingroup(ReadingWriting).
 
 step( rinst(r(R,I), C, Xs, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, Xs, ap(K,V))         ).
-step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,void))      ).
 
 step( delem(ep(E,P,I), _, V),                            hear(ep(E,P,I),rd(V)),          delem(ep(E,P,I), false, V)            ).
 step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),                  delem(ep(E,P,I), true, V)             ) :-
@@ -103,7 +105,7 @@ step( runnable(r(R,I), T, _, N),                         hear(A,wr(_)),         
     dataReceivedEvent(r(R,I),e(E,P)).
 
 step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
-step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,void))      ).
 
 step( delem(ep(E,P,I), U, V),                            hear(ep(E,P,I),up(U)),          delem(ep(E,P,I), U, V)                ).
 step( delem(ep(E,P,I), _, _),                            hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-

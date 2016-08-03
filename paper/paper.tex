@@ -5,6 +5,7 @@
 \usepackage[fleqn]{amsmath}
 \usepackage{mathpartir}
 \usepackage{ amssymb }
+\usepackage[makeroom]{cancel}
 % \usepackage{minted}
 \title{A semantics of core AUTOSAR}
 \author{Johan Nordlander \and Patrik Jansson}
@@ -179,7 +180,7 @@ where each step
 \]
 states that the system state captured as process term \V{P_{i-1}} can evolve into state \V{P_i} by means of a single transition labelled \V{L_i}.
 
-The label \V{L} of a transition can essentially be of two kinds, indicating that the affected process either "says" or "hears" something during the transition. Such a label always consists of an address \V{A} paired with some additional detail \V{D}. There is also a special form of "hearing" that denotes letting time pass and which does not carry any address. The different labels are captured in the following label grammar. 
+The label \V{L} of a transition can essentially be of two kinds, indicating that the affected process either "says" or "hears" something during the transition. Such a label always consists of an address \V{A} paired with some additional detail \V{D}. There is also a special form of "hearing" that denotes letting time pass and which does not carry any address. The different labels are captured in the following grammar. 
 \[
 \begin{array}{rcll}
   \V{L}     & ::= & \V{A}!\V{D} 	& \hspace{4em}\text{Say  \V{A} and \V{D}} \\
@@ -191,9 +192,11 @@ The possible forms of the extra label information \V{D} will be introduced as th
 
 Two processes \V{P} and \V{Q} can make transitions in parallel if they agree on what is being said or heard. Just as the saying/hearing intuition suggests, at most one of the processes can have the saying role in such an agreement. The following set of inference rules capture this intuition formally.
 {
-\renewcommand{\Prule}[2]{#1 & \Pif & #2\\}
+\renewcommand{\Prule}[2]{#1 \quad \Pif\; #2\\}
+\renewcommand{\Tstep}[3]{#1 \red{#2} #3}
+\renewcommand\Pcomma{\;\text{and}\;}
 
-\[ \begin{array}{@{}r@{}c@{}l@{\quad\;}c@{\;\,}r@{}c@{}l@{}r@{}c@{}l}  \CombRed  \end{array} \]
+\begin{eqnarray}  \CombRed  \notag \end{eqnarray}
 }
 
 
@@ -235,7 +238,7 @@ where \V{V} is the \emph{initValue} attributed to \V{S} if it exists, otherwise 
 if the \emph{swImplPolicy} attribute of element \V{E} is \emph{queued} (with capacity \V{N}); otherwise, a term
 \[
 \begin{array}{c}
-  \Tdelem{\Tep{\V{E}}{\V{P}}{\V{I}}}{\Tfalse}{\Tnodata}
+  \Tdelem{\Tep{\V{E}}{\V{P}}{\V{I}}}{\Tfalse}{\TneverReceived}
 \end{array}
 \]
 
@@ -262,29 +265,124 @@ The AUTOSAR naming scheme guarantees that all processes terms in such an initial
 Some further static model information will also be referenced by the transition rules. We refer to the connectors of a model using a binary relation $\Rightarrow$ on port addresses, where the arrow points in the \emph{provided-to-required} direction. We also assume that $\Rightarrow$ is transitively closed (i.e., it expresses end-to-end connectivity across \emph{Delegation-} as well as \emph{AssemblySwConnector}s), and that every connection $a \Rightarrow b$ is lifted to the \emph{DataElement}s and \emph{ClientServerOperation}s of the connected ports such that
 \[
 \begin{array}{lll}
-  \Tconnect{\Tp{e}{a}}{\Tp{e}{b}} & \text{for all elements $e$ of port $b$} \\
-  \Tconnect{\Tp{o}{a}}{\Tp{o}{b}} & \text{for all operations $o$ of port $b$} \\
+  \Tconnect{a.e}{b.e} & \text{for all elements $e$ common to $a$ and $b$} \\
+  \Tconnect{a.o}{b.o} & \text{for all operations $o$ common to $a$ and $b$} \\
 \end{array}
 \]
 
 We expect the implementation of a runnable to be available as a continuation function $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these functions by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments or results will be replaced by the unit value $\Tvoid$.
 
-We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\emph{DataReceivedEvent}(i.r, p.e)$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $p.e$ (in component $i$). Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
+We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\TdataReceivedEvent {i.r} {p.e}$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $p.e$ (in component $i$). Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
 
-\subsection{Exclusive areas}
-
-An exclusive area is the analogue of a binary semaphore, that can be acquired and released in an atomic fashion by competing runnable instances. Rule (1) states that a runnable instance executing $\Enter x k$ may successfully proceed to executing its continuation $k$ by broadcasting $\say{\Tx x i}{\Tenter}$ to its process environment. Rule (3) expresses that exclusive area $\Tx x i$ accepts hearing $\hear{\Tx x i}{\Tenter}$ if it is currently not taken; i.e., carries the boolean state $\Tfalse$. This makes it possible for a runnable instance and an exclusive area term to engage in a parallel transition:
-\begin{eqnarray}
-	\Tstep{\TparLong{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tvar{Xs}}{\TrteEnter{\Tvar{X}}{\Tvar{K}}}}
-				{\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Tfalse}}}
-	  	  {\say{\Tx x i}{\Tenter}}
-		  {\TparLong{\Trinst{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{C}}{\Tcons{\Tvar{X}}{\Tvar{Xs}}}{\Tap{\Tvar{K}}{\Tok}}}
-		  {\Texcl{\Tx{\Tvar{X}}{\Tvar{I}}}{\Ttrue}}}
-\end{eqnarray}
-
+The semantic transition axioms are written in full in Appendix~\ref{sec:Rules}. We will discuss each group of axioms in turn, starting with the relatively simple behaviour of inter-runnable variables and exclusive areas. In most cases, the driving force behind a transition is some runnable instance wishing to say something which other processes either react to or ignore. How the runnable instances themselves come into existence will be detailed in Section~\ref{sect:SpawnTerm}.
 
 \subsection{Inter-runnable variables}
 
+An inter-runnable variable (irv) represents state that is local to a particular component and accessible by all runnables of that component. Axioms (5) and (6) show the \emph{say} transitions taken by a runnable instance wishing to read and write an irv $s$. In both cases the embedded continuation $k$ is applied to the command result. The corresponding \emph{hear} transitions of an irv appear as rules (7) and (8). Thanks to inference rule (1), a runnable instance and an irv can now engage in a parallel transition, for example expressing the writing of shared data.
+$$
+\begin{array}{c}
+	\Tpar {\Trinst {i.r} c \Xs {\TrteIrvWrite s v k}}
+	 	  {\Tirv {i.s} \_} \vspace{0.6ex} \\ 
+	\red {\say {i.s} {\Tirvw v}} \\
+	\Tpar {\Trinst {i.r} c \Xs {\Tap k \Tvoid}}
+		  {\Tirv {i.s} v}
+\end{array}
+$$
+The corresponding read transition looks as follows:
+$$
+\begin{array}{c}
+	\Tpar {\Trinst {i.r} c \Xs {\TrteIrvRead s k}}
+	 	  {\Tirv {i.s} v} \vspace{0.6ex} \\ 
+	\red{\say {i.s} {\Tirvr v}} \\
+	\Tpar{\Trinst {i.r} c \Xs {\Tap k v}}
+		 {\Tirv {i.s} v}
+\end{array}
+$$
+Section~\ref{sect:Ignore} will show how examples like these can be extended to the case when both participating processes are embedded in arbitrarily large parallel process compositions.
+
+Note that in the last example above, the read value $v$ flows from the irv process to the runnable instance, even though axiom (7) states that an irv actually \emph{hears} the transition payload $\Tirvr{v}$. This apparent paradox is simply a reminder that the saying/hearing distinction of our calculus, and the dataflow patterns it may define, are entirely separate notions.
+
+
+\subsection{Exclusive areas}
+
+An exclusive area is the AUTOSAR equivalent of a binary semaphore, that can be acquired and released in an atomic fashion by competing runnable instances. Axiom (9) states that a runnable instance wishing to enter exclusive area $x$ may successfully proceed to its continuation $k$ by broadcasting $\say{\Tx x i}{\Tent}$. Axiom (11) expresses that exclusive area $\Tx x i$ accepts hearing an ${\Tent}$ payload if it is currently not taken; i.e., carries the boolean state $\Tfalse$. This makes the following parallel transition possible:
+$$
+\begin{array}{c}
+	\Trinst {i.r} c \Xs {\TrteEnter x k}
+	\Opar
+	\Texcl {i.x} \Tfalse \vspace{0.6ex} \\ 
+	\red{\say {i.x} \Tent} \\
+	\Trinst{i.r} c {\Tcons x \Xs} {\Tap k \Tvoid}
+	\Opar
+	\Texcl {i.x} \Ttrue
+\end{array}
+$$
+Exiting from an exclusive area is simply the reverse, as defined in axioms (10) and (12):
+$$
+\begin{array}{c}
+	\Trinst {i.r} c {\Tcons x \Xs} {\TrteExit x k}
+	\Opar
+	\Texcl {i.x} \Ttrue \vspace{0.6ex} \\ 
+	\red{\say {i.x} \Tex} \\
+	\Trinst{i.r} c \Xs {\Tap k \Tvoid}
+	\Opar
+	\Texcl {i.x} \Tfalse
+\end{array}
+$$
+However, because axiom (11) is only defined for exclusive areas in the not taken state, there is no way to derive any parallel transition of the following form:
+$$
+\begin{array}{c}
+	p \Opar {\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} \ldots \\
+\end{array}
+$$
+This means that any runnable instance in $p$ wishing to enter $x$ is effectively blocked from making progress until some other process in $p$ choses to exit $x$. In the same manner, a process wishing to exit an exclusive area not taken is also effectively blocked. The conditions on exiting are actually stronger than those that govern entering, since axiom (10) is only applicable to a runnable instance for which the exited area $x$ is at the top of its stack of acquired exclusive areas (as expressed by the sequence pattern $\Tcons x \Xs$). An exclusive area can thus only be exited by the process that entered it, and only in the reverse order of entering. Section~\ref{sect:DiscExcl} will bring up some alternatives to this semantics, and also discuss the interpretation of blocked processes in more detail.
+
+
+\subsection{Unbuffered sending/receiving}
+
+Axioms (13) and (14) define unbuffered interprocess communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (6)). A data element ({\bf delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (15) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-confition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns such that $\Tconnect {i.p.e} a$ and $\Tconnect {i.p.e} b$ are simultaneously true, parallel data element updates like the following are possible:
+$$
+\begin{array}{c}
+	\Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
+	{\Tdelem a \_ \_} \Opar {\Tdelem b \_ \_} \vspace{0.6ex} \\
+	\red{\say{i.p.e}{\Twr v}} \\
+	\Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
+	{\Tdelem a \Ttrue v} \Opar {\Tdelem b \Ttrue v}
+\end{array}
+$$
+As an aside, note that the associativity of the parallel composition operator is made entirely irrelevant by the symmetric shape of transition rules (1) and (2).
+
+Axiom (17) provides another means to intepret a data element write. It expresses that a runnable set up to trigger on data reception on required data element $\Tep e p i$ should be marked as {\bf pending} whenever a write occurs on an element connected to $\Tep e p i$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
+$$
+\begin{array}{c}
+	\Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
+	{\Tdelem a \_ \_} \Opar {\Trunnable b t \_ n} \vspace{0.6ex} \\
+	\red{\say{i.p.e}{\Twr v}} \\
+	\Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
+	{\Tdelem a \Ttrue v} \Opar {\Trunnable b t \Tpending n}
+\end{array}
+$$
+Transitions that actually create an instance of a pending runnable will be introduced in Section~\ref{sect:SpawnTerm}.
+
+A data element can also be queried for its update status flag, and be marked as carrying no valid value. Axioms (18)-(21) define the corresponding transitions.
+
+
+\subsection{Buffered sending/receiving}
+
+Buffered interprocess communication (axioms (22) - (30)) is essentially a minor variant of the unbuffered mechanism, where the single-value store of a {\bf delem} term is replaced by a {\bf qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (25)) and extended to the right (axiom (27)). When the buffer is empty, the special value (i.e., the error code) {\bf nodata} is returned to receiving runnable instances (axiom (26)). When the buffer is at its maximum capacity and cannot hold more values, the provided value is simply dropped (axiom (28)).
+
+However, the AUTOSAR specification requires 
+
+
+\subsection{Calling a server}
+
+\subsection{Passing back a server result}
+
+\subsection{Spawning and terminating} \label{sect:SpawnTerm}
+
+\subsection{Passing time}
+
+\subsection{Ignoring broadcasts} \label{sect:Ignore}
 
 
 TODO: some links from rules and choices made here to the AUTOSAR spec
@@ -312,6 +410,10 @@ Mixing OperationInvokedEvents with others for same runnable...
 
 Multiple timingEvent for same runnable, possibly with same period?
 
+DataReceivedEvent at Invalidate?
+
+DataReceivedEvent at limit response?
+
 Exclusive area nesting
 
 Return value of qelem write with fanout > 1 and *some* LIMIT failures
@@ -322,6 +424,8 @@ Rule and examples of provided delegation port compatibility don't match
 
 Multiple inconsistent CompSpecs
 
+Crashed runnables
+
 
 \section{Conclusions and Future Work}
 \label{sec:Conc}
@@ -331,21 +435,23 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \onecolumn
 \appendix
 \section{Semantic rules}
-\label{sec:Prolog}
+\label{sec:Rules}
 
-\subsection{Exclusive areas}
-\begin{eqnarray}      \ExclusiveAreas          \notag \end{eqnarray}
+\setcounter{equation}{4}
 
 \subsection{Inter-runnable variables}
 \begin{eqnarray}      \InterrunnableVariables  \notag \end{eqnarray}
 
-\subsection{Sending/receiving}
+\subsection{Exclusive areas}
+\begin{eqnarray}      \ExclusiveAreas          \notag \end{eqnarray}
+
+\subsection{Unbuffered sending/receiving}
+\begin{eqnarray}      \ReadingWriting          \notag \end{eqnarray}
+
+\subsection{Buffered sending/receiving}
 \begin{eqnarray}      \SendingReceiving        \notag \end{eqnarray}
 
 %TODO: RuleLong?
-\subsection{Reading/writing (unbuffered versions of rcv and snd)}
-\begin{eqnarray}      \ReadingWriting          \notag \end{eqnarray}
-
 \subsection{Calling a server}
 
 \renewcommand\Pcomma{\nonumber \\&&\text{and}\;\;}
