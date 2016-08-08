@@ -1,12 +1,12 @@
--- | Gearbox logic for the ACC model.
+-- | Automatic transmission for Simulink 4-speed gearbox.
 --
--- Simscape offers a 4-speed transmission which provides input- and output
--- rotational ports and schedules clutches based on an input gear selection
--- signal. This module is intended to control the transmission by providing
--- gear selection signals based on the engine rpm differences over time.
+-- TODO: 
+--  * Does not allow us to skip several gears, or go from neutral to a
+--    feasible gear at high speeds.
+--  * The torque converter allows us to brake to full stop w/o halting engine;
+--    can remove neutral gear.
 --
--- TODO: The state machine could also read an acceleration estimate and provide
---       more natural shifting that is based on acceleration as well.
+--
 module Gearbox 
   ( GearCtrl(..)
   , gearController
@@ -25,24 +25,20 @@ data GearCtrl = GearCtrl
 
 -- | @'gearController' dt@ creates a gear controller polling for inputs on 
 -- intervals of length @dt@.
---
--- The gear controller produces output signals based on engine rpm. Outputs
--- range from @-1@ to @4@, where @-1@ is either reverse or neutral, and @4@ is
--- either reverse or neutral. Anything in between should be as expected.
-gearController :: Time
-               -- ^ Sample time 
-               -> AUTOSAR GearCtrl
+gearController :: Time -> AUTOSAR GearCtrl
 gearController resolution = 
   let initialGear = -1
-      timerLimit  = 1.0 
+      timerLimit  = 0.5
   in atomic $ 
   do engineRPM  <- requiredPort
      gearSignal <- providedPort
      comSpec gearSignal (InitValue initialGear)
-    
+   
+     -- Initial setup: Gearbox in neutral and timer enabled to prevent
+     -- gear lock-in before Simulink vehicle model stabilizes.
      revs  <- interRunnableVariable 0.0
      gears <- interRunnableVariable initialGear
-     timer <- interRunnableVariable (False, 0.0)
+     timer <- interRunnableVariable (True, 0.8 * timerLimit)
 
      runnable (MinInterval 0) [TimingEvent resolution] $
        do res <- rteRead engineRPM
@@ -63,7 +59,7 @@ gearController resolution =
                   do rteIrvWrite timer (True, t + resolution)
                      rteWrite gearSignal gear0
                 (False, _)    -> 
-                  do let gear1 = setGear rpm1 rpm0 gear0
+                  do let gear1 = nextGear rpm1 rpm0 gear0
 
                      rteIrvWrite gears gear1
                      rteIrvWrite revs  rpm1
@@ -75,10 +71,11 @@ gearController resolution =
      return $ sealBy GearCtrl engineRPM gearSignal
 
 -- | Set new gear based on RPM and previous gear.
-setGear :: (Eq a, Ord a, Num a) => Double -> Double -> a -> a
-setGear rpm1 rpm0 gear 
+nextGear :: (Eq a, Ord a, Num a) => Double -> Double -> a -> a
+nextGear rpm1 rpm0 gear 
   |     revUp && shiftUpI   &&     neutral          = 1
   |     revUp && shiftUp    && not high             = gear + 1
+  |     revUp && shiftUp2   && gear < 3             = gear + 2
   | not revUp && shiftDown  && not (low || neutral) = gear - 1
   | not revUp && shiftDownI && low                  = -1
   | otherwise                                       = gear
@@ -87,29 +84,9 @@ setGear rpm1 rpm0 gear
     neutral    = gear == -1
     low        = gear == 1
     high       = gear == 4
-    shiftUp    = rpm1 >  4000
-    shiftDown  = rpm1 <  2000
+    shiftUp2   = rpm1 >  3000
+    shiftUp    = rpm1 >  2500
+    shiftDown  = rpm1 <  1700
     shiftUpI   = rpm1 >  1100
     shiftDownI = rpm1 <  900
-
--- * Engine rev-limiter.
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Simple rev-limiting logic.
---
--- TODO: Finish.
-
-data RevLimit = RevLimit
-  { rpmIn          :: DataElem Unqueued Double Required
-  , revThrottleIn  :: DataElem Unqueued Double Required
-  , revThrottleOut :: DataElem Unqueued Double Provided
-  }
-
--- | Limits the engine speed to a fixed number of revolutions per minute. Simply
--- cuts off throttle until engine revs have dropped by some fixed percentage.
-revLimit :: Time 
-         -- ^ Sample time
-         -> Double
-         -- ^ RPM limit
-         -> AUTOSAR RevLimit
-revLimit resolution limit = undefined
 

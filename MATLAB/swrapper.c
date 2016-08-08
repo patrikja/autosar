@@ -21,14 +21,6 @@
  * simulation. This is done in init_simulator() which is called from
  * mdlInitializeSizes.
  *
- * KNOWN ISSUES
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *   o  There is an issue when simulating systems with a unit
- *      (output) port width, causing ARSIM to interpret the
- *      first data transfer as a request to halt simulation.
- *      The handshake and transfer protocols (or perhaps the 
- *      magic numbers involved) should be revised to prevent
- *      this.
  */
 #include <fcntl.h>
 #include <errno.h>
@@ -44,7 +36,7 @@
 #include "protocol.h"
 
 #define S_FUNCTION_NAME swrapper
-#define S_FUNCTION_LEVEL 2       // Leave this as 2
+#define S_FUNCTION_LEVEL 2
 #include "simstruc.h"
 
 #define MINIMUM_DELTA 1e-6
@@ -227,10 +219,12 @@ void init_protocol(SimStruct *S)
   /* - Set up some intermediate storage (MATLAB crux). 
    * - Run the simulator one step (need some outputs to be ready since
    *   Simulink updates the model in a backwards order).
-   *
-   * TODO: Error handling for calloc
    */
   intermediate = calloc(protocol->p_input_width, sizeof(double));
+  if (intermediate == NULL) {
+    ssSetErrorStatus(S, "Memory allocation error in init_simulator.");
+    return;
+  }
   Protocol_send_data(protocol, intermediate);
 
   sim_running = true;
@@ -249,9 +243,13 @@ void init_protocol(SimStruct *S)
 static void mdlInitializeSizes(SimStruct *S)
 {
   // Easier to spot a restart this way.
-  fprintf(stderr, "******************************************"
-                  "******************************************\n\n");
-  
+  fprintf(stderr, 
+      "*****************************************"
+      "***************************************\n"
+      "* ARSim Simulink wrapper                 "
+      "                                      *\n"
+      "*****************************************"
+      "***************************************\n");
   debug("( trace )");
 
   ssSetNumSFcnParams(S, 1);
@@ -397,7 +395,7 @@ static void mdlGetTimeOfNextVarHit(SimStruct *S)
 /* == FUNCTION mdlTerminate ===================================================
  * Called by Simulink whenever the simulation finishes. 
  *
- * Closes handles, unlinks FIFOs, resets model and checks errno.
+ * Closes handles, unlinks FIFOs and resets model.
  */
 static void mdlTerminate(SimStruct *S) {
   
@@ -423,10 +421,6 @@ static void mdlTerminate(SimStruct *S) {
 
     unlink(hs_input_fifo);
     unlink(hs_output_fifo);
-
-#ifndef NDEBUG
-    ssPrintf("= Unlinked FIFOs and reset model.\n");
-#endif
   }
 
 }
