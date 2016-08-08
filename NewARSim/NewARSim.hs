@@ -1844,8 +1844,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                   
                    -- Produce an output vector.
                    let next   = mkCDouble dt
-                       procs2 = pmapUpdate procs procs1
-                       output = procsToVector procs2 prev2 addr_out
+                       output = procsToVector procs1 prev2 addr_out
 
                    -- Re-set the previous output to the current output.
                    newPrevOut <- copyVector output
@@ -1858,7 +1857,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
-                   (ts++) <$> simulateExt (fdInput, fdOutput) sched conn procs2
+                   (ts++) <$> simulateExt (fdInput, fdOutput) sched conn procs1
 
        -- In case this happened we did not receive OK and we should die.
        DIE ->
