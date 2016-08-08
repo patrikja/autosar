@@ -338,26 +338,23 @@ apInit conn mp p = p
 
 -- | Decorate a @Task@ process with its state, and check that all tasks have
 -- been assigned runnables.
-taskInit :: HasCallStack
-         => Map String [(Int, ProcAddress)]
+taskInit :: Map String [(Int, ProcAddress)]
          -> Map Address String
          -> Proc
          -> Proc
-taskInit tp na p@(Task a t d _) = 
+taskInit tp na p@(Task a t _ _) = 
   let name  = na Map.! a
   in  case Map.lookup name tp of
         Nothing -> error $ "Task " ++ show name ++ " was assigned no runnables."
         Just prios ->
           let prios' = map snd $ sortBy (compare `on` fst) prios 
-              ts     = TaskState prios' prios' Nothing
-          in  Task a t d ts
+              ts     = TaskState name prios' prios' Nothing 
+          in  Task a t Inactive ts
 taskInit _  _  p = p
 
 -- | Check that all tasks which have been assigned runnables also have been 
 -- declared.
-checkTasks :: Map String [(Int, ProcAddress)]
-           -> Map Address String
-           -> ()
+checkTasks :: Map String [(Int, ProcAddress)] -> Map Address String -> ()
 checkTasks tp na = check na' tp' 
   where
     na' = Map.elems na
@@ -371,12 +368,25 @@ checkTasks tp na = check na' tp'
 
 -- * Handling task state
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- TODO: 
+--   * Tasks are /always/ activated when their timer reset them. If the first
+--     runnable in the task execution queue is not pending when we "reset" a
+--     process, it should not become active. This causes some errors.
+--   * Because of the above, there should be a way to check this (for the head
+--     of the execution queue, not the currently scheduled task as it is right
+--     now).
+--   * Some of these helpers are now unused. Some could be joined.
 
 data TaskState = TaskState
-  { execQueue   :: [ProcAddress]       -- Dynamic
+  { taskName    :: String              -- Static
+  , execQueue   :: [ProcAddress]       -- Dynamic
   , execProcs   :: [ProcAddress]       -- Static
   , execCurrent :: Maybe ProcAddress   -- Dynamic
   } deriving Show
+
+isPendingRunnable :: Proc -> Bool
+isPendingRunnable (Run _ _ Pending _ _ _ _) = True
+isPendingRunnable _                         = False
 
 stateOf :: HasCallStack => Proc -> TaskState
 stateOf (Task _ _ _ ts) = ts
@@ -385,9 +395,8 @@ stateOf p               = error $ "The process " ++ show p ++ " is not a task."
 -- Reset the task state when we're starting a new period. Do NOT schedule
 -- anything here, since this is used on inactive tasks as well.
 resetTaskState :: TaskState -> TaskState
-resetTaskState ts = TaskState 
+resetTaskState ts = ts
   { execQueue   = execProcs ts
-  , execProcs   = execProcs ts
   , execCurrent = Nothing 
   }
 
@@ -408,9 +417,10 @@ runningProc :: HasCallStack => TaskState -> ProcAddress
 runningProc = fromMaybe (error "No process is scheduled in the task.") 
             . execCurrent
 
--- scheduleNext' :: HasCallStack => ProcMap -> Proc -> Proc
--- scheduleNext' pm p = checkPending pm next `seq` next
---   where next = scheduleNext p
+-- Check for pending status when scheduling a new runnable.
+scheduleNext' :: HasCallStack => ProcMap -> Proc -> Proc
+scheduleNext' pm p = checkPending pm next `seq` next
+  where next = scheduleNext p
 
 -- Schedule the next process in the task execution queue. If there is no such
 -- process we block the Task until its period has ended. 
@@ -432,25 +442,20 @@ scheduleNext proc =
 
 -- Throw an error if the newly scheduled address points to a non-pending
 -- runnable.
-checkPending :: ProcMap -> Update Proc -> Update Proc
+checkPending :: ProcMap -> Proc -> Proc
 checkPending pmap proc = 
   case proc of  
-    Update (Task b _ _ ts) | bad (execCurrent ts) ->
+    Task b _ _ ts | bad (execCurrent ts) ->
       error $ 
-        "A non-pending runnable was scheduled in the task with " ++
-        "address " ++ show b
+        "A non-pending runnable was scheduled in the task " ++ 
+          show (taskName ts) ++ "."
     _ -> proc
   where
     bad Nothing  = False
-    bad (Just a) = notPending (pmapLookup pmap a)
+    bad (Just a) = (not . isPendingRunnable) (pmapLookup pmap a)
 
-    notPending (Run _ _ Pending _ _ _ _) = False 
-    notPending _                         = True
-
--- Schedule a spawned running instance (this is a destructive update to the
--- execution queue and will break concurrency within tasks possibly leading to
--- all sorts of interesting effects).
-scheduleInstance :: HasCallStack => Proc -> Label -> Proc
+-- Schedule a spawned running instance. 
+scheduleInstance :: Proc -> Label -> Proc
 scheduleInstance proc label =
   case (proc, label) of 
     (Task b t (Active s) ts, NEW a n) -> Task b t (Active s) (schedInst a n ts)
@@ -674,7 +679,7 @@ declareTask :: String -> Time -> AUTOSAR ()
 declareTask n t = do 
   a <- newAddress
   newProcess (Timer a 0.0 t 0)
-  newProcess (Task a t Inactive (TaskState [] [] Nothing))
+  newProcess (Task a t Inactive (TaskState "" [] [] Nothing))
   newTask n a
 
 -- | Runnable without task assignment.
@@ -955,46 +960,45 @@ mayHear conn (DELTA d)      (Timer _ t _ _)   | d > t          = VETO
 mayHear conn (DELTA d)      (Task _ _ (Active s) _) | d > s    = VETO
 mayHear conn label          _                                  = label
 
-hear :: ConnRel -> Label -> Proc -> Update Proc
-hear conn (ENTER a)     (Excl b Free)      | a==b          = Update $ Excl b Taken
-hear conn (EXIT a)      (Excl b Taken)     | a==b          = Update $ Excl b Free
-hear conn (IRVR a _)    (Irv b v)          | a==b          = Unchanged
-hear conn (IRVW a v)    (Irv b _)          | a==b          = Update $ Irv b v
-hear conn (RCV a _)     (QElem b n (v:vs)) | a==b          = Update $ QElem b n vs
-hear conn (RCV a _)     (QElem b n [])     | a==b          = Unchanged 
-hear conn (SND a v _)   (QElem b n vs)
-        | a `conn` b && length vs < n                      = Update $ QElem b n (vs++[v])
-        | a `conn` b                                       = Unchanged 
-hear conn (SND a _ _)   (Run b t _ n m s f)
-        | trig conn a s                                    = Update $ Run b t Pending n m s f
-hear conn (RD a _)      (DElem b _ v)      | a==b          = Update $ DElem b False v
-hear conn (WR a v)      (DElem b _ _)      | a `conn` b    = Update $ DElem b True (Ok v)
-hear conn (WR a _)      (Run b t _ n m s f)
-        | trig conn a s                                    = Update $ Run b t Pending n m s f
-hear conn (UP a _)      (DElem b u v)      | a==b          = Unchanged 
-hear conn (INV a)       (DElem b _ _)      | a `conn` b    = Update $ DElem b True NO_DATA
-hear conn (CALL a v _)  (Run b t (Serving cs vs) n m s f)
-        | trig (rev conn) a s && a `notElem` cs            = Update $ Run b t (Serving (cs++[a]) (vs++[v])) n m s f
-        | trig (rev conn) a s                              = Unchanged 
-hear conn (RES a _)     (Op b (v:vs))         | a==b       = Update $ Op b vs
-hear conn (RES a _)     (Op b [])             | a==b       = Unchanged 
-hear conn (RET a v)     (Op b vs)             | a==b       = Update $ Op b (vs++[v])
-hear conn (TERM a)      (Run b t act n m s f) | a==b       = Update $ Run b t act (n-1) m s f
-hear conn (TICK a)      (Run b t _ n m s f)   | a==b       = Update $ Run b t Pending n m s f
-hear conn (DELTA d)     (Run b 0.0 act n m s _)            = Unchanged 
-hear conn (DELTA d)     (Run b t act n m s f)              = Update $ Run b (t-d) act n m s f
-hear conn (DELTA d)     (Timer b t t0 n)                   = Update $ Timer b (t-d) t0 n
-hear conn (WR a v)      (Output b _)       | a `conn` b    = Update $ Output b v
-
-hear conn (DELTA d)     (Task b t (Active s) ts)           = Update $ Task b t (Active (s - d)) ts
-hear conn (TICK a)      (Task b t _          ts) | a == b  = Update $ scheduleNext (Task b t (Active t) (resetTaskState ts))
-hear conn (TERM a)      (Task b t (Active s) ts) 
-        | a `isRunning` ts                                 = Update $ scheduleNext (Task b t (Active s) ts)
-        | a `isQueued` ts                                  = error "Unsure.1 -- Unlikely this would trigger."
-hear conn (NEW a n)     (Task b t (Active s) ts)
-        | a `isRunning` ts                                 = Update $ scheduleInstance (Task b t (Active s) ts) (NEW a n)
-        | a `isQueued` ts                                  = error "Unsure.2 -- Only when we schedule non-pending runnables so far."
-hear conn label         proc                               = Unchanged 
+hear :: ProcMap -> ConnRel -> Label -> Proc -> Update Proc
+hear pm conn (ENTER a)     (Excl b Free)      | a==b         = Update $ Excl b Taken
+hear pm conn (EXIT a)      (Excl b Taken)     | a==b         = Update $ Excl b Free
+hear pm conn (IRVR a _)    (Irv b v)          | a==b         = Unchanged
+hear pm conn (IRVW a v)    (Irv b _)          | a==b         = Update $ Irv b v
+hear pm conn (RCV a _)     (QElem b n (v:vs)) | a==b         = Update $ QElem b n vs
+hear pm conn (RCV a _)     (QElem b n [])     | a==b         = Unchanged 
+hear pm conn (SND a v _)   (QElem b n vs)
+        | a `conn` b && length vs < n                        = Update $ QElem b n (vs++[v])
+        | a `conn` b                                         = Unchanged 
+hear pm conn (SND a _ _)   (Run b t _ n m s f)
+        | trig conn a s                                      = Update $ Run b t Pending n m s f
+hear pm conn (RD a _)      (DElem b _ v)      | a==b         = Update $ DElem b False v
+hear pm conn (WR a v)      (DElem b _ _)      | a `conn` b   = Update $ DElem b True (Ok v)
+hear pm conn (WR a _)      (Run b t _ n m s f)
+        | trig conn a s                                      = Update $ Run b t Pending n m s f
+hear pm conn (UP a _)      (DElem b u v)      | a==b         = Unchanged 
+hear pm conn (INV a)       (DElem b _ _)      | a `conn` b   = Update $ DElem b True NO_DATA
+hear pm conn (CALL a v _)  (Run b t (Serving cs vs) n m s f)
+        | trig (rev conn) a s && a `notElem` cs              = Update $ Run b t (Serving (cs++[a]) (vs++[v])) n m s f
+        | trig (rev conn) a s                                = Unchanged 
+hear pm conn (RES a _)     (Op b (v:vs))         | a==b      = Update $ Op b vs
+hear pm conn (RES a _)     (Op b [])             | a==b      = Unchanged 
+hear pm conn (RET a v)     (Op b vs)             | a==b      = Update $ Op b (vs++[v])
+hear pm conn (TERM a)      (Run b t act n m s f) | a==b      = Update $ Run b t act (n-1) m s f
+hear pm conn (TICK a)      (Run b t _ n m s f)   | a==b      = Update $ Run b t Pending n m s f
+hear pm conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged 
+hear pm conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
+hear pm conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
+hear pm conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
+hear pm conn (DELTA d)     (Task b t (Active s) ts)          = Update $ Task b t (Active (s - d)) ts
+hear pm conn (TICK a)      (Task b t _          ts) | a == b = Update $ scheduleNext' pm (Task b t (Active t) (resetTaskState ts))
+hear pm conn (TERM a)      (Task b t (Active s) ts) 
+        | a `isRunning` ts                                   = Update $ scheduleNext' pm (Task b t (Active s) ts)
+        | a `isQueued` ts                                    = error "Unsure.1 -- Unlikely this would trigger."
+hear pm conn (NEW a n)     (Task b t (Active s) ts)
+        | a `isRunning` ts                                   = Update $ scheduleInstance (Task b t (Active s) ts) (NEW a n)
+        | a `isQueued` ts                                    = error "Unsure.2 -- Only when we schedule non-pending runnables so far."
+hear pm conn label         proc                              = Unchanged 
 
 -- * 'step' and 'explore'
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1037,43 +1041,38 @@ explore conn pm h (p:ps) =
     VETO  ->          explore conn pm h ps
     label -> commit : explore conn pm h ps
       where
-        broadcast = say label p ++ heard 
+        broadcast = say label p ++ hear1 conn label (pmapDelete p pm)
         commit    = (label, procAddress p, logs label, broadcast)
 
         logs (DELTA _) = []
         logs _         = mayLog p
-
-        -- Check that tasks did not schedule non-pending runnables (regardless
-        -- if we take this scheduling option or not later on)
-        heard = map (checkPending pm) (hear1 conn label (pmapDelete p pm))
-
 
 -- | Let only those concerned hear the broadcast (to some extent).
 hear1 :: ConnRel -> Label -> ProcMap -> [Update Proc]
 hear1 conn label pm = 
   case label of
     -- On target
-    ENTER a   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    EXIT a    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    IRVR a _  -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    IRVW a _  -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    RCV a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    RD a _    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    UP a _    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    RES a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-    RET a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    ENTER a   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    EXIT a    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    IRVR a _  -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    IRVW a _  -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    RCV a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    RD a _    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    UP a _    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    RES a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    RET a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
 --     TERM a    -> [hear conn label (pmapLookup pm (RunAddr a))]
 --     TICK a    -> [hear conn label (pmapLookup pm (RunAddr a))]
 
     -- Not on target
-    CALL {}   -> map (hear conn label) (pmapElems pm)
-    INV {}    -> map (hear conn label) (pmapElems pm)
-    SND a _ _ -> map (hear conn label) (pmapElems pm)
-    WR a _    -> map (hear conn label) (pmapElems pm)
-    DELTA {}  -> map (hear conn label) (pmapElems pm)
-    TICK {}   -> map (hear conn label) (pmapElems pm)
-    TERM {}   -> map (hear conn label) (pmapElems pm)
-    NEW {}    -> map (hear conn label) (pmapElems pm)
+    CALL {}   -> map (hear pm conn label) (pmapElems pm)
+    INV {}    -> map (hear pm conn label) (pmapElems pm)
+    SND a _ _ -> map (hear pm conn label) (pmapElems pm)
+    WR a _    -> map (hear pm conn label) (pmapElems pm)
+    DELTA {}  -> map (hear pm conn label) (pmapElems pm)
+    TICK {}   -> map (hear pm conn label) (pmapElems pm)
+    TERM {}   -> map (hear pm conn label) (pmapElems pm)
+    NEW {}    -> map (hear pm conn label) (pmapElems pm)
     _         -> [Unchanged]
 
 -- | Agree on labels before broadcast.
@@ -1119,7 +1118,7 @@ pmapElems = Map.elems
 -- | Lookup process by its address. 
 pmapLookup :: HasCallStack => ProcMap -> ProcAddress -> Proc
 pmapLookup pm pa = -- (Map.!)
-  fromMaybe (error $ "Address " ++ show pa ++ " has no process.") 
+  fromMaybe (error $ "Address " ++ show pa ++ " has no process.")
             (Map.lookup pa pm)
 
 -- | Insert the (address, process) pair in the map.
@@ -1844,8 +1843,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                   
                    -- Produce an output vector.
                    let next   = mkCDouble dt
-                       procs2 = pmapUpdate procs procs1
-                       output = procsToVector procs2 prev2 addr_out
+                       output = procsToVector procs1 prev2 addr_out
 
                    -- Re-set the previous output to the current output.
                    newPrevOut <- copyVector output
@@ -1858,7 +1856,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
-                   (ts++) <$> simulateExt (fdInput, fdOutput) sched conn procs2
+                   (ts++) <$> simulateExt (fdInput, fdOutput) sched conn procs1
 
        -- In case this happened we did not receive OK and we should die.
        DIE ->
