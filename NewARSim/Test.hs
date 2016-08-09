@@ -2,6 +2,7 @@
 
 module Main where
 
+import Control.Monad
 import NewARSim 
 import System.Random
 
@@ -19,30 +20,22 @@ comp1 = atomic $ do
     rteIrvWrite s (x + 1)
   return $ seal a 
 
-comp2 :: AUTOSAR (IntPort Provided)
-comp2 = atomic $ do
-  a <- providedPort
-  s <- interRunnableVariable 0
-  runnableT ["task1" :-> 1] (MinInterval 0) [TimingEvent 0.2] $ do
-    Ok x <- rteIrvRead s
-    rteWrite a x
-    rteIrvWrite s ((x + 1) `mod` 31)
-  return $ seal a 
+-- comp2 :: AUTOSAR (IntPort Provided)
+-- comp2 = atomic $ do
+--   a <- providedPort
+--   s <- interRunnableVariable 0
+--   runnableT ["task1" :-> 1] (MinInterval 0) [TimingEvent 0.2] $ do
+--     Ok x <- rteIrvRead s
+--     rteWrite a x
+--     rteIrvWrite s ((x + 1) `mod` 31)
+--   return $ seal a 
 
--- | This is probably a bad task-assignment:
--- 
--- Since 'comp3' is the only process assigned to @task2@ it will be scheduled
--- immediately. However, since 'comp3' relies on a @DataReceivedEvent@ to be
--- triggered, it is unlikely it will have status @Pending@ when this happens,
--- since both 'comp1' and 'comp2' will need to complete execution in @task1@
--- before this can happen.
 comp3 :: AUTOSAR C
 comp3 = atomic $ do
   c1 <- requiredPort
   c2 <- requiredPort
-  runnableT ["task1" :-> 2, "task2" :-> 0] 
-            -- (MinInterval 0) 
-            Concurrent 
+  runnableT ["task1" :-> 2] 
+            (MinInterval 0) 
             [DataReceivedEvent c2] $ do
     Ok a <- rteRead c1
     Ok b <- rteRead c2
@@ -53,16 +46,20 @@ comp3 = atomic $ do
 softw :: AUTOSAR ()
 softw = composition $ do
   a <- comp1
-  b <- comp2
+  b <- comp1
+--   b <- comp2
   (c1, c2) <- comp3
   connect a c1
   connect b c2
 
-  declareTask "task1" 0.1
-  declareTask "task2" 0.1
+  declareTask "task1" 0.2
+--   declareTask "task2" 0.2
 
 main :: IO ()
 main = do 
   g <- newStdGen
   simulateStandalone 5.0 printLogs (RandomSched g) softw
-  putStrLn "--> done"
+  putStr "."
+
+main2 :: IO ()
+main2 = replicateM_ 100 main >> putStrLn " done."

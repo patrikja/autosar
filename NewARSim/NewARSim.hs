@@ -230,8 +230,13 @@ data Proc
   -- other.
   |           Task   Address Time Toggle TaskState
 
+-- Tasks start out as @Inactive@. If the runnable at the head of the queue in 
+-- the task state becomes @Pending@, then the task state changes to @Ready@. A 
+-- task with status @Ready@ may become Active when it receives a @TICK@ from its 
+-- timer. A task which is @Active@ may be scheduled (i.e. given say).
 data Toggle
   = Active Time
+  | Ready
   | Inactive
   deriving Show
 
@@ -400,13 +405,27 @@ resetTaskState ts = ts
   , execCurrent = Nothing 
   }
 
--- Check if runnable is contained in the execution queue in the runnable.
+-- Check if runnable is at the top of the execution queue in the task.
 isQueued :: Address -> TaskState -> Bool
-isQueued a ts = RunAddr a `elem` execQueue ts 
+a `isQueued` ts = RunAddr a == head (execQueue ts)
+
+-- Search for triggers of the queue head
+queueTrig :: ProcMap -> TaskState -> ConnRel -> Address -> Bool
+queueTrig pm ts conn a = 
+  case queueHead pm ts of
+    Run _ _ _ _ _ s _ -> trig conn a s
+    _                 -> False
+
+-- Search for the top process of the execution queue
+queueHead :: ProcMap -> TaskState -> Proc
+queueHead pm = pmapLookup pm . head . execQueue
+
+emptyQueue :: TaskState -> Bool
+emptyQueue = null . execQueue
 
 -- Check if runnable is scheduled for execution in the task.
 isRunning :: Address -> TaskState -> Bool
-isRunning a ts = 
+a `isRunning` ts = 
   case execCurrent ts of
     Nothing              -> False
     Just (RunAddr b)     -> a == b
@@ -418,41 +437,26 @@ runningProc = fromMaybe (error "No process is scheduled in the task.")
             . execCurrent
 
 -- Check for pending status when scheduling a new runnable.
-scheduleNext' :: HasCallStack => ProcMap -> Proc -> Proc
-scheduleNext' pm p = checkPending pm next `seq` next
-  where next = scheduleNext p
+scheduleNext :: HasCallStack => ProcMap -> Proc -> Proc
+scheduleNext pm p = checkPending pm next `seq` next
+  where 
+    next = case p of
+      Task b t (Active s) ts -> Task b t (Active s) ts 
+        { execCurrent = Just $ head $ execQueue ts
+        , execQueue   = tail $ execQueue ts
+        }
+      _ -> error "scheduleNext called on non-task process"
 
--- Schedule the next process in the task execution queue. If there is no such
--- process we block the Task until its period has ended. 
-scheduleNext :: HasCallStack => Proc -> Proc 
-scheduleNext proc = 
-  case proc of 
-    Task b t (Active s) ts
-      | hasNext ts -> Task b t (Active s) (schedNext ts)
-      | otherwise  -> Task b t Inactive   (resetTaskState ts)
-    _              -> proc
-  where
-    hasNext   = not . null . execQueue
-    
-
-    schedNext ts = ts 
-      { execCurrent = Just $ head $ execQueue ts
-      , execQueue   = tail $ execQueue ts
-      }
-
--- Throw an error if the newly scheduled address points to a non-pending
--- runnable.
-checkPending :: ProcMap -> Proc -> Proc
-checkPending pmap proc = 
-  case proc of  
-    Task b _ _ ts | bad (execCurrent ts) ->
-      error $ 
-        "A non-pending runnable was scheduled in the task " ++ 
-          show (taskName ts) ++ "."
-    _ -> proc
-  where
-    bad Nothing  = False
-    bad (Just a) = (not . isPendingRunnable) (pmapLookup pmap a)
+    checkPending pmap proc = 
+      case proc of  
+        Task b _ _ ts | bad (execCurrent ts) ->
+          error $ 
+            "A non-pending runnable was scheduled in the task " ++ 
+              show (taskName ts) ++ "."
+        _ -> proc
+      where
+        bad Nothing  = False
+        bad (Just a) = (not . isPendingRunnable) (pmapLookup pmap a)
 
 -- Schedule a spawned running instance. 
 scheduleInstance :: Proc -> Label -> Proc
@@ -958,6 +962,7 @@ mayHear conn (DELTA d)      (Run _ t _ _ _ _ _)
        | d > t && t > 0                                        = VETO
 mayHear conn (DELTA d)      (Timer _ t _ _)   | d > t          = VETO
 mayHear conn (DELTA d)      (Task _ _ (Active s) _) | d > s    = VETO
+mayHear conn (TICK a)       (Task b _ Inactive   _) | a == b   = VETO
 mayHear conn label          _                                  = label
 
 hear :: ProcMap -> ConnRel -> Label -> Proc -> Update Proc
@@ -990,14 +995,19 @@ hear pm conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged
 hear pm conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
 hear pm conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
 hear pm conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
-hear pm conn (DELTA d)     (Task b t (Active s) ts)          = Update $ Task b t (Active (s - d)) ts
-hear pm conn (TICK a)      (Task b t _          ts) | a == b = Update $ scheduleNext' pm (Task b t (Active t) (resetTaskState ts))
+-- ~~XXX~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+hear pm conn (TICK a)      (Task b t Inactive   ts) 
+        | a `isQueued` ts                                    = Update $ Task b t Ready ts
+hear pm conn (SND a _ _)   (Task b t Inactive   ts) 
+        | a `isQueued` ts && queueTrig pm ts conn a          = Update $ Task b t Ready ts
+hear pm conn (TICK a)      (Task b t Ready      ts) | a == b = Update $ scheduleNext pm (Task b t (Active t) ts)
 hear pm conn (TERM a)      (Task b t (Active s) ts) 
-        | a `isRunning` ts                                   = Update $ scheduleNext' pm (Task b t (Active s) ts)
-        | a `isQueued` ts                                    = error "Unsure.1 -- Unlikely this would trigger."
+        | a `isRunning` ts && emptyQueue ts                  = Update $ Task b t Inactive (resetTaskState ts)
+        | a `isRunning` ts                                   = Update $ scheduleNext pm (Task b t (Active s) ts)
 hear pm conn (NEW a n)     (Task b t (Active s) ts)
         | a `isRunning` ts                                   = Update $ scheduleInstance (Task b t (Active s) ts) (NEW a n)
-        | a `isQueued` ts                                    = error "Unsure.2 -- Only when we schedule non-pending runnables so far."
+hear pm conn (DELTA d)     (Task b t (Active s) ts)          = Update $ Task b t (Active (s - d)) ts
+-- ~~XXX~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 hear pm conn label         proc                              = Unchanged 
 
 -- * 'step' and 'explore'
@@ -1061,9 +1071,12 @@ hear1 conn label pm =
     UP a _    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
     RES a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
     RET a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+
 --     TERM a    -> [hear conn label (pmapLookup pm (RunAddr a))]
 --     TICK a    -> [hear conn label (pmapLookup pm (RunAddr a))]
 
+--  It would be possible to use applicative to try RunAddr first and then
+--  UniqueAddr on some of these 
     -- Not on target
     CALL {}   -> map (hear pm conn label) (pmapElems pm)
     INV {}    -> map (hear pm conn label) (pmapElems pm)
@@ -1090,6 +1103,14 @@ response conn pm p h =
       UP a _   -> mayHear conn label (pmapLookup pm (UniqueAddr a))
       RES a _  -> mayHear conn label (pmapLookup pm (UniqueAddr a))
 
+      -- Try to find a task with the address @a@. If we dont find one,
+      -- we can safely leave the label as it is. (It's a bit expensive to
+      -- send these to /all/ processes).
+      TICK a   -> 
+        case Map.lookup (UniqueAddr a) pm of
+          Just proc -> mayHear conn label proc
+          Nothing   -> label
+                  
       -- Not on target
       CALL {}  -> response' label 
       SND {}   -> response' label
