@@ -9,14 +9,16 @@
 \newcommand{\Cont} {\V{K}}
 \newcommand{\State}{\V{State}}
 \newcommand{\Act}  {\V{Act}}
-\newcommand{\Upd}  {\V{Upd}}
+\newcommand{\Srv}  {\V{Srv}}
 \newcommand{\Xs}   {\V{Xs}}
 \newcommand{\Vs}   {\V{Vs}}
 \newcommand{\Cs}   {\V{Cs}}
 %}
 
 \newcommand{\kw}[1]{\textbf{#1}}
-\newcommand{\Tserving} [2]{\kw{serving}(#1,#2)}
+\newcommand{\Tcalling} [1]{\kw{calling}(#1)}
+\newcommand{\Tdone}    [1]{\kw{done}(#1)}
+\newcommand{\Tclient}  [3]{(#1,#2,#3)}
 
 \newcommand{\Trunnable}[4]{\kw{runnable}(#1,#2,#3,#4)}
 \newcommand{\Trinst}   [4]{\kw{rinst}(#1,#2,#3,#4)}
@@ -24,7 +26,7 @@
 \newcommand{\Tirv}     [2]{\kw{irv}(#1,#2)}
 \newcommand{\Tdelem}   [3]{\kw{delem}(#1,#2,#3)}
 \newcommand{\Tqelem}   [3]{\kw{qelem}(#1,#2,#3)}
-\newcommand{\Topres}   [2]{\kw{opres}(#1,#2)}
+\newcommand{\Toper}    [3]{\kw{oper}(#1,#2,#3)}
 \newcommand{\Ttimer}   [3]{\kw{timer}(#1,#2,#3)}
 
 %TODO: start with lower case
@@ -91,6 +93,7 @@
 \newcommand{\Tnodata}       {\Tatom{nodata}}
 \newcommand{\TneverReceived}{\Tatom{neverReceived}}
 \newcommand{\Tlimit}        {\Tatom{limit}}
+\newcommand{\Ttimeout}      {\Tatom{timeout}}
 \newcommand{\Tfalse}        {\Tatom{false}}
 \newcommand{\Ttrue}         {\Tatom{true}}
 \newcommand{\Tinvalid}      {\Tatom{invalid}}
@@ -139,8 +142,12 @@
 \newcommand{\Tconnect}      [2]{\ensuremath{#1 \Rightarrow #2}}
 \newcommand{\Tnotconnect}   [2]{\ensuremath{#1 \nRightarrow #2}}
 
+\newcommand{\Tand}   [2]{\ensuremath{#1 \wedge #2}}
+\newcommand{\Tnot}   [1]{\neg(#1)}
+
+
 %%% static properties
-\newcommand{\TcanBeInvokedConcurrently}    [1]{\emph{canBeInvokedConcurrently}(#1)}
+\newcommand{\TcanBeInvokedConcurrently}    [2]{\emph{canBeInvokedConcurrently}(#1,#2)}
 \newcommand{\TminimumStartInterval}        [2]{\emph{minimumStartInterval}(#1,#2)}
 \newcommand{\Timplementation}              [2]{\emph{implementation}(#1,#2)}
 
@@ -151,7 +158,8 @@
 
 \newcommand{\TsynchronousServerCallPoint}[2]{\emph{synchronousServerCallPoint}(#1,#2)}
 \newcommand{\TasynchronousServerCallPoint}[2]{\emph{asynchronousServerCallPoint}(#1,#2)}
-\newcommand{\TasynchronousServerCallResultPoint}[2]{\emph{asynchronousServerCallResultPoint}(#1,#2)}
+\newcommand{\TasynchronousServerCallReturnsEvent}[2]{\emph{asynchronousServerCallReturnsEvent}(#1,#2)}
+\newcommand{\TserverCallPointTimeout}[2]{\emph{serverCallPointTimeout}(#1,#2)}
 \newcommand{\TinitValue}[2]{\emph{initValue}(#1,#2)}
 
 %%% operators
@@ -167,6 +175,7 @@
 
 %%% payload
 \newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
+\newcommand{\Tbusy}         {\mathrm{busy}}
 \newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
 \newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
 \newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
@@ -174,7 +183,8 @@
 \newcommand{\Trd}           [1]{\mathrm{rd}(#1)}
 \newcommand{\Twr}           [1]{\mathrm{wr}(#1)}
 \newcommand{\Tres}          [1]{\mathrm{res}(#1)}
-\newcommand{\Tret}          [1]{\mathrm{ret}(#1)}
+\newcommand{\Tret}          [2]{\mathrm{ret}(#1,#2)}
+\newcommand{\Tskip}         [1]{\mathrm{skip}(#1)}
 \newcommand{\Tup}           [1]{\mathrm{up}(#1)}
 \newcommand{\Tent}          {\mathrm{ent}}
 \newcommand{\Tex}           {\mathrm{ex}}

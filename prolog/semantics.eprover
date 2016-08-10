@@ -36,6 +36,18 @@ step( par(P_1,Q_1), delta(T),  par(P_2,Q_2) ) :- step( P_1, delta(T),  P_2 ), st
 
 endgroup(CombRed).
 
+%%%%% Inter-runnable variables
+
+begingroup(InterrunnableVariables).
+
+step( rinst(r(R,I), C, Xs, rte_IrvRead(S,K)),            say(s(S,I),irvr(V)),           rinst(r(R,I), C, Xs, ap(K,V))          ).
+step( irv(s(S,I), V),                                    hear(s(S,I),irvr(V)),          irv(s(S,I), V)                         ).
+
+step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,V,K)),         say(s(S,I),irvw(V)),           rinst(r(R,I), C, Xs, ap(K,void))       ).
+step( irv(s(S,I), _),                                    hear(s(S,I),irvw(V)),          irv(s(S,I), V)                         ).
+
+endgroup(InterrunnableVariables).
+
 %%%%% Exclusive areas
 begingroup(ExclusiveAreas).
 
@@ -43,41 +55,56 @@ begingroup(ExclusiveAreas).
 %   (TODO: comment about flagging error on attempted "bad" rte_Exit?)
 
 step( rinst(r(R,I), C, Xs, rte_Enter(X,K)),              say(x(X,I),ent),             rinst(r(R,I), C, cons(X,Xs), ap(K,void)) ).
-step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),ex),              rinst(r(R,I), C, Xs, ap(K,void))         ).
-
 step( excl(x(X,I), false),                               hear(x(X,I),ent),            excl(x(X,I), true)                       ).
+
+step( rinst(r(R,I), C, cons(X,Xs), rte_Exit(X,K)),       say(x(X,I),ex),              rinst(r(R,I), C, Xs, ap(K,void))         ).
 step( excl(x(X,I), true),                                hear(x(X,I),ex),             excl(x(X,I), false)                      ).
 
 endgroup(ExclusiveAreas).
 
-%%%%% Inter-runnable variables
+%%%%% Reading/writing (unbuffered versions of rcv and snd)
 
-begingroup(InterrunnableVariables).
+begingroup(ReadingWriting).
 
-step( rinst(r(R,I), C, Xs, rte_IrvRead(S,K)),            say(s(S,I),irvr(V)),           rinst(r(R,I), C, Xs, ap(K,V))          ).
-step( rinst(r(R,I), C, Xs, rte_IrvWrite(S,V,K)),         say(s(S,I),irvw(V)),           rinst(r(R,I), C, Xs, ap(K,void))       ).
+step( rinst(r(R,I), C, Xs, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, Xs, ap(K,V))         ).
+step( delem(ep(E,P,I), _, V),                            hear(ep(E,P,I),rd(V)),          delem(ep(E,P,I), false, V)            ).
 
-step( irv(s(S,I), V),                                    hear(s(S,I),irvr(V)),          irv(s(S,I), V)                         ).
-step( irv(s(S,I), _),                                    hear(s(S,I),irvw(V)),          irv(s(S,I), V)                         ).
+step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,void))      ).
+step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),                  delem(ep(E,P,I), true, V)             ) :-
+    connect(A,ep(E,P,I)).
+step( runnable(r(R,I), T, _, N),                         hear(A,wr(_)),                  runnable(r(R,I), T, pending, N)       ) :-
+    connect(A,ep(E,P,I)),
+    dataReceivedEvent(r(R,I),e(E,P)).
 
-endgroup(InterrunnableVariables).
+step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
+step( delem(ep(E,P,I), U, V),                            hear(ep(E,P,I),up(U)),          delem(ep(E,P,I), U, V)                ).
+
+step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,void))      ).
+step( delem(ep(E,P,I), _, _),                            hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-
+    connect(A,ep(E,P,I)).
+
+endgroup(ReadingWriting).
 
 %%%%% Sending/receiving
 
 begingroup(SendingReceiving).
 
 step( rinst(r(R,I), C, Xs, rte_Receive(e(E,P),K)),       say(ep(E,P,I),rcv(V)),          rinst(r(R,I), C, Xs, ap(K,V))         ).
-step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,eps)),      rinst(r(R,I), C, Xs, ap(K,ok))        ).
-step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,As)),       rinst(r(R,I), C, Xs, ap(K,limit))     ) :-
-    notequal(As,eps).
-
 step( qelem(ep(E,P,I), N, cons(V,Vs)),                   hear(ep(E,P,I),rcv(V)),         qelem(ep(E,P,I), N, Vs)               ).
 step( qelem(ep(E,P,I), N, eps),                          hear(ep(E,P,I),rcv(nodata)),    qelem(ep(E,P,I), N, eps)              ).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,As)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
-    connect(A,ep(E,P,I)), less(length(Vs),N), notmember(ep(E,P,I),As).
-step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,As)),              qelem(ep(E,P,I), N, Vs)               ) :-
-    connect(A,ep(E,P,I)), equal(length(Vs),N), member(ep(E,P,I),As).
 
+step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,eps)),      rinst(r(R,I), C, Xs, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,As)),       rinst(r(R,I), C, Xs, ap(K,limit))     ) :-
+    notequal(As,eps),
+    connect(ep(R,P,I),As).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(V,As)),              qelem(ep(E,P,I), N, seq(Vs,V))        ) :-
+    connect(A,ep(E,P,I)), 
+    less(length(Vs),N), 
+    notmember(ep(E,P,I),As).
+step( qelem(ep(E,P,I), N, Vs),                           hear(A,snd(_,As)),              qelem(ep(E,P,I), N, Vs)               ) :-
+    connect(A,ep(E,P,I)), 
+    equal(length(Vs),N), 
+    member(ep(E,P,I),As).
 step( runnable(r(R,I), T, _, N),                         hear(A,snd(_,As)),              runnable(r(R,I), T, pending, N)       ) :-
     connect(A,ep(E,P,I)),
     dataReceivedEvent(r(R,I),e(E,P)),
@@ -89,48 +116,23 @@ step( runnable(r(R,I), T, Act, N),                       hear(A,snd(_,As)),     
 
 endgroup(SendingReceiving).
 
-%%%%% Reading/writing (unbuffered versions of rcv and snd)
-
-begingroup(ReadingWriting).
-
-step( rinst(r(R,I), C, Xs, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, Xs, ap(K,V))         ).
-step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,void))      ).
-
-step( delem(ep(E,P,I), _, V),                            hear(ep(E,P,I),rd(V)),          delem(ep(E,P,I), false, V)            ).
-step( delem(ep(E,P,I), _, _),                            hear(A,wr(V)),                  delem(ep(E,P,I), true, V)             ) :-
-    connect(A,ep(E,P,I)).
-
-step( runnable(r(R,I), T, _, N),                         hear(A,wr(_)),                  runnable(r(R,I), T, pending, N)       ) :-
-    connect(A,ep(E,P,I)),
-    dataReceivedEvent(r(R,I),e(E,P)).
-
-step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
-step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,void))      ).
-
-step( delem(ep(E,P,I), U, V),                            hear(ep(E,P,I),up(U)),          delem(ep(E,P,I), U, V)                ).
-step( delem(ep(E,P,I), _, _),                            hear(A,inv),                    delem(ep(E,P,I), true, invalid)       ) :-
-    connect(A,ep(E,P,I)).
-
-endgroup(ReadingWriting).
-
 %%%%% Calling a server
 
 begingroup(CallServer).
 
-step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))                      ) :-
+step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(_,V)),           rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))    ) :-
     synchronousServerCallPoint(r(R,I),o(O,P)).
-step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,ok)),      rinst(r(R,I), C, Xs, ap(K,Res))                                 ) :-
+step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(_,V)),           rinst(r(R,I), C, Xs, ap(K,ok))                ) :-
     asynchronousServerCallPoint(r(R,I),o(O,P)).
-step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(V,limit)),   rinst(r(R,I), C, Xs, ap(K,Res))                                 ).
+step( oper(op(O,P,I), M, done(_)),                  hear(op(O,P,I),call(M,V)),          oper(op(O,P,I), M, calling(T))                ) :-
+    serverCallPointTimeout(op(O,P,I),T).
+step( runnable(r(R,I), T, Cs, N),                   hear(A,call(M,V)),                  runnable(r(R,I), T, seq(Cs,client(A,M,V)), N) ) :-
+    operationInvokedEvent(r(R,I),o(O,P)),
+    connect(op(O,P,I),A).
 
-step( runnable(r(R,I), T, serving(Cs,Vs), N),       hear(A,call(V,ok)),             runnable(r(R,I), T, serving(seq(Cs,A),seq(Vs,V)), N)            ) :-
-    connect(op(O,P,I),A),
-    operationInvokedEvent(r(R,I),o(O,P)),
-    notmember(A,Cs).
-step( runnable(r(R,I), T, serving(Cs,Vs), N),       hear(A,call(_,limit)),          runnable(r(R,I), T, serving(Cs,Vs), N)                       ) :-
-    connect(op(O,P,I),A),
-    operationInvokedEvent(r(R,I),o(O,P)),
-    member(A,Cs).
+step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),busy),                rinst(r(R,I), C, Xs, ap(K,limit))             ).
+step( oper(op(O,P,I), M, calling(T)),               hear(op(O,P,I),busy),               oper(op(O,P,I), M, calling(T))                ).
+step( runnable(r(R,I), T, Cs, N),                   hear(A,busy),                       runnable(r(R,I), T, Cs, N)                    ).
 
 endgroup(CallServer).
 
@@ -138,15 +140,27 @@ endgroup(CallServer).
 
 begingroup(ServerResult).
 
-step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),          rinst(r(R,I), C, Xs, ap(K,V))                                   ) :-
+step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),              rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
+    synchronousServerCallPoint(r(R,I),o(O,P)),
     notequal(V,nodata).
-step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(nodata)),     rinst(r(R,I), C, Xs, ap(K,V))                                   ) :-
-    asynchronousServerCallResultPoint(r(R,I),o(O,P)).
-step( rinst(A, op(O,P,I), eps, return(V)),          say(op(O,P,I),ret(V)),          rinst(A, void, eps, return(void))                                ).
+step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),              rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
+    asynchronousServerCallPoint(r(R,I),o(O,P)).
 
-step( opres(op(O,P,I), cons(V,Vs)),                 hear(op(O,P,I),res(V)),         opres(op(O,P,I), Vs)                                            ).
-step( opres(op(O,P,I), Vs),                         hear(op(O,P,I),ret(V)),         opres(op(O,P,I), seq(Vs,V))                                     ).
-step( opres(op(O,P,I), eps),                        hear(op(O,P,I),res(nodata)),    opres(op(O,P,I), eps)                                           ).
+step( oper(op(O,P,I), M, calling(T)),               hear(op(O,P,I),res(nodata)),        oper(op(O,P,I), M, calling(T))                ).
+step( oper(op(O,P,I), M, done(V)),                  hear(op(O,P,I),res(V)),             oper(op(O,P,I), M, done(V))                   ).
+
+step( rinst(A, client(B,M,_), Xs, return(V)),       say(B,ret(M,V)),                    rinst(A, void, Xs, return(void))              ).
+
+step( oper(op(O,P,I), M, calling(_)),               hear(op(O,P,I),ret(M,V)),           oper(op(O,P,I), plus(M,1), done(V))           ).
+step( oper(op(O,P,I), M, calling(0)),               say(op(O,P,I),ret(M,timeout)),      oper(op(O,P,I), plus(M,1), done(timeout))     ).
+
+step( runnable(r(R,I), T, _, N),                    hear(op(O,P,I),ret(_,_)),           runnable(r(R,I), T, pending, N)               ) :-
+    asynchronousServerCallReturnsEvent(r(R,I),o(O,P)).
+
+step( rinst(A, client(B,M,_), Xs, return(_)),       say(B,skip(M)),                     rinst(A, void, Xs, return(void))              ).
+step( oper(op(O,P,I), M, Srv),                      hear(op(O,P,I),skip(N)),            oper(op(O,P,I), M, Srv)                       ) :- 
+    notequal(M,N).
+step( runnable(r(R,I), T, Act, N),                  hear(op(O,P,I),skip(_)),            runnable(r(R,I), T, Act, N)                   ).
 
 endgroup(ServerResult).
 
@@ -154,27 +168,19 @@ endgroup(ServerResult).
 
 begingroup(SpawnTerminate).
 
-step( rinst(A, void, eps, return(_)),                         say(A,term),    zero                                                                  ).
-step( runnable(A, T, Act, N),                                 hear(A,term),   runnable(A, T, Act, minus(N,1))                                       ).
-step( runnable(A, 0, pending, 0),                             say(A,new),     par( runnable(A, T, idle, 1),
-                                                                                   rinst(A, void, eps, ap(K,void)) )                                 ) :-
+step( runnable(A, 0, pending, N),                   say(A,new),                         par( runnable(A, T, idle, plus(N,1)),
+                                                                                              rinst(A, void, eps, ap(K,void)) )       ) :-
+    canBeInvokedConcurrently(A,N),
     minimumStartInterval(A,T),
     implementation(A,K).
-step( runnable(A, 0, pending, N),                             say(A,new),     par( runnable(A, T, idle, plus(N,1)),
-                                                                                   rinst(A, void, eps, ap(K,void)) )                                 ) :-
-    canBeInvokedConcurrently(A),
+step( runnable(A, 0, cons(client(B,M,V),Cs), N),    say(A,new),                         par( runnable(A, T, Cs, plus(N,1)),
+                                                                                             rinst(A, client(B,M,V), eps, ap(K,V)) )  ) :-
+    canBeInvokedConcurrently(A,N),
     minimumStartInterval(A,T),
     implementation(A,K).
 
-step( runnable(A, 0, serving(cons(C,Cs),cons(V,Vs)), 0),      say(A,new),     par( runnable(A, T, serving(Cs,Vs), 1),
-                                                                                   rinst(A, C, eps, ap(K,V)) )                                      ) :-
-    minimumStartInterval(A,T),
-    implementation(A,K).
-step( runnable(A, 0, serving(cons(C,Cs),cons(V,Vs)), N),      say(A,new),     par( runnable(A, T, serving(Cs,Vs), plus(N,1)),
-                                                                                   rinst(A, C, eps, ap(K,V)) )                                      ) :-
-    canBeInvokedConcurrently(A),
-    minimumStartInterval(A,T),
-    implementation(A,K).
+step( rinst(A, void, eps, return(_)),               say(A,term),                        zero                                         ).
+step( runnable(A, T, Act, N),                       hear(A,term),                       runnable(A, T, Act, minus(N,1))              ).
 
 endgroup(SpawnTerminate).
 
@@ -194,7 +200,8 @@ step( excl(A, V),                  delta(_),       excl(A, V)                   
 step( irv(A, V),                   delta(_),       irv(A, V)                          ).
 step( qelem(A, N, Vs),             delta(_),       qelem(A, N, Vs)                    ).
 step( delem(A, U, V),              delta(_),       delem(A, U, V)                     ).
-step( opres(A, Vs),                delta(_),       opres(A, Vs)                       ).
+step( oper(A, M, calling(V)),      delta(T),       oper(A, M, calling(minus(V,T)))    ) :-   lesseq(T,V).
+step( oper(A, M, done(V)),         delta(_),       oper(A, M, done(V))                ).
 
 endgroup(PassingTime).
 
@@ -202,13 +209,17 @@ endgroup(PassingTime).
 
 begingroup(IgnoreBroadcast).
 
-step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)                ).
-step( timer(B, T_p, T),            hear(_,_),      timer(B, T_p, T)                  ).
-step( runnable(B, T, Act, N),      hear(A,_),      runnable(B, T, Act, N)            ) :-   notequal(A,B).
-step( excl(B, V),                  hear(A,_),      excl(B, V)                        ) :-   notequal(A,B).
-step( irv(B, V),                   hear(A,_),      irv(B, V)                         ) :-   notequal(A,B).
-step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                   ) :-   notconnect(A,B).
-step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                    ) :-   notconnect(A,B).
-step( opres(B, Vs),                hear(A,_),      opres(B, Vs)                      ) :-   notequal(A,B).
+step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)                 ).
+step( timer(B, T_p, T),            hear(_,_),      timer(B, T_p, T)                   ).
+step( excl(B, V),                  hear(A,_),      excl(B, V)                         ) :-   notequal(A,B).
+step( irv(B, V),                   hear(A,_),      irv(B, V)                          ) :-   notequal(A,B).
+step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                    ) :-   notconnect(A,B).
+step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                     ) :-   notconnect(A,B).
+step( oper(B, M, Srv),             hear(A,_),      oper(B, M, Srv)                    ) :-   notequal(A,B).
+step( runnable(r(R,I), T, Act, N), hear(A,_),      runnable(r(R,I), T, Act, N)        ) :-   
+    notequal(A,B), 
+    not(and(connect(A,ep(E,P,I)),dataReceivedEvent(r(R,I),e(E,P)))),
+    not(and(operationInvokedEvent(r(R,I),o(O,P)),connect(op(O,P,I),A))),
+    not(asynchronousServerCallReturnsEvent(r(R,I),A)).
 
 endgroup(IgnoreBroadcast).
