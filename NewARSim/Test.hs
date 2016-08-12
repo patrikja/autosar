@@ -14,7 +14,7 @@ comp1 :: AUTOSAR (IntPort Provided)
 comp1 = atomic $ do
   a <- providedPort
   s <- interRunnableVariable 0
-  runnableT ["task1" :-> 0] (MinInterval 0) [TimingEvent 0.1] $ do
+  runnableT ["task1" :-> 0] (MinInterval 0) [TimingEvent 0.2] $ do
     Ok x <- rteIrvRead s
     rteWrite a x
     rteIrvWrite s (x + 1)
@@ -24,7 +24,7 @@ comp2 :: AUTOSAR (IntPort Provided)
 comp2 = atomic $ do
   a <- providedPort
   s <- interRunnableVariable 0
-  runnableT ["task1" :-> 1] (MinInterval 0) [TimingEvent 0.1] $ do
+  runnableT ["task1" :-> 1] (MinInterval 0) [TimingEvent 0.2] $ do
     Ok x <- rteIrvRead s
     rteWrite a x
     rteIrvWrite s ((x + 1) `mod` 31)
@@ -48,14 +48,12 @@ softw = composition $ do
   (c1, c2) <- comp3
   connect a c1
   connect b c2
-
-  declareTask "task1" 0.2
---   declareTask "task2" 0.2
+  declareTask "task1" 0.1
 
 main :: IO ()
 main = do 
   g <- newStdGen
-  simulateStandalone 5.0 printLogs (RandomSched g) softw
+  simulateStandalone 2.0 printLogs (RandomSched g) softw
   return ()
 
 main2 :: IO ()
