@@ -170,12 +170,12 @@ begingroup(SpawnTerminate).
 
 step( runnable(A, 0, pending, N),                   say(A,new),                         par( runnable(A, T, idle, plus(N,1)),
                                                                                               rinst(A, void, eps, ap(K,void)) )       ) :-
-    canBeInvokedConcurrently(A,N),
+    or(equal(N,0),canBeInvokedConcurrently(A,N)),
     minimumStartInterval(A,T),
     implementation(A,K).
 step( runnable(A, 0, cons(client(B,M,V),Cs), N),    say(A,new),                         par( runnable(A, T, Cs, plus(N,1)),
                                                                                              rinst(A, client(B,M,V), eps, ap(K,V)) )  ) :-
-    canBeInvokedConcurrently(A,N),
+    or(equal(N,0),canBeInvokedConcurrently(A,N)),
     minimumStartInterval(A,T),
     implementation(A,K).
 
@@ -188,20 +188,22 @@ endgroup(SpawnTerminate).
 
 begingroup(PassingTime).
 
-step( timer(A, T_p, 0),            say(A,tick),    timer(A, T_p, T_p)                 ).
-step( runnable(A, T, _, N),        hear(A,tick),   runnable(A, T, pending, N)         ).
-
 % The "time left" state V is always decreasing in delta(T) steps, and never negative.
-step( timer(A, T_p, V),            delta(T),       timer(A, T_p, minus(V,T))          ) :-   lesseq(T,V).
-step( runnable(A, V, Act, N),      delta(T),       runnable(A, minus(V,T), Act, N)    ) :-   lesseq(T,V).
-step( runnable(A, 0, Act, N),      delta(_),       runnable(A, 0, Act, N)             ).
 step( rinst(A, C, Xs, Code),       delta(_),       rinst(A, C, Xs, Code)              ).
 step( excl(A, V),                  delta(_),       excl(A, V)                         ).
 step( irv(A, V),                   delta(_),       irv(A, V)                          ).
 step( qelem(A, N, Vs),             delta(_),       qelem(A, N, Vs)                    ).
 step( delem(A, U, V),              delta(_),       delem(A, U, V)                     ).
-step( oper(A, M, calling(V)),      delta(T),       oper(A, M, calling(minus(V,T)))    ) :-   lesseq(T,V).
 step( oper(A, M, done(V)),         delta(_),       oper(A, M, done(V))                ).
+
+step( oper(A, M, calling(V)),      delta(T),       oper(A, M, calling(minus(V,T)))    ) :-   lesseq(T,V).
+step( runnable(A, V, Act, N),      delta(T),       runnable(A, minus(V,T), Act, N)    ) :-   lesseq(T,V).
+step( runnable(A, 0, Act, N),      delta(_),       runnable(A, 0, Act, N)             ).
+step( timer(A, T_p, V),            delta(T),       timer(A, T_p, minus(V,T))          ) :-   lesseq(T,V).
+
+step( timer(A, T_p, 0),            say(A,tick),    timer(A, T_p, T_p)                 ).
+step( runnable(A, T, _, N),        hear(A,tick),   runnable(A, T, pending, N)         ).
+
 
 endgroup(PassingTime).
 
@@ -213,8 +215,8 @@ step( rinst(A, C, Xs, K),          hear(_,_),      rinst(A, C, Xs, K)           
 step( timer(B, T_p, T),            hear(_,_),      timer(B, T_p, T)                   ).
 step( excl(B, V),                  hear(A,_),      excl(B, V)                         ) :-   notequal(A,B).
 step( irv(B, V),                   hear(A,_),      irv(B, V)                          ) :-   notequal(A,B).
-step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                    ) :-   notconnect(A,B).
-step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                     ) :-   notconnect(A,B).
+step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                    ) :-   notequal(A,B), notconnect(A,B).
+step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                     ) :-   notequal(A,B), notconnect(A,B).
 step( oper(B, M, Srv),             hear(A,_),      oper(B, M, Srv)                    ) :-   notequal(A,B).
 step( runnable(r(R,I), T, Act, N), hear(A,_),      runnable(r(R,I), T, Act, N)        ) :-   
     notequal(A,B), 

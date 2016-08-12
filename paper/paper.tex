@@ -121,7 +121,7 @@ We write $\Vs$ for a sequence of values \V{V}, $\Cs$ for a sequence of clients \
 
 The $\Code$ part of a runnable instance should technically be a representation of the C or Matlab implementation that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in any detail, a more abstract notion of executable code will be required.
 
-To this end, we have chosen to ignore all internal computations and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. And because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style where every $\Code$ term except the final function return literally the sequence that follows it, as a continuation function $\Cont$.
+To this end, we have chosen to ignore all internal computations and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. And because the result from an RTE call may in general affect subsequent runnable behavior, we use a continuation-passing style where every $\Code$ term except the final function return literally contain the sequence that follows it, as a continuation parameter $\Cont$.
 %
 \[
 \begin{array}{lll}
@@ -143,7 +143,7 @@ To this end, we have chosen to ignore all internal computations and just capture
 \end{array}
 \]
 
-In contrast to $\Code$ sequences, process terms are completely unordered. This is expressed in the standard process calculus style using an associative operator $\Tpar{}{}$ that allows arbitrary sets of primitive processes to be composed in parallel. This operator also has a left and right unit in the form of process $\Tzero$, which stands for the empty, or terminated, process. The complete grammar for our process terms thus looks as follows:
+In contrast to code sequences, process terms are completely unordered. This is expressed in the standard process calculus style using an associative operator $\Tpar{}{}$ that allows arbitrary sets of primitive processes to be composed in parallel. This operator also has a left and right unit in the form of process $\Tzero$, which stands for the empty, or terminated, process. The complete grammar for our process terms thus looks as follows:
 
 \[
 \begin{array}{rcll}
@@ -356,7 +356,7 @@ $$
 $$
 As an aside, note that the associativity of the parallel composition operator is made entirely irrelevant by the symmetric shape of transition rules (1) and (2).
 
-Axiom (17) provides another means of intepreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $i.p.e$ should be marked as {\bf pending} whenever a write occurs on an element connected to $i.p.e$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
+Axiom (17) provides another means of intepreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $a$ should be marked as {\bf pending} whenever a write occurs on an element connected to $a$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
 $$
 \begin{array}{c}
 	\Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
@@ -373,7 +373,7 @@ A data element can also be queried for its update status flag, and be marked as 
 
 \subsection{Buffered sending/receiving}
 
-Buffered interprocess communication (axioms (22) - (30)) is essentially a minor variant of the unbuffered mechanism, where the single-value store of a {\bf delem} term is replaced by a {\bf qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (23)) and extended to the right (axiom (27)). When the buffer is empty, the special value (error code) {\bf nodata} is returned to receiving runnable instances (axiom (24)). When the buffer is at its maximum capacity, the communicated value is simply dropped (axiom (28)).
+Buffered interprocess communication (axioms (22) - (30)) is just a minor variant of the unbuffered mechanism, where the single-value store of a {\bf delem} term is replaced by a {\bf qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (23)) and extended to the right (axiom (27)). When the buffer is empty, the special value (error code) {\bf nodata} is returned to receiving runnable instances (axiom (24)). When the buffer is at its maximum capacity, the communicated value is simply dropped (axiom (28)).
 
 However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the {\em snd} transition, listing the addresses of connected {\bf qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. Precondition $\Tconnect {i.p.e} \Tvar{as}$ in axiom (26) should be read $\Tconnect {i.p.e} a$ for all $a \in \Tvar{as}$, and its purpose is to outrule irrelevant addresses in $\Tvar{as}$ causing bogus {\bf limit} results.
 
@@ -453,12 +453,88 @@ $$
 
 \subsection{Spawning and terminating} \label{sect:SpawnTerm}
 
+Runnables with an activation state distinct from $\Tidle$ or $\Teps$ are amenable to instantiation. Axiom (49) defines this crucial step for runnables triggered by all types of events except server invocation, which is instead handled by axiom (50). Both rules have many details in common:
+\begin{itemize}
+\item They apply only when the runnable instantiation timer (parameter two) has reached zero.
+\item They reset the timer to a model-defined {\em minimumStartInterval} to disable further instantiation immediately after a new instance is born.
+\item They are guarded by the condition that the current number of runnable instances (fourth parameter) is either zero, or the runnable has been defined to accept concurrent invocations.
+\item They make the runnable keep track of the new number of instances.
+\item They let the new instance inherit the address of its parent runnable.
+\item They create the new instance in parallel with its parent (runnable instances is actually the only example of dynamic process creation in this calculus).
+\item They initialize the new instance with code according to the model-defined implementation and an empty list of owned exclusive areas.
+\end{itemize}
+The differences all emanate from the server/non-server distinction:
+\begin{itemize}
+\item The non-server runnable instance gets a $\Tvoid$ client parameter whereas the server instance is assigned the client tuple from the head of the server's client queue.
+\item The non-server runnable toggles back to the $\Tidle$ activation state, while the server just chops of the head of its client queue.
+\item Only the server runnable instance is given a non-void parameter, which is taken from the same client queue head.
+\end{itemize}
+The transition label of axioms (49) and (59) is noteworthy because it is not matched by a corresponding hearing transition; all other process terms just ignore the information that a new runnable instance has been spawned. An example of process instantiation within a parallel context will thus merely be a trivial variant of one of the instantiation axioms, and is therefore left out.
 
+Complementing the notion of spawning is a mechanism for runnable instance termination. An instance with a $\Tvoid$ client parameter (either acquired natively, or via axioms (42) or (46)) transforms into the terminated process $\Tzero$ as defined in axiom (51). Since this term is the unit of parallel process composition, it is silently absorbed by any other process in parallel with it. The instance termination is also noted by the associated runnable parent, which reacts by decrementing its current instance counter (axiom (52)). An example of this interaction follows below.
+$$
+\begin{array}{c}
+	{\Trunnable b t \Act 3} \Opar
+	{\Trinst b \Tvoid \Teps {\Treturn v}} \vspace{0.6ex} \\
+	\red{\say{i.p.o}{\Tterm}} \\
+	{\Trunnable b t \Act 2} \Opar \Tzero \\
+	\equiv \\
+	{\Trunnable b t \Act 2}
+\end{array}
+$$
 
 
 \subsection{Passing time}
 
+In common with most real-time process calculi, the concept of passing time in our calculus is kept separate from the computational work expressed by the say/hear transitions. This has the advantage of freeing the semantics from possessing a particular computation speed, as any finite number of computation steps can be performed before time must advance. On the other hand, it also means that the  limitations of a particular platform cannot be directly studied unless the calculus is complemented with some form of constraint on the work-time relationship. Such an extension is beyond the scope of the current report, though.
+
+The passage of time is captured as a special transition relation $\red {\Tdelta t}$, whose only effect on the related process terms is to decrement any contained time variables by $t$. For some processes time cannot advance until a particular work transition has been taken; this corresponds to time events that must be noted (although not necessarily acted upon) at the exact time instance when they occur. Yet other processes can only take time transitions, which simply means that they represent an idle system that currently has no work to do. Mostly, though, work and time transitions are simltaneously available, indicating that the semantics considers the slightly slower and sligthly faster behavior alternatives to be equally correct.
+
+Most process terms actually ignore the passage of time, which is expressed by axioms (53) to (58). In axiom (59), an {\bf oper} term in the {\bf calling} state lets time pass by decrementing its timeout counter. The counter is not allowed to go negative, though, which forces the {\bf oper} term to handle the timeout once the counter reaches zero (c.f.\ axiom (44)). Axiom (60) defines a similar behavior for the start interval timer of a runnable, although this timer is also allowed to slip behind further time updates once it has reached zero (axiom (61)). The reason for this is that the interval timers do not enforce any particular action when they time out, they just enable new transition options that do not have to be taken immediately.
+
+A timer process, finally, decrements its counter according to axiom (62). When the counter has become zero, the timer is forced to take the tick transition of axiom (63), which also resets the counter to its static period value $t_p$. The net effect of such a transition is that the runnable to which the ticking timer belongs is put into the {\bf pending} state (axiom (64)). An example of a transition sequence involving a time-triggered runnable follows below.
+$$
+\begin{array}{c}
+	{\Trunnable a 0 \Tidle 0} \Opar
+	{\Ttimer a {2.5} {0.3}} \vspace{0.6ex} \\
+	\red{\Tdelta {0.3}} \\
+	{\Trunnable a 0 \Tidle 0} \Opar
+	{\Ttimer a {2.5} 0} \vspace{0.6ex} \\
+	\red{\say a \Ttick} \\
+	{\Trunnable a 0 \Tpending 0} \Opar
+	{\Ttimer a {2.5} {2.5}} \vspace{0.6ex} \\
+	\red{\say a \Tnew} \\
+	{\Trunnable a {0.8} \Tidle 1} \Opar
+	{\Ttimer a {2.5} {2.5}} \,\Opar \\
+	{\Trinst a \Tvoid \Teps {\Code_1}} \vspace{0.6ex} \\
+	\longrightarrow \cdots \longrightarrow \\
+	{\Trunnable a {0.8} \Tidle 1} \Opar
+	{\Ttimer a {2.5} {2.5}} \,\Opar \\
+	{\Trinst a \Tvoid \Teps {\Code_2}} \vspace{0.6ex} \\
+	\red{\Tdelta {0.8}} \\
+	{\Trunnable a 0 \Tidle 1} \Opar
+	{\Ttimer a {2.5} {1.7}} \,\Opar \\
+	{\Trinst a \Tvoid \Teps {\Code_2}} \vspace{0.6ex} \\
+	\longrightarrow \cdots \longrightarrow \\
+	{\Trunnable a 0 \Tidle 1} \Opar
+	{\Ttimer a {2.5} {2.5}} \,\Opar \\
+	{\Trinst a \Tvoid \Teps {\Treturn \Tvoid}} \vspace{0.6ex} \\
+	\red{\say a \Tterm} \\
+	{\Trunnable a 0 \Tidle 0} \Opar
+	{\Ttimer a {2.5} {1.7}} \vspace{0.6ex} \\
+	\red{\Tdelta {1.5}} \cdots \red{\Tdelta {0.2}} \\
+	{\Trunnable a 0 \Tidle 0} \Opar
+	{\Ttimer a {2.5} 0} \vspace{0.6ex} \\
+	\red{\say a \Ttick} \\
+	\cdots
+\end{array}
+$$
+
+
+
 \subsection{Ignoring broadcasts} \label{sect:Ignore}
+
+
 
 
 TODO: some links from rules and choices made here to the AUTOSAR spec
