@@ -225,14 +225,10 @@ data Proc
   |           Op     Address [Value]
   |           Input  Address Value
   |           Output Address Value
-  -- The bool tells us if the task is ready to execute
-  |           Task   Address Time Toggle TaskState
-  --          Task   Address Toggle TaskState?
+  |           Task   Address Toggle TaskState
 
--- TODO: Is it clear that tasks need a concept of time themselves, and not just
--- be controlled by their timers (or other triggering events)? 
 data Toggle
-  = Active Time
+  = Active 
   | Ready
   | Inactive
   deriving Show
@@ -248,7 +244,7 @@ instance Show Proc where
   show (Op a _)              = unwords ["Op", show a]
   show (Input a _)           = unwords ["Input", show a]
   show (Output a _)          = unwords ["Output", show a]
-  show (Task a t c ts)       = unwords ["Task", show a, show t, show c, show ts]
+  show (Task a c ts)         = unwords ["Task", show a, show c, show ts]
 
 data ProcAddress 
   = RunAddr    Address
@@ -279,7 +275,7 @@ procAddress (DElem  a _ _)        = UniqueAddr a
 procAddress (Op a _)              = UniqueAddr a
 procAddress (Input a _)           = ExtAddr a
 procAddress (Output a _)          = ExtAddr a
-procAddress (Task a _ _ _)        = UniqueAddr a
+procAddress (Task a _ _)          = UniqueAddr a
 
 -- * Connection relations
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -339,7 +335,7 @@ taskInit :: Map String [(Int, ProcAddress)]
          -> Map Address String
          -> Proc
          -> Proc
-taskInit tp na p@(Task a t _ _) = 
+taskInit tp na p@(Task a _ _) = 
   let name  = na Map.! a
   in  case Map.lookup name tp of
         Nothing -> error $ "Task " ++ show name ++ " was assigned no runnables."
@@ -351,7 +347,7 @@ taskInit tp na p@(Task a t _ _) =
                          , execQueue   = prios' 
                          , execCurrent = Nothing 
                          }
-          in  Task a t Inactive ts 
+          in  Task a Inactive ts 
 taskInit _  _  p = p
 
 -- | Check that all tasks which have been assigned runnables also have been 
@@ -403,19 +399,16 @@ scheduleNext :: HasCallStack => ProcMap -> Proc -> Proc
 scheduleNext pm p = checkPending next 
   where 
     next = case p of
-      Task b t (Active s) ts
-        | null (execQueue ts) ->
-          Task b t (Active s) ts
-            { execCurrent = Nothing }
-        | otherwise ->  
-          Task b t (Active s) ts 
-            { execCurrent = Just $ head $ execQueue ts
-            , execQueue   = tail $ execQueue ts
-            } 
+      Task b Active ts
+        | null (execQueue ts) -> Task b Inactive (resetTaskState ts)
+        | otherwise           -> Task b Active ts 
+                                   { execCurrent = Just $ head $ execQueue ts
+                                   , execQueue   = tail $ execQueue ts
+                                   } 
       _ -> error "scheduleNext called on inactive or non-task process"
 
     checkPending :: Proc -> Proc
-    checkPending p@(Task _ _ _ ts) =
+    checkPending p@(Task _ _ ts) =
       case execCurrent ts of
         Nothing   -> p
         Just addr -> case pmapLookup pm addr of
@@ -427,7 +420,7 @@ scheduleNext pm p = checkPending next
 scheduleInstance :: Proc -> Address -> Int -> Proc
 scheduleInstance proc a n =
   case proc of 
-    Task b t (Active s) ts -> Task b t (Active s) ts { execCurrent = inst }
+    Task b Active ts -> Task b Active ts { execCurrent = inst }
     _ -> error "Bad call to scheduleInstance" 
   where inst = Just (RInstAddr a n)
 
@@ -653,7 +646,7 @@ declareTask :: String -> Time -> AUTOSAR ()
 declareTask n t = do 
   a <- newAddress
   newProcess (Timer a 0.0 t 0)
-  newProcess (Task a t Inactive (TaskState "" [] [] Nothing))
+  newProcess (Task a Inactive (TaskState "" [] [] Nothing))
   newTask n a
 
 -- | Runnable without task assignment.
@@ -831,9 +824,7 @@ maySay (Run a 0.0 Pending n m s _)
 maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n m s _)
     | n == 0 || invocation s == Concurrent     = NEW   a m
 maySay (Run a t act n m s _)   | t > 0.0       = DELTA t
-maySay (Task _ _ (Active 0.0) _)               = DEACT -- deactivate the task, enforcing DELTA after each cycle
-maySay (Task _ _ (Active s)   _) | s > 0.0     = DELTA s
-maySay (Task _ _ Ready        _)               = START -- schedule first process
+maySay (Task _ Ready _)                        = START -- schedule first process
 maySay (Timer a 0.0 t _)                       = TICK  a
 maySay (Timer a t t0 _)   | t > 0.0            = DELTA t
 maySay (RInst a _ c ex code _)                 = maySay' (view code)
@@ -866,9 +857,7 @@ say pm (NEW _ _) (Run a _ (Serving (c:cs) (v:vs)) n m s b) = [ Update $ Run a (m
 say pm (DELTA d) (Run a t act n m s b)                     = [ Update $ Run a (t - d) act n m s b]
 say pm (TICK _)  (Timer a _ t n)                           = [ Update $ Timer a t t n]
 say pm (DELTA d) (Timer a t t0 n)                          = [ Update $ Timer a (t - d) t0 n]
-say pm DEACT     (Task b t (Active _) ts)                  = [ Update $ Task b t Inactive (resetTaskState ts) ] -- reset task 
-say pm (DELTA d) (Task b t (Active s) ts)                  = [ Update $ Task b t (Active (s - d)) ts ]
-say pm START     (Task b t Ready      ts)                  = [ Update $ scheduleNext pm (Task b t (Active t) ts) ]
+say pm START     (Task b Ready ts)                         = [ Update $ scheduleNext pm (Task b Active ts) ]
 say pm label     (RInst a n c ex code b)                   = say' label (view code)
   where say' (ENTER _)      (Enter (EX x) :>>= cont)       = [ Update $ RInst a n c (x:ex)   (cont void) b]
         say' (EXIT _)       (Exit (EX x)  :>>= cont)       = [ Update $ RInst a n c ex       (cont void) b]
@@ -933,7 +922,6 @@ mayHear conn (RES a _)      (Op b [])         | a==b           = VETO  -- RES a 
 mayHear conn (DELTA d)      (Run _ t _ _ _ _ _) 
        | d > t && t > 0                                        = VETO
 mayHear conn (DELTA d)      (Timer _ t _ _)   | d > t          = VETO
-mayHear conn (DELTA d)      (Task _ _ (Active s) _) | d > s    = VETO
 mayHear conn label          _                                  = label
 
 hear :: ProcMap -> ConnRel -> Label -> Proc -> Update Proc
@@ -966,12 +954,11 @@ hear pm conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged
 hear pm conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
 hear pm conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
 hear pm conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
-hear pm conn (TICK a)      (Task b t Inactive ts) | a == b   = Update $ Task b t Ready ts
-hear pm conn (TERM a)      (Task b t (Active s) ts)
-        | a `isRunning` ts                                   = Update $ scheduleNext pm (Task b t (Active s) ts)
-hear pm conn (NEW a n)     (Task b t (Active s) ts)
-        | a `isRunning` ts                                   = Update $ scheduleInstance (Task b t (Active s) ts) a n 
-hear pm conn (DELTA d)     (Task b t (Active s) ts)          = Update $ Task b t (Active (s - d)) ts 
+hear pm conn (TICK a)      (Task b Inactive ts) | a == b     = Update $ Task b Ready ts
+hear pm conn (TERM a)      (Task b Active ts)
+        | a `isRunning` ts                                   = Update $ scheduleNext pm (Task b Active ts)
+hear pm conn (NEW a n)     (Task b Active ts)
+        | a `isRunning` ts                                   = Update $ scheduleInstance (Task b Active ts) a n 
 hear pm conn label         proc                              = Unchanged 
 
 -- * 'step' and 'explore'
@@ -1000,11 +987,11 @@ step conn pm = explore conn pm procs sayers
     tasks     = filter isActiveTask procs 
     scheduled = map (pmapLookup pm) $ mapMaybe (execCurrent . stateOf) tasks
 
-    stateOf (Task _ _ _ ts) = ts
+    stateOf (Task _ _ ts) = ts
 
-    isActiveTask (Task _ _ (Active _) _) = True
-    isActiveTask (Task _ _ Ready      _) = True
-    isActiveTask _                       = False
+    isActiveTask (Task _ Active _) = True
+    isActiveTask (Task _ Ready  _) = True
+    isActiveTask _                 = False
 
     isUntasked (Run _ _ _ _ _ _ b) = not b
     isUntasked (RInst _ _ _ _ _ b) = not b
@@ -1229,7 +1216,7 @@ simulate withTasks sched conn procs =
      case next of
        Nothing ->
          return []
-       Just (trans, procs1) -> 
+       Just (trans, procs1) -> -- (show (transLabel trans)) `trace`
          (trans:) <$> simulate withTasks sched conn (pmapUpdate procs procs1)
 
 -- Progresses simulation until there are no more transition alternatives.
@@ -1262,25 +1249,24 @@ maximumProgress withTasks pm sched alts
     isDelta _                = False
 
 -- Finer control of the order of scheduling is needed when assigning runnables
--- to tasks. TICKS <= Tasked NEW/TERM <= other non-DELTAS <= DELTAS.
+-- to tasks. TODO: Simplify
 taskProgress :: ProcMap -> Scheduler m -> Scheduler m
-taskProgress pm sched alts
-  | null ticks && null tasks = sched rem
-  | null ticks               = sched tasks
-  | otherwise                = sched ticks
+taskProgress pm sched alts = sched (head alts2)
   where
-    (ticks, bs)  = partition isTick  alts
-    (tasks, rem) = partition hasTask bs
+    alts2       = dropWhile null [ticks,start,tasks,rm]
+    (ticks, as) = partition isTick  alts
+    (start, bs) = partition isStart as
+    (tasks, rm) = partition hasTask bs 
 
-    isTick (TICK _, _, _, _) = True
-    isTick _                 = False
-  
-    hasTask (label, _, _, _) = 
-      case label of 
-        NEW a _ -> case pmapLookup pm (RunAddr a) of
-          Run _ _ _ _ _ _ b -> b
-        TERM a  -> case pmapLookup pm (RunAddr a) of
-          Run _ _ _ _ _ _ b -> b
+    fst4 (a, _, _, _) = a
+    isTick  a = case fst4 a of { TICK _ -> True ; _ -> False }
+    isStart a = case fst4 a of { START -> True ; _ -> False }
+    tag     a = case pmapLookup pm (RunAddr a) of Run _ _ _ _ _ _ b -> b
+   
+    hasTask (l, _, _, _) = 
+      case l of 
+        NEW a _ -> tag a   
+        TERM a  -> tag a 
         _       -> False
 
 trivialSched :: Scheduler Identity
