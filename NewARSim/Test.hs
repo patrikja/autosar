@@ -34,13 +34,14 @@ comp3 :: AUTOSAR C
 comp3 = atomic $ do
   c1 <- requiredPort
   c2 <- requiredPort
-  runnable (MinInterval 0) [DataReceivedEvent c2] $ do
+  runnableT ["task2" :-> 0] (MinInterval 0) [DataReceivedEvent c2] $ do
     Ok a <- rteRead c1
     Ok b <- rteRead c2
     printlog "comp3" (a, b) 
   return $ seal (c1, c2)
 
--- Declare tasks.
+-- Triggering task2 on c2 works, but triggering on c1 fails since it has data
+-- prior to c2, and comp3 is not pending.
 softw :: AUTOSAR ()
 softw = composition $ do
   a <- comp1
@@ -48,7 +49,8 @@ softw = composition $ do
   (c1, c2) <- comp3
   connect a c1
   connect b c2
-  declareTask "task1" 0.1
+  declareTask "task1" (TimingEvent 0.2)
+  declareTask "task2" (DataReceivedEvent c1)
 
 main :: IO ()
 main = do 
