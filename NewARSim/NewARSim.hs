@@ -331,23 +331,21 @@ apInit conn mp p = p
 
 -- | Decorate a @Task@ process with its state, and check that all tasks have
 -- been assigned runnables.
-taskInit :: Map String [(Int, ProcAddress)]
+taskInit :: HasCallStack => Map String [(Int, ProcAddress)]
          -> Map Address String
          -> Proc
          -> Proc
-taskInit tp na p@(Task a _ _) = 
-  let name  = na Map.! a
+taskInit tp na p@(Task a _ ts) = 
+  let name = na Map.! a
   in  case Map.lookup name tp of
         Nothing -> error $ "Task " ++ show name ++ " was assigned no runnables."
         Just prios ->
           let prios' = map snd $ sortBy (compare `on` fst) prios 
-              ts     = TaskState 
-                         { taskName    = name 
-                         , execProcs   = prios'
-                         , execQueue   = prios' 
-                         , execCurrent = Nothing 
-                         }
           in  Task a Inactive ts 
+                { taskName    = name 
+                , execProcs   = prios'
+                , execQueue   = prios' 
+                }
 taskInit _  _  p = p
 
 -- | Check that all tasks which have been assigned runnables also have been 
@@ -366,24 +364,20 @@ checkTasks tp na = check na' tp'
 
 -- * Handling task state
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- TODO: 
---   * Remove execCurrent, use only execQueue
---   * Time on tasks, remove?
 
 data TaskState = TaskState
   { taskName    :: String 
   , execQueue   :: [ProcAddress]
   , execProcs   :: [ProcAddress]
   , execCurrent :: Maybe ProcAddress
+  , taskTrigger :: Maybe Address
   } deriving Show
 
--- Reset the task state by re-creating the execution queue and setting the task
--- to not execute anything.
-resetTaskState :: TaskState -> TaskState
-resetTaskState ts = ts
-  { execQueue   = execProcs ts
-  , execCurrent = Nothing 
-  }
+trigT :: ConnRel -> Address -> TaskState -> Bool
+trigT conn a ts = 
+  case taskTrigger ts of
+    Nothing -> False
+    Just b  -> a `conn` b
 
 -- Check if runnable is scheduled for execution in the task.
 isRunning :: Address -> TaskState -> Bool
@@ -394,18 +388,21 @@ a `isRunning` ts =
     Just (RInstAddr b _) -> a == b
 
 -- Schedule the next runnable in the task, or schedule nothing.
--- TODO: Just use the execQueue, get rid of execCurrent.
 scheduleNext :: HasCallStack => ProcMap -> Proc -> Proc
 scheduleNext pm p = checkPending next 
   where 
     next = case p of
       Task b Active ts
-        | null (execQueue ts) -> Task b Inactive (resetTaskState ts)
-        | otherwise           -> Task b Active ts 
-                                   { execCurrent = Just $ head $ execQueue ts
-                                   , execQueue   = tail $ execQueue ts
-                                   } 
-      _ -> error "scheduleNext called on inactive or non-task process"
+        | null (execQueue ts) -> 
+          Task b Inactive ts
+            { execCurrent = Nothing
+            , execQueue   = execProcs ts
+            }
+        | otherwise           -> 
+          Task b Active ts 
+            { execCurrent = Just $ head $ execQueue ts
+            , execQueue   = tail $ execQueue ts
+            } 
 
     checkPending :: Proc -> Proc
     checkPending p@(Task _ _ ts) =
@@ -638,15 +635,20 @@ instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
 -- | Declare a task.
 --
 -- TODO:
---   declareTask :: String -> Event c -> AUTOSAR ()
---   declareTask n (TimingEvent t) = ...
---   declareTask n (DataReceivedEvent p) = ...
---
-declareTask :: String -> Time -> AUTOSAR ()
-declareTask n t = do 
+--   Some warnings could be emitted:
+--     * Task time period is GTE max runnable period in task
+--     * Corresponding events
+--     * Concurrent
+declareTask :: String -> Event c -> AUTOSAR ()
+declareTask n event = do 
   a <- newAddress
-  newProcess (Timer a 0.0 t 0)
-  newProcess (Task a Inactive (TaskState "" [] [] Nothing))
+  let ts = TaskState "" [] [] Nothing Nothing
+  case event of 
+    TimingEvent t -> do
+      newProcess (Timer a 0.0 t 0)
+      newProcess (Task a Inactive ts)
+    DataReceivedEvent (DE b) -> 
+      newProcess (Task a Inactive ts { taskTrigger = Just b})
   newTask n a
 
 -- | Runnable without task assignment.
@@ -954,6 +956,10 @@ hear pm conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged
 hear pm conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
 hear pm conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
 hear pm conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
+hear pm conn (WR a _)      (Task b Inactive ts) 
+        | trigT conn a ts                                    = Update $ Task b Ready ts 
+hear pm conn (SND a _ _)   (Task b Inactive ts) 
+        | trigT conn a ts                                    = Update $ Task b Ready ts 
 hear pm conn (TICK a)      (Task b Inactive ts) | a == b     = Update $ Task b Ready ts
 hear pm conn (TERM a)      (Task b Active ts)
         | a `isRunning` ts                                   = Update $ scheduleNext pm (Task b Active ts)
