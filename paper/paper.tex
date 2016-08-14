@@ -111,10 +111,10 @@ Formally,
   t        & \in & \text{Time values} \\
   c        & \in & \text{Clients} \\
   \Act     & \in & \text{Activation states} \\
-  \Srv	   & \in & \text{Call states} \\ \\
+  \Srv     & \in & \text{Call states} \\ \\
   c        & ::= & \Tclient {\Top o p i} m v \sep \Tvoid \\
   \Act     & ::= & \Tidle \sep \Tpending \sep \Cs \\
-  \Srv	   & ::= & \Tcalling t \sep \Tdone v
+  \Srv     & ::= & \Tcalling t \sep \Tdone v
 \end{array}
 \]
 We write $\Vs$ for a sequence of values \V{V}, $\Cs$ for a sequence of clients \V{C}, etc. Sequences may be empty, which is written $\epsilon$. By $\Tlength{\Vs}$ we mean the length of sequence $\Vs$. Left (right) concatenation of an element with a sequence is written $\Tcons{\V{V}}{\V{Vs}}$ ($\Tsnoc{\V{Vs}}{\V{V}}$).
@@ -125,7 +125,7 @@ To this end, we have chosen to ignore all internal computations and just capture
 %
 \[
 \begin{array}{lll}
-  \Code & \in & \text{Code}								\\
+  \Code & \in & \text{Code}                \\
   \Cont & \in & \text{Values} \rightarrow \text{Code}   \\ \\
   \Code & ::= & \Enter x \Cont               \\
         & |   & \Exit x \Cont                \\
@@ -147,17 +147,17 @@ In contrast to code sequences, process terms are completely unordered. This is e
 
 \[
 \begin{array}{rcll}
-  \V{P},\V{Q}   
-  		& ::= & \Trunnable a t {\Act} n	                \\
-        & |   & \Trinst a c {\Xs} {\Code}               \\
-        & |   & \Texcl a u                              \\
-        & |   & \Tirv a v                               \\
-        & |   & \Tdelem a u v                           \\
-        & |   & \Tqelem a n {\Vs}                       \\
-        & |   & \Toper a m \Srv                         \\
-        & |   & \Ttimer a {\V{T_p}} t                   \\
-        & |   & \Tpar p q                               \\
-        & |	  & \Tzero									\\
+  \V{P},\V{Q}
+        & ::= & \Trunnable a t {\Act} n      \\
+        & |   & \Trinst a c {\Xs} {\Code}    \\
+        & |   & \Texcl a u                   \\
+        & |   & \Tirv a v                    \\
+        & |   & \Tdelem a u v                \\
+        & |   & \Tqelem a n {\Vs}            \\
+        & |   & \Toper a m \Srv              \\
+        & |   & \Ttimer a {\V{T_p}} t        \\
+        & |   & \Tpar p q                    \\
+        & |   & \Tzero                       \\
 \end{array}
 \]
 
@@ -183,12 +183,12 @@ where each step
 \]
 states that the system state captured as process term $p_{i-1}$ can evolve into state $p_i$ by means of a single transition labelled $l_i$.
 
-The label $l$ of a transition can essentially be of two kinds, indicating that the affected process either "says" or "hears" something during the transition. Such a label always consists of an address $a$ paired with some additional detail $d$. There is also a special form of "hearing" that denotes letting time pass and which does not carry any address. The different labels are captured in the following grammar. 
+The label $l$ of a transition can essentially be of two kinds, indicating that the affected process either ``says'' or ``hears'' something during the transition. Such a label always consists of an address $a$ paired with some additional detail $d$. There is also a special form of ``hearing'' that denotes letting time pass and which does not carry any address. The different labels are captured in the following grammar.
 \[
 \begin{array}{rcll}
-  l         & ::= & a!d 	    & \hspace{4em}\text{Say  \V{A} and \V{D}} \\
-            & |   & a?d 	    & \hspace{4em}\text{Hear \V{A} and \V{D}} \\
-            & |   & \Tdelta t	& \hspace{4em}\text{Let \V{T} seconds pass} \\
+  l         & ::= & a!d       & \hspace{4em}\text{Say  \V{A} and \V{D}}   \\
+            & |   & a?d       & \hspace{4em}\text{Hear \V{A} and \V{D}}   \\
+            & |   & \Tdelta t & \hspace{4em}\text{Let \V{T} seconds pass} \\
 \end{array}
 \]
 The possible forms of the extra label information \V{D} will be introduced as the different transition rules are defined.
@@ -284,21 +284,21 @@ The semantic transition axioms are written in full in Appendix~\ref{sec:Rules}. 
 An inter-runnable variable (irv) represents state that is local to a particular component and accessible by all runnables of that component. Axioms (5) and (7) show the \emph{say} transitions taken by a runnable instance wishing to read and write an irv $s$. In both cases the embedded continuation $k$ is applied to the command result. The corresponding \emph{hear} transitions of an irv appear as rules (6) and (8). Thanks to inference rule (1), a runnable instance and an irv can now engage in a parallel transition, for example expressing the writing of shared data.
 $$
 \begin{array}{c}
-	\Tpar {\Trinst {i.r} c \Xs {\TrteIrvWrite s v k}}
-	 	  {\Tirv {i.s} \_} \vspace{0.6ex} \\ 
-	\red {\say {i.s} {\Tirvw v}} \\
-	\Tpar {\Trinst {i.r} c \Xs {\Tap k \Tvoid}}
-		  {\Tirv {i.s} v}
+  \Tpar {\Trinst {i.r} c \Xs {\TrteIrvWrite s v k}}
+        {\Tirv {i.s} \_} \vspace{0.6ex} \\
+  \red {\say {i.s} {\Tirvw v}} \\
+  \Tpar {\Trinst {i.r} c \Xs {\Tap k \Tvoid}}
+        {\Tirv {i.s} v}
 \end{array}
 $$
 The corresponding read transition looks as follows:
 $$
 \begin{array}{c}
-	\Tpar {\Trinst {i.r} c \Xs {\TrteIrvRead s k}}
-	 	  {\Tirv {i.s} v} \vspace{0.6ex} \\ 
-	\red {\say {i.s} {\Tirvr v}} \\
-	\Tpar {\Trinst {i.r} c \Xs {\Tap k v}}
-		  {\Tirv {i.s} v}
+  \Tpar {\Trinst {i.r} c \Xs {\TrteIrvRead s k}}
+        {\Tirv {i.s} v} \vspace{0.6ex} \\
+  \red {\say {i.s} {\Tirvr v}} \\
+  \Tpar {\Trinst {i.r} c \Xs {\Tap k v}}
+        {\Tirv {i.s} v}
 \end{array}
 $$
 Section~\ref{sect:Ignore} will show how examples like these can be extended to the case when both participating processes are embedded in arbitrarily large parallel process compositions.
@@ -311,32 +311,32 @@ Note that in the last example above, the read value $v$ flows from the irv proce
 An exclusive area is the AUTOSAR equivalent of a binary semaphore, that can be acquired and released in an atomic fashion by competing runnable instances. Axiom (9) states that a runnable instance wishing to enter exclusive area $x$ may successfully proceed to its continuation $k$ by broadcasting $\say {i.x}{\Tent}$. Axiom (10) expresses that exclusive area $i.x$ accepts hearing an ${\Tent}$ payload if it is currently not taken; i.e., carries the boolean state $\Tfalse$. This makes the following parallel transition possible:
 $$
 \begin{array}{c}
-	\Trinst {i.r} c \Xs {\TrteEnter x k}
-	\Opar
-	\Texcl {i.x} \Tfalse \vspace{0.6ex} \\ 
-	\red {\say {i.x} \Tent} \\
-	\Trinst {i.r} c {\Tcons x \Xs} {\Tap k \Tvoid}
-	\Opar
-	\Texcl {i.x} \Ttrue
+  \Trinst {i.r} c \Xs {\TrteEnter x k}
+  \Opar
+  \Texcl {i.x} \Tfalse \vspace{0.6ex} \\
+  \red {\say {i.x} \Tent} \\
+  \Trinst {i.r} c {\Tcons x \Xs} {\Tap k \Tvoid}
+  \Opar
+  \Texcl {i.x} \Ttrue
 \end{array}
 $$
 Exiting from an exclusive area is simply the reverse, as defined in axioms (11) and (12):
 $$
 \begin{array}{c}
-	\Trinst {i.r} c {\Tcons x \Xs} {\TrteExit x k}
-	\Opar
-	\Texcl {i.x} \Ttrue \vspace{0.6ex} \\ 
-	\red {\say {i.x} \Tex} \\
-	\Trinst {i.r} c \Xs {\Tap k \Tvoid}
-	\Opar
-	\Texcl {i.x} \Tfalse
+  \Trinst {i.r} c {\Tcons x \Xs} {\TrteExit x k}
+  \Opar
+  \Texcl {i.x} \Ttrue \vspace{0.6ex} \\
+  \red {\say {i.x} \Tex} \\
+  \Trinst {i.r} c \Xs {\Tap k \Tvoid}
+  \Opar
+  \Texcl {i.x} \Tfalse
 \end{array}
 $$
 
 Because axiom (10) is only defined for exclusive areas in the not taken state, there is no way to derive any parallel transition of the following form:
 $$
 \begin{array}{c}
-	p \Opar {\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} \ldots \\
+  p \Opar {\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} \ldots \\
 \end{array}
 $$
 This means that any runnable instance in $p$ wishing to enter $x$ is effectively blocked from making progress until some other process in $p$ choses to exit $x$. In the same manner, a process wishing to exit an exclusive area not taken is also effectively blocked. The conditions on exiting are actually stronger than those that govern entering, since axiom (11) is only applicable to a runnable instance for which the exited area $x$ is at the top of its stack of acquired exclusive areas (as expressed by the sequence pattern $\Tcons x \Xs$). An exclusive area can thus only be exited by the process that entered it, and only in the reverse order of entering. Section~\ref{sect:DiscExcl} will bring up some alternatives to this semantics, and also discuss the interpretation of blocked processes in more detail.
@@ -344,26 +344,26 @@ This means that any runnable instance in $p$ wishing to enter $x$ is effectively
 
 \subsection{Unbuffered sending/receiving}
 
-Axioms (13) and (15) define unbuffered interprocess communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (7)). A data element ({\bf delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (14) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-confition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns such that $\Tconnect {i.p.e} a$ and $\Tconnect {i.p.e} b$ are simultaneously true, parallel data element updates like the following are possible:
+Axioms (13) and (15) define unbuffered interprocess communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (7)). A data element (\textbf{delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (14) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-confition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns such that $\Tconnect {i.p.e} a$ and $\Tconnect {i.p.e} b$ are simultaneously true, parallel data element updates like the following are possible:
 $$
 \begin{array}{c}
-	\Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
-	{\Tdelem a \_ \_} \Opar {\Tdelem b \_ \_} \vspace{0.6ex} \\
-	\red{\say{i.p.e}{\Twr v}} \\
-	\Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
-	{\Tdelem a \Ttrue v} \Opar {\Tdelem b \Ttrue v}
+  \Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
+  {\Tdelem a \_ \_} \Opar {\Tdelem b \_ \_} \vspace{0.6ex} \\
+  \red{\say{i.p.e}{\Twr v}} \\
+  \Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
+  {\Tdelem a \Ttrue v} \Opar {\Tdelem b \Ttrue v}
 \end{array}
 $$
 As an aside, note that the associativity of the parallel composition operator is made entirely irrelevant by the symmetric shape of transition rules (1) and (2).
 
-Axiom (17) provides another means of intepreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $a$ should be marked as {\bf pending} whenever a write occurs on an element connected to $a$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
+Axiom (17) provides another means of intepreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $a$ should be marked as \textbf{pending} whenever a write occurs on an element connected to $a$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
 $$
 \begin{array}{c}
-	\Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
-	{\Tdelem a \_ \_} \Opar {\Trunnable b t \_ n} \vspace{0.6ex} \\
-	\red{\say{i.p.e}{\Twr v}} \\
-	\Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
-	{\Tdelem a \Ttrue v} \Opar {\Trunnable b t \Tpending n}
+  \Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
+  {\Tdelem a \_ \_} \Opar {\Trunnable b t \_ n} \vspace{0.6ex} \\
+  \red{\say{i.p.e}{\Twr v}} \\
+  \Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
+  {\Tdelem a \Ttrue v} \Opar {\Trunnable b t \Tpending n}
 \end{array}
 $$
 Transitions that actually create an instance of a pending runnable will be introduced in Section~\ref{sect:SpawnTerm}.
@@ -373,80 +373,80 @@ A data element can also be queried for its update status flag, and be marked as 
 
 \subsection{Buffered sending/receiving}
 
-Buffered interprocess communication (axioms (22) - (30)) is just a minor variant of the unbuffered mechanism, where the single-value store of a {\bf delem} term is replaced by a {\bf qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (23)) and extended to the right (axiom (27)). When the buffer is empty, the special value (error code) {\bf nodata} is returned to receiving runnable instances (axiom (24)). When the buffer is at its maximum capacity, the communicated value is simply dropped (axiom (28)).
+Buffered interprocess communication (axioms (22) - (30)) is just a minor variant of the unbuffered mechanism, where the single-value store of a \textbf{delem} term is replaced by a \textbf{qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (23)) and extended to the right (axiom (27)). When the buffer is empty, the special value (error code) \textbf{nodata} is returned to receiving runnable instances (axiom (24)). When the buffer is at its maximum capacity, the communicated value is simply dropped (axiom (28)).
 
-However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the {\em snd} transition, listing the addresses of connected {\bf qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. Precondition $\Tconnect {i.p.e} \Tvar{as}$ in axiom (26) should be read $\Tconnect {i.p.e} a$ for all $a \in \Tvar{as}$, and its purpose is to outrule irrelevant addresses in $\Tvar{as}$ causing bogus {\bf limit} results.
+However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the \emph{snd} transition, listing the addresses of connected \textbf{qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. Precondition $\Tconnect {i.p.e} \Tvar{as}$ in axiom (26) should be read $\Tconnect {i.p.e} a$ for all $a \in \Tvar{as}$, and its purpose is to outrule irrelevant addresses in $\Tvar{as}$ causing bogus \textbf{limit} results.
 
 The following example illustrates a scenario where a sent value is only stored in a subset of the connected buffers. Assuming $\Tconnect {\Tep e p i} {a_1}$ and $\Tconnect {\Tep e p i} {a_2}$:
 $$
 \begin{array}{c}
-	\Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
-	{\Tqelem {a_1} 2 \Teps} \Opar {\Tqelem {a_2} 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
-	\red{\say{i.p.e}{\Tsnd v {a_2}}} \\
-	\Trinst {i.r} c \Xs {\Tap k \Tlimit} \,\Opar \\
-	{\Tqelem {a_1} 2 v} \Opar {\Tqelem {a_2} 2 {\Tcons {v_1} {v_2}}}
+  \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
+  {\Tqelem {a_1} 2 \Teps} \Opar {\Tqelem {a_2} 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
+  \red{\say{i.p.e}{\Tsnd v {a_2}}} \\
+  \Trinst {i.r} c \Xs {\Tap k \Tlimit} \,\Opar \\
+  {\Tqelem {a_1} 2 v} \Opar {\Tqelem {a_2} 2 {\Tcons {v_1} {v_2}}}
 \end{array}
 $$
 
 
 \subsection{Calling a server}
 
-The behavior of client-server communication in AUTOSAR depends on whether a client lists the required server port operation as a synchronous or an asynchronous callpoint (which are mutually exclusive model attributes). In the former case, the call command is treated as if it were immediately followed by a command for retrieving the server result (axiom (31)), whereas in the latter case, the call succeeds immediately and the result has to be retireved explicitly by the client's continuation code (axiom (32)). In both cases, however, an attempt to call the server before it is done processing a previous asynchronous call leads to immediate abortion with the error code {\bf limit} (axiom (35)). 
+The behavior of client-server communication in AUTOSAR depends on whether a client lists the required server port operation as a synchronous or an asynchronous callpoint (which are mutually exclusive model attributes). In the former case, the call command is treated as if it were immediately followed by a command for retrieving the server result (axiom (31)), whereas in the latter case, the call succeeds immediately and the result has to be retireved explicitly by the client's continuation code (axiom (32)). In both cases, however, an attempt to call the server before it is done processing a previous asynchronous call leads to immediate abortion with the error code \textbf{limit} (axiom (35)).
 
 The AUTOSAR specification restricts client-server connections to the many-to-one pattern only, assigning a dedicated runnable resposible for implementing the offered service. It furthermore forbids runnables to be triggered by any events other than operation invocations of compatible signatures, making it natural to associate the state needed to buffer up server invocations with the server runnables themselves. On the other hand, the specification also introduces timeouts and sequence counters that are private to each connection, which is why our calculus needs process terms that correspond to each required (i.e., client-side) operation as well. Axiom (33) shows how the current sequence counter $m$ blazes a call transition if the client-side operation is not already busy, while the busy case is detected in axiom (36). In axiom (34), a successful call transition causes the client identifier $a$ to be buffered up in the server runnable together with sequence number $m$ and call parameter $v$. Axiom (37) lets a server runnable ignore an aborted call attempt.
 
 Here is an example of how a client runnable instance, a client port operation, and a server runnable interact during a call transition (assuming $b = {i_2.r_2}$, $\ToperationInvokedEvent b {p_2.o}$, $\Tconnect {i_2.p_2.o} {i.p.o}$, and $\TserverCallPointTimeout{i.p.o} t $).
 $$
 \begin{array}{c}
-	{\Trinst {i.r} c \Xs {\TrteCall {p.o} v k}} \,\Opar  \\
-	{\Toper {i.p.o} m {\Tdone \Tnodata}} \Opar \\
-	{\Trunnable b 0 \Cs 0} \vspace{0.6ex} \\
-	\red{\say{i.p.o}{\Tcall m v}} \\
-	{\Trinst {i.r} c \Xs {\Tap k \Tok}} \,\Opar \\
-	{\Toper {i.p.o} m {\Tcalling t}} \Opar \\
-	{\Trunnable b 0 {\Tcons \Cs {\Tclient {i.p.o} m v}}  0} 
+  {\Trinst {i.r} c \Xs {\TrteCall {p.o} v k}} \,\Opar  \\
+  {\Toper {i.p.o} m {\Tdone \Tnodata}} \Opar \\
+  {\Trunnable b 0 \Cs 0} \vspace{0.6ex} \\
+  \red{\say{i.p.o}{\Tcall m v}} \\
+  {\Trinst {i.r} c \Xs {\Tap k \Tok}} \,\Opar \\
+  {\Toper {i.p.o} m {\Tcalling t}} \Opar \\
+  {\Trunnable b 0 {\Tcons \Cs {\Tclient {i.p.o} m v}}  0}
 \end{array}
 $$
 
 
 \subsection{Passing back a server result}
 
-The {\em result} command can appear as an implicit effect of a previous call command, if the operation invoked is marked as an {\em synchronousServerCallPoint} (c.f.\ axiom (31)). It can also be referenced explicitly in a client runnable's code, if the current runnable lists the operation as an {\em asynchronousServerCallPoint}). For the synchronous case, axiom (38) excludes {\bf nodata} values, which effectively blocks progress of the caller until a server result distinct from {\bf nodata} has been produced. The asynchronous case of axiom (39) has no value restrictions, so it will happily pass back the {\bf nodata} tag as well as an indication that a result is not yet available.
+The \emph{result} command can appear as an implicit effect of a previous call command, if the operation invoked is marked as an \emph{synchronousServerCallPoint} (c.f.\ axiom (31)). It can also be referenced explicitly in a client runnable's code, if the current runnable lists the operation as an \emph{asynchronousServerCallPoint}). For the synchronous case, axiom (38) excludes \textbf{nodata} values, which effectively blocks progress of the caller until a server result distinct from \textbf{nodata} has been produced. The asynchronous case of axiom (39) has no value restrictions, so it will happily pass back the \textbf{nodata} tag as well as an indication that a result is not yet available.
 
-The state keeping track of a call's status resides in the {\bf oper} term of a connection. Axiom (40) defines that {\bf nodata} is the result provided while a call is open, whereas axiom (41) returns the stored result once a call has completed. 
+The state keeping track of a call's status resides in the \textbf{oper} term of a connection. Axiom (40) defines that \textbf{nodata} is the result provided while a call is open, whereas axiom (41) returns the stored result once a call has completed.
 
-A server runnable instance is identified by a client parameter distinct from $\Tvoid$. Axiom (42) says that when such a runnable instance reaches the end of its code sequence, it must emit the produced value together with the sequence number and {\bf oper} address of its current invocation, before it is allowed to terminate (see Section~\ref{sect:SpawnTerm}). The addressed {\bf oper} term reacts according to axiom (43), by completing the call, storing the produced value and increasing its sequence counter in preparation for the next call. However, should the {\bf oper} timeout counter reach zero before a transition according to (43) can be taken, the client is obliged to unilaterally terminate the call and set the result to error code {\bf timeout} (axiom (44)). Axiom (45) enables the completion of a call---successfully or via a timeout---to trigger a subscribing runnable (can be distinct from the original client).
+A server runnable instance is identified by a client parameter distinct from $\Tvoid$. Axiom (42) says that when such a runnable instance reaches the end of its code sequence, it must emit the produced value together with the sequence number and \textbf{oper} address of its current invocation, before it is allowed to terminate (see Section~\ref{sect:SpawnTerm}). The addressed \textbf{oper} term reacts according to axiom (43), by completing the call, storing the produced value and increasing its sequence counter in preparation for the next call. However, should the \textbf{oper} timeout counter reach zero before a transition according to (43) can be taken, the client is obliged to unilaterally terminate the call and set the result to error code \textbf{timeout} (axiom (44)). Axiom (45) enables the completion of a call---successfully or via a timeout---to trigger a subscribing runnable (can be distinct from the original client).
 
-Because of call timeouts, server runnables run the risk of producing results that the original client is not waiting for anymore. Detecting such mismatches is the job of sequence numbers, as witnessed by the requirement in axiom (43) that the sequence numbers returned by the server and expected by the client must be identical (variable $m$). However, there must also exist a means for server runnables to simply discard their results, otherwise they would not be able to terminate. Axiom (46) therefore defines an alternative transition for finished servers, applicable on the condition that the returned sequence number does {\em not} match what the client expects (axiom (47)). By means of axiom (48), runnables can ignore the corresponding transition.
+Because of call timeouts, server runnables run the risk of producing results that the original client is not waiting for anymore. Detecting such mismatches is the job of sequence numbers, as witnessed by the requirement in axiom (43) that the sequence numbers returned by the server and expected by the client must be identical (variable $m$). However, there must also exist a means for server runnables to simply discard their results, otherwise they would not be able to terminate. Axiom (46) therefore defines an alternative transition for finished servers, applicable on the condition that the returned sequence number does \emph{not} match what the client expects (axiom (47)). By means of axiom (48), runnables can ignore the corresponding transition.
 
 An example of a normal server result interaction can look as follows:
 $$
 \begin{array}{c}
-	{\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-	{\Toper {i.p.o} {91} {\Tcalling t}} \vspace{0.6ex} \\
-	\red{\say{i.p.o}{\Tret {91} v}} \\
-	{\Trinst b \Tvoid \Xs {\Treturn \Tvoid}} \,\Opar \\
-	{\Toper {i.p.o} {92} {\Tdone v}}
+  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
+  {\Toper {i.p.o} {91} {\Tcalling t}} \vspace{0.6ex} \\
+  \red{\say{i.p.o}{\Tret {91} v}} \\
+  {\Trinst b \Tvoid \Xs {\Treturn \Tvoid}} \,\Opar \\
+  {\Toper {i.p.o} {92} {\Tdone v}}
 \end{array}
 $$
 As a contrast, this is the behavior observed when a call timeout occurs:
 $$
 \begin{array}{c}
-	{\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-	{\Toper {i.p.o} {91} {\Tcalling 0}} \vspace{0.6ex} \\
-	\red{\say{i.p.o}{\Tret {91} \Ttimeout}} \\
-	{\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-	{\Toper {i.p.o} {92} {\Tdone \Ttimeout}}
+  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
+  {\Toper {i.p.o} {91} {\Tcalling 0}} \vspace{0.6ex} \\
+  \red{\say{i.p.o}{\Tret {91} \Ttimeout}} \\
+  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
+  {\Toper {i.p.o} {92} {\Tdone \Ttimeout}}
 \end{array}
 $$
 The processes are now in a state where runnable instance $b$ is prohibited from doing a normal return. Progress is only possible via axioms (46) and (47).
 $$
 \begin{array}{c}
-	{\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-	{\Toper {i.p.o} {92} {\Tdone \Ttimeout}} \vspace{0.6ex} \\
-	\red{\say{i.p.o}{\Tskip {91}}} \\
-	{\Trinst b \Tvoid \Xs {\Treturn \Tvoid}} \,\Opar \\
-	{\Toper {i.p.o} {92} {\Tdone \Ttimeout}}
+  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
+  {\Toper {i.p.o} {92} {\Tdone \Ttimeout}} \vspace{0.6ex} \\
+  \red{\say{i.p.o}{\Tskip {91}}} \\
+  {\Trinst b \Tvoid \Xs {\Treturn \Tvoid}} \,\Opar \\
+  {\Toper {i.p.o} {92} {\Tdone \Ttimeout}}
 \end{array}
 $$
 
@@ -456,7 +456,7 @@ $$
 Runnables with an activation state distinct from $\Tidle$ or $\Teps$ are amenable to instantiation. Axiom (49) defines this crucial step for runnables triggered by all types of events except server invocation, which is instead handled by axiom (50). Both rules have many details in common:
 \begin{itemize}
 \item They apply only when the runnable instantiation timer (parameter two) has reached zero.
-\item They reset the timer to a model-defined {\em minimumStartInterval} to disable further instantiation immediately after a new instance is born.
+\item They reset the timer to a model-defined \emph{minimumStartInterval} to disable further instantiation immediately after a new instance is born.
 \item They are guarded by the condition that the current number of runnable instances (fourth parameter) is either zero, or the runnable has been defined to accept concurrent invocations.
 \item They make the runnable keep track of the new number of instances.
 \item They let the new instance inherit the address of its parent runnable.
@@ -474,12 +474,12 @@ The transition label of axioms (49) and (59) is noteworthy because it is not mat
 Complementing the notion of spawning is a mechanism for runnable instance termination. An instance with a $\Tvoid$ client parameter (either acquired natively, or via axioms (42) or (46)) transforms into the terminated process $\Tzero$ as defined in axiom (51). Since this term is the unit of parallel process composition, it is silently absorbed by any other process in parallel with it. The instance termination is also noted by the associated runnable parent, which reacts by decrementing its current instance counter (axiom (52)). An example of this interaction follows below.
 $$
 \begin{array}{c}
-	{\Trunnable b t \Act 3} \Opar
-	{\Trinst b \Tvoid \Teps {\Treturn v}} \vspace{0.6ex} \\
-	\red{\say{i.p.o}{\Tterm}} \\
-	{\Trunnable b t \Act 2} \Opar \Tzero \\
-	\equiv \\
-	{\Trunnable b t \Act 2}
+  {\Trunnable b t \Act 3} \Opar
+  {\Trinst b \Tvoid \Teps {\Treturn v}} \vspace{0.6ex} \\
+  \red{\say{i.p.o}{\Tterm}} \\
+  {\Trunnable b t \Act 2} \Opar \Tzero \\
+  \equiv \\
+  {\Trunnable b t \Act 2}
 \end{array}
 $$
 
@@ -490,43 +490,43 @@ In common with most real-time process calculi, the concept of passing time in ou
 
 The passage of time is captured as a special transition relation $\red {\Tdelta t}$, whose only effect on the related process terms is to decrement any contained time variables by $t$. For some processes time cannot advance until a particular work transition has been taken; this corresponds to time events that must be noted (although not necessarily acted upon) at the exact time instance when they occur. Yet other processes can only take time transitions, which simply means that they represent an idle system that currently has no work to do. Mostly, though, work and time transitions are simltaneously available, indicating that the semantics considers the slightly slower and sligthly faster behavior alternatives to be equally correct.
 
-Most process terms actually ignore the passage of time, which is expressed by axioms (53) to (58). In axiom (59), an {\bf oper} term in the {\bf calling} state lets time pass by decrementing its timeout counter. The counter is not allowed to go negative, though, which forces the {\bf oper} term to handle the timeout once the counter reaches zero (c.f.\ axiom (44)). Axiom (60) defines a similar behavior for the start interval timer of a runnable, although this timer is also allowed to slip behind further time updates once it has reached zero (axiom (61)). The reason for this is that the interval timers do not enforce any particular action when they time out, they just enable new transition options that do not have to be taken immediately.
+Most process terms actually ignore the passage of time, which is expressed by axioms (53) to (58). In axiom (59), an \textbf{oper} term in the \textbf{calling} state lets time pass by decrementing its timeout counter. The counter is not allowed to go negative, though, which forces the \textbf{oper} term to handle the timeout once the counter reaches zero (c.f.\ axiom (44)). Axiom (60) defines a similar behavior for the start interval timer of a runnable, although this timer is also allowed to slip behind further time updates once it has reached zero (axiom (61)). The reason for this is that the interval timers do not enforce any particular action when they time out, they just enable new transition options that do not have to be taken immediately.
 
-A timer process, finally, decrements its counter according to axiom (62). When the counter has become zero, the timer is forced to take the tick transition of axiom (63), which also resets the counter to its static period value $t_p$. The net effect of such a transition is that the runnable to which the ticking timer belongs is put into the {\bf pending} state (axiom (64)). An example of a transition sequence involving a time-triggered runnable follows below.
+A timer process, finally, decrements its counter according to axiom (62). When the counter has become zero, the timer is forced to take the tick transition of axiom (63), which also resets the counter to its static period value $t_p$. The net effect of such a transition is that the runnable to which the ticking timer belongs is put into the \textbf{pending} state (axiom (64)). An example of a transition sequence involving a time-triggered runnable follows below.
 $$
 \begin{array}{c}
-	{\Trunnable a 0 \Tidle 0} \Opar
-	{\Ttimer a {2.5} {0.3}} \vspace{0.6ex} \\
-	\red{\Tdelta {0.3}} \\
-	{\Trunnable a 0 \Tidle 0} \Opar
-	{\Ttimer a {2.5} 0} \vspace{0.6ex} \\
-	\red{\say a \Ttick} \\
-	{\Trunnable a 0 \Tpending 0} \Opar
-	{\Ttimer a {2.5} {2.5}} \vspace{0.6ex} \\
-	\red{\say a \Tnew} \\
-	{\Trunnable a {0.8} \Tidle 1} \Opar
-	{\Ttimer a {2.5} {2.5}} \,\Opar \\
-	{\Trinst a \Tvoid \Teps {\Code_1}} \vspace{0.6ex} \\
-	\longrightarrow \cdots \longrightarrow \\
-	{\Trunnable a {0.8} \Tidle 1} \Opar
-	{\Ttimer a {2.5} {2.5}} \,\Opar \\
-	{\Trinst a \Tvoid \Teps {\Code_2}} \vspace{0.6ex} \\
-	\red{\Tdelta {0.8}} \\
-	{\Trunnable a 0 \Tidle 1} \Opar
-	{\Ttimer a {2.5} {1.7}} \,\Opar \\
-	{\Trinst a \Tvoid \Teps {\Code_2}} \vspace{0.6ex} \\
-	\longrightarrow \cdots \longrightarrow \\
-	{\Trunnable a 0 \Tidle 1} \Opar
-	{\Ttimer a {2.5} {2.5}} \,\Opar \\
-	{\Trinst a \Tvoid \Teps {\Treturn \Tvoid}} \vspace{0.6ex} \\
-	\red{\say a \Tterm} \\
-	{\Trunnable a 0 \Tidle 0} \Opar
-	{\Ttimer a {2.5} {1.7}} \vspace{0.6ex} \\
-	\red{\Tdelta {1.5}} \cdots \red{\Tdelta {0.2}} \\
-	{\Trunnable a 0 \Tidle 0} \Opar
-	{\Ttimer a {2.5} 0} \vspace{0.6ex} \\
-	\red{\say a \Ttick} \\
-	\cdots
+  {\Trunnable a 0 \Tidle 0} \Opar
+  {\Ttimer a {2.5} {0.3}} \vspace{0.6ex} \\
+  \red{\Tdelta {0.3}} \\
+  {\Trunnable a 0 \Tidle 0} \Opar
+  {\Ttimer a {2.5} 0} \vspace{0.6ex} \\
+  \red{\say a \Ttick} \\
+  {\Trunnable a 0 \Tpending 0} \Opar
+  {\Ttimer a {2.5} {2.5}} \vspace{0.6ex} \\
+  \red{\say a \Tnew} \\
+  {\Trunnable a {0.8} \Tidle 1} \Opar
+  {\Ttimer a {2.5} {2.5}} \,\Opar \\
+  {\Trinst a \Tvoid \Teps {\Code_1}} \vspace{0.6ex} \\
+  \longrightarrow \cdots \longrightarrow \\
+  {\Trunnable a {0.8} \Tidle 1} \Opar
+  {\Ttimer a {2.5} {2.5}} \,\Opar \\
+  {\Trinst a \Tvoid \Teps {\Code_2}} \vspace{0.6ex} \\
+  \red{\Tdelta {0.8}} \\
+  {\Trunnable a 0 \Tidle 1} \Opar
+  {\Ttimer a {2.5} {1.7}} \,\Opar \\
+  {\Trinst a \Tvoid \Teps {\Code_2}} \vspace{0.6ex} \\
+  \longrightarrow \cdots \longrightarrow \\
+  {\Trunnable a 0 \Tidle 1} \Opar
+  {\Ttimer a {2.5} {2.5}} \,\Opar \\
+  {\Trinst a \Tvoid \Teps {\Treturn \Tvoid}} \vspace{0.6ex} \\
+  \red{\say a \Tterm} \\
+  {\Trunnable a 0 \Tidle 0} \Opar
+  {\Ttimer a {2.5} {1.7}} \vspace{0.6ex} \\
+  \red{\Tdelta {1.5}} \cdots \red{\Tdelta {0.2}} \\
+  {\Trunnable a 0 \Tidle 0} \Opar
+  {\Ttimer a {2.5} 0} \vspace{0.6ex} \\
+  \red{\say a \Ttick} \\
+  \cdots
 \end{array}
 $$
 
@@ -556,7 +556,7 @@ TODO: some links from rules and choices made here to the AUTOSAR spec
 \subsection{Clarification proposals and improvements}
 \label{sec:DiscImp}
 
-irv without initValue vs.\ delem without initValue -- "undefined" vs.\ NO\_DATA at initial read.
+irv without initValue vs.\ delem without initValue -- ``undefined'' vs.\ NO\_DATA at initial read.
 
 Multiple runnables triggered by same OperationInvokedEvent?
 
