@@ -534,8 +534,16 @@ $$
 
 \subsection{Ignoring broadcasts} \label{sect:Ignore}
 
+Although our chosen mechanism for coordinating transitions among process terms goes under the name {\em broadcast}, there is no implication that every process must react to everything being said --- the intent is rather that a process term not directly or indirectly addressed in a transition should be allowed to ignore it. One could try to express this as some form of "catch-up" rule $p \red{l} p$, that would apply only if none of the axioms (5) to (64) match $p$ and $l$. However, such a rule would be too liberal, as it would also enable transitions that are deliberately omitted from the previous axioms, like ${\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} {\Texcl {i.x} \Ttrue}$ (granting entry to an exclusive area already taken). 
+
+Instead we need a more restrictive rule, that applies to processes not addressed by earlier axioms but avoids those previously excluded by restrictive patterns and other side-conditions. To make this idea precise, however, we need to split the rule according to the different forms of $p$ so that the addressing notion of each process type can be individually captured. Axioms (65) to (72) contain the resulting definitions.
+
+Runnable instances and timers can ignore everything being said by others, as they define no hearing transitions proper that need to be excluded here (axioms (65) and (66)). Exclusive areas, inter-runnable variables and operation terms have hearing transitions previously defined, but only for label addresses matching their own; they can thus safely ignore transitions labelled with any other address. 
+Axioms (70) to (72) constitute the non-trivial cases, because here there are multiple earlier definitions to exclude, which also link label and process addresses via static model references. Still, it can be verified that each of the axioms (70) to (72) is guarded by an exact negation of the addressing conditions of any previously defined hearing transition for the same process type. 
 
 
+
+\subsection{TODO}
 
 TODO: some links from rules and choices made here to the AUTOSAR spec
 
@@ -606,9 +614,11 @@ Return to the limitation - what is the next step (which can be lifted more easil
 %TODO: RuleLong?
 \subsection{Calling a server}
 
-\renewcommand\Pcomma{\nonumber \\&&\text{and}\;\;}
+\renewcommand\Pcomma{\nonumber \;\text{and}\;}
 
 \begin{eqnarray}      \CallServer              \notag \end{eqnarray}
+
+\renewcommand\Pcomma{\nonumber \\&&\text{and}\;\;}
 
 \subsection{Passing back a server result}
 \begin{eqnarray}      \ServerResult            \notag \end{eqnarray}
