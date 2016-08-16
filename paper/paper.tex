@@ -275,7 +275,7 @@ Some further static model information will also be referenced by the transition 
 
 We expect the implementation of a runnable to be available as a continuation function $\Cont$, even though the real AUTOSAR model will be refering to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these functions by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments or results will be replaced by the unit value $\Tvoid$.
 
-We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\TdataReceivedEvent {i.r} {p.e}$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $p.e$ (in component $i$). Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
+We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\TdataReceivedEvent {i.r} {i.p.e}$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $i.p.e$. Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
 
 The semantic transition axioms are written in full in Appendix~\ref{sec:Rules}. We will discuss each group of axioms in turn, starting with the relatively simple behaviour of inter-runnable variables and exclusive areas. In most cases, the driving force behind a transition is some runnable instance wishing to say something which other processes either react to or ignore. How the runnable instances themselves come into existence will be detailed in Section~\ref{sect:SpawnTerm}.
 
@@ -371,20 +371,20 @@ Transitions that actually create an instance of a pending runnable will be intro
 A data element can also be queried for its update status flag, and be marked as carrying no valid value. Axioms (18)-(21) define the corresponding transitions.
 
 
-\subsection{Buffered sending/receiving}
+\subsection{Buffered sending/receiving} \label{sect:BufSndRcv}
 
 Buffered interprocess communication (axioms (22) - (30)) is just a minor variant of the unbuffered mechanism, where the single-value store of a \textbf{delem} term is replaced by a \textbf{qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (23)) and extended to the right (axiom (27)). When the buffer is empty, the special value (error code) \textbf{nodata} is returned to receiving runnable instances (axiom (24)). When the buffer is at its maximum capacity, the communicated value is simply dropped (axiom (28)).
 
-However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the \emph{snd} transition, listing the addresses of connected \textbf{qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. Precondition $\Tconnect {i.p.e} \Tvar{as}$ in axiom (26) should be read $\Tconnect {i.p.e} a$ for all $a \in \Tvar{as}$, and its purpose is to outrule irrelevant addresses in $\Tvar{as}$ causing bogus \textbf{limit} results.
+However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the \emph{snd} transition, listing the addresses of connected \textbf{qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. By requiring connectivity for all $a$ in $\Tvar{as}$ in axiom (26), the possibility of letting irrelevant addresses in $\Tvar{as}$ cause bogus \textbf{limit} results is outruled.
 
-The following example illustrates a scenario where a sent value is only stored in a subset of the connected buffers. Assuming $\Tconnect {\Tep e p i} {a_1}$ and $\Tconnect {\Tep e p i} {a_2}$:
+The following example illustrates a scenario where a sent value is only stored in a subset of the connected buffers. Assuming $\Tconnect {\Tep e p i} a$ and $\Tconnect {\Tep e p i} b$:
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
-  {\Tqelem {a_1} 2 \Teps} \Opar {\Tqelem {a_2} 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
+  {\Tqelem a 2 \Teps} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
   \red{\say{i.p.e}{\Tsnd v {a_2}}} \\
   \Trinst {i.r} c \Xs {\Tap k \Tlimit} \,\Opar \\
-  {\Tqelem {a_1} 2 v} \Opar {\Tqelem {a_2} 2 {\Tcons {v_1} {v_2}}}
+  {\Tqelem a 2 v} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}}
 \end{array}
 $$
 
@@ -395,7 +395,7 @@ The behavior of client-server communication in AUTOSAR depends on whether a clie
 
 The AUTOSAR specification restricts client-server connections to the many-to-one pattern only, assigning a dedicated runnable resposible for implementing the offered service. It furthermore forbids runnables to be triggered by any events other than operation invocations of compatible signatures, making it natural to associate the state needed to buffer up server invocations with the server runnables themselves. On the other hand, the specification also introduces timeouts and sequence counters that are private to each connection, which is why our calculus needs process terms that correspond to each required (i.e., client-side) operation as well. Axiom (33) shows how the current sequence counter $m$ blazes a call transition if the client-side operation is not already busy, while the busy case is detected in axiom (36). In axiom (34), a successful call transition causes the client identifier $a$ to be buffered up in the server runnable together with sequence number $m$ and call parameter $v$. Axiom (37) lets a server runnable ignore an aborted call attempt.
 
-Here is an example of how a client runnable instance, a client port operation, and a server runnable interact during a call transition (assuming $b = {i_2.r_2}$, $\ToperationInvokedEvent b {p_2.o}$, $\Tconnect {i_2.p_2.o} {i.p.o}$, and $\TserverCallPointTimeout{i.p.o} t $).
+Here is an example of how a client runnable instance, a client port operation, and a server runnable interact during a call transition (assuming $\ToperationInvokedEvent b a$, $\Tconnect a {i.p.o}$, and $\TserverCallPointTimeout{i.p.o} t $).
 $$
 \begin{array}{c}
   {\Trinst {i.r} c \Xs {\TrteCall {p.o} v k}} \,\Opar  \\
@@ -492,7 +492,7 @@ The passage of time is captured as a special transition relation $\red {\Tdelta 
 
 Most process terms actually ignore the passage of time, which is expressed by axioms (53) to (58). In axiom (59), an \textbf{oper} term in the \textbf{calling} state lets time pass by decrementing its timeout counter. The counter is not allowed to go negative, though, which forces the \textbf{oper} term to handle the timeout once the counter reaches zero (c.f.\ axiom (44)). Axiom (60) defines a similar behavior for the start interval timer of a runnable, although this timer is also allowed to slip behind further time updates once it has reached zero (axiom (61)). The reason for this is that the interval timers do not enforce any particular action when they time out, they just enable new transition options that do not have to be taken immediately.
 
-A timer process, finally, decrements its counter according to axiom (62). When the counter has become zero, the timer is forced to take the tick transition of axiom (63), which also resets the counter to its static period value $t_p$. The net effect of such a transition is that the runnable to which the ticking timer belongs is put into the \textbf{pending} state (axiom (64)). An example of a transition sequence involving a time-triggered runnable follows below.
+A timer process, finally, decrements its counter according to axiom (62). When the counter has become zero, the timer is forced to take the $\payload{tick}$ transition of axiom (63), which also resets the counter to its static period value $t_p$. The net effect of such a transition is that the runnable to which the ticking timer belongs is put into the \textbf{pending} state (axiom (64)). An example of a transition sequence involving a time-triggered runnable follows below.
 $$
 \begin{array}{c}
   {\Trunnable a 0 \Tidle 0} \Opar
@@ -540,6 +540,17 @@ Instead we need a more restrictive rule, that applies to processes not addressed
 
 Runnable instances and timers can ignore everything being said by others, as they define no hearing transitions proper that need to be excluded here (axioms (65) and (66)). Exclusive areas, inter-runnable variables and operation terms have hearing transitions previously defined, but only for label addresses matching their own; they can thus safely ignore transitions labelled with any other address. 
 Axioms (70) to (72) constitute the non-trivial cases, because here there are multiple earlier definitions to exclude, which also link label and process addresses via static model references. Still, it can be verified that each of the axioms (70) to (72) is guarded by an exact negation of the addressing conditions of any previously defined hearing transition for the same process type. 
+
+As an example, consider the example of Section~\ref{sect:BufSndRcv} under the different assumption that only $\Tconnect{{i.p.e} a}$ holds, with no connection from ${i.p.e}$ to $b$.
+$$
+\begin{array}{c}
+  \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
+  {\Tqelem a 2 \Teps} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
+  \red{\say{i.p.e}{\Tsnd v \Teps}} \\
+  \Trinst {i.r} c \Xs {\Tap k \Tok} \,\Opar \\
+  {\Tqelem a 2 v} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}}
+\end{array}
+$$
 
 
 
