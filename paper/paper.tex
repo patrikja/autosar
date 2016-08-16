@@ -382,7 +382,7 @@ $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
   {\Tqelem a 2 \Teps} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
-  \red{\say{i.p.e}{\Tsnd v {a_2}}} \\
+  \red{\say{i.p.e}{\Tsnd v b}} \\
   \Trinst {i.r} c \Xs {\Tap k \Tlimit} \,\Opar \\
   {\Tqelem a 2 v} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}}
 \end{array}
@@ -541,7 +541,7 @@ Instead we need a more restrictive rule, that applies to processes not addressed
 Runnable instances and timers can ignore everything being said by others, as they define no hearing transitions proper that need to be excluded here (axioms (65) and (66)). Exclusive areas, inter-runnable variables and operation terms have hearing transitions previously defined, but only for label addresses matching their own; they can thus safely ignore transitions labelled with any other address. 
 Axioms (70) to (72) constitute the non-trivial cases, because here there are multiple earlier definitions to exclude, which also link label and process addresses via static model references. Still, it can be verified that each of the axioms (70) to (72) is guarded by an exact negation of the addressing conditions of any previously defined hearing transition for the same process type. 
 
-As an example, consider the example of Section~\ref{sect:BufSndRcv} under the different assumption that only $\Tconnect{{i.p.e} a}$ holds, with no connection from ${i.p.e}$ to $b$.
+As an concrete illustration, consider the example of Section~\ref{sect:BufSndRcv}. The axioms that enable each individual process transition in that example are (26), (27) and (28), respectively (and rules (1) and (3) allow them to be combined). In particular, axiom (28) is applicable because of the assumption $\Tconnect {i.p.e} b$, which simultaneously blocks applicability of axiom (70). However, under the different assumption that there is no connection from ${i.p.e}$ to $b$, axioms (28) and (70) must trade places. This also forces the removal of $b$ from the second argument of the {\sc snd} payload (i.e., the list of connected buffers not able to store the value sent). As a consequence, axiom (26) is no longer applicable and must be replaced by axiom (25). The resulting parallel transition looks as follows, illustrating the correct generation of an {\bf ok} result despite the presence of a full (but unconnected) buffer.
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
@@ -554,17 +554,67 @@ $$
 
 
 
-\subsection{TODO}
-
 TODO: some links from rules and choices made here to the AUTOSAR spec
 
-\section{Examples}
-\label{sec:Examples}
+\section{Parallelism}
+\label{sec:Parallelism}
 
-\begin{itemize}
-\item More details on the simple examples + a bigger example.
-\item Some examples chosen to illustrate the value of a formal calculus
-\end{itemize}
+$$
+\begin{array}{c}
+  {\Trunnable a 0 \Tidle 0} \Opar 
+  {\Tqelem b 2 \Teps} \vspace{0.6ex} \\
+
+  \red{\hear{b}{\Tsnd {v_1} \Teps}} \\
+
+  {\Trunnable a 0 \Tpending 0} \Opar 
+  {\Tqelem b 2 {v_1}} \vspace{0.6ex} \\
+
+  \red{\say{a}{\Tnew}} \\
+
+  {\Trunnable a 0 \Tidle 1} \Opar 
+  {\Tqelem b 2 {v_1}} \,\Opar  \\
+  {\Trinst a \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
+
+  \red{\hear{b}{\Tsnd {v_2} \Teps}} \\
+
+  {\Trunnable a 0 \Tpending 1} \Opar 
+  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \,\Opar  \\
+  {\Trinst a \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
+
+  \red{\say{a}{\Tnew}} \\
+
+  {\Trunnable a 0 \Tidle 2} \Opar 
+  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \,\Opar  \\
+  {\Trinst a \Tvoid \Teps {\Code}} \Opar 
+  {\Trinst a \Tvoid \Teps {\Code}}
+\end{array}
+$$
+
+$$
+\begin{array}{c}
+  {\Trunnable a 0 \Tidle 0} \Opar 
+  {\Tqelem b 2 \Teps} \vspace{0.6ex} \\
+
+  \red{\hear{b}{\Tsnd {v_1} \Teps}} \\
+
+  {\Trunnable a 0 \Tpending 0} \Opar 
+  {\Tqelem b 2 {v_1}} \vspace{0.6ex} \\
+
+  \red{\hear{b}{\Tsnd {v_2} \Teps}} \\
+
+  {\Trunnable a 0 \Tpending 0} \Opar 
+  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \vspace{0.6ex} \\
+
+  \red{\say{a}{\Tnew}} \\
+
+  {\Trunnable a 0 \Tidle 2} \Opar 
+  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \,\Opar  \\
+  {\Trinst a \Tvoid \Teps {\Code}}
+\end{array}
+$$
+
+
+
 
 \section{Discussion / results}
 \label{sec:Disc}
