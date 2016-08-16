@@ -228,8 +228,7 @@ data Proc
   |           Task   Address Toggle TaskState
 
 data Toggle
-  = Active 
-  | Ready
+  = Active Bool [ProcAddress] -- Address?
   | Inactive
   deriving Show
 
@@ -342,9 +341,8 @@ taskInit tp na p@(Task a _ ts) =
         Just prios ->
           let prios' = map snd $ sortBy (compare `on` fst) prios 
           in  Task a Inactive ts 
-                { taskName    = name 
-                , execProcs   = prios'
-                , execQueue   = prios' 
+                { taskName  = name 
+                , execProcs = prios' 
                 }
 taskInit _  _  p = p
 
@@ -365,11 +363,10 @@ checkTasks tp na = check na' tp'
 -- * Handling task state
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+-- Static task state.
 data TaskState = TaskState
   { taskName    :: String 
-  , execQueue   :: [ProcAddress]
-  , execProcs   :: [ProcAddress]
-  , execCurrent :: Maybe ProcAddress
+  , execProcs   :: [ProcAddress] -- Address?
   , taskTrigger :: Maybe Address
   } deriving Show
 
@@ -379,47 +376,20 @@ trigT conn a ts =
     Nothing -> False
     Just b  -> a `conn` b
 
--- Check if runnable is scheduled for execution in the task.
-isRunning :: Address -> TaskState -> Bool
-a `isRunning` ts = 
-  case execCurrent ts of
-    Nothing              -> False
-    Just (RunAddr b)     -> a == b
-    Just (RInstAddr b _) -> a == b
+isRunning :: Address -> ProcAddress -> Bool
+isRunning a (RunAddr b)     = a == b
+isRunning a (RInstAddr b _) = a == b
+isRunning _ _               = False
 
--- Schedule the next runnable in the task, or schedule nothing.
-scheduleNext :: HasCallStack => ProcMap -> Proc -> Proc
-scheduleNext pm p = checkPending next 
-  where 
-    next = case p of
-      Task b Active ts
-        | null (execQueue ts) -> 
-          Task b Inactive ts
-            { execCurrent = Nothing
-            , execQueue   = execProcs ts
-            }
-        | otherwise           -> 
-          Task b Active ts 
-            { execCurrent = Just $ head $ execQueue ts
-            , execQueue   = tail $ execQueue ts
-            } 
-
-    checkPending :: Proc -> Proc
-    checkPending p@(Task _ _ ts) =
-      case execCurrent ts of
-        Nothing   -> p
-        Just addr -> case pmapLookup pm addr of
-          Run _ _ Pending _ _ _ _ -> p
-          _ -> error $ "Non pending process " ++ show addr ++ " was " ++ 
-                       "scheduled in task " ++ show (taskName ts) ++ "."
-
--- Schedule a spawned running instance. 
-scheduleInstance :: Proc -> Address -> Int -> Proc
-scheduleInstance proc a n =
+execReady :: Proc -> Maybe Proc
+execReady proc = 
   case proc of 
-    Task b Active ts -> Task b Active ts { execCurrent = inst }
-    _ -> error "Bad call to scheduleInstance" 
-  where inst = Just (RInstAddr a n)
+    Task _ (Active True (x:xs)) _ -> Just proc
+    _                             -> Nothing
+
+nameOf :: Proc -> String
+nameOf (Task _ _ ts) = show (taskName ts)
+nameOf _             = "NON_TASK"
 
 -- The AR monad ---------------------------------------------------------------
 
@@ -642,7 +612,7 @@ instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
 declareTask :: String -> Event c -> AUTOSAR ()
 declareTask n event = do 
   a <- newAddress
-  let ts = TaskState "" [] [] Nothing Nothing
+  let ts = TaskState "" [] Nothing
   case event of 
     TimingEvent t -> do
       newProcess (Timer a 0.0 t 0)
@@ -769,9 +739,6 @@ data Label                  = ENTER Address
                             | TICK  Address
                             | DELTA Time
                             | VETO
-                            -- Task say labels, ignored by all others
-                            | DEACT
-                            | START
                             deriving Show
 
 labelText :: Label -> String
@@ -794,8 +761,6 @@ labelText l = case l of
           TICK  a            -> "TICK:" ++show a
           DELTA t            -> "DELTA:"++show t
           VETO               -> "VETO"
-          DEACT              -> "DEACT"
-          START              -> "START" 
 
 labelAddress :: Label -> Maybe Address
 labelAddress l = case l of
@@ -817,8 +782,6 @@ labelAddress l = case l of
           TICK  a            -> Just a
           DELTA t            -> Nothing
           VETO               -> Nothing
-          DEACT              -> Nothing
-          START              -> Nothing
 
 maySay :: Proc -> Label
 maySay (Run a 0.0 Pending n m s _)
@@ -826,7 +789,6 @@ maySay (Run a 0.0 Pending n m s _)
 maySay (Run a 0.0 (Serving (c:cs) (v:vs)) n m s _)
     | n == 0 || invocation s == Concurrent     = NEW   a m
 maySay (Run a t act n m s _)   | t > 0.0       = DELTA t
-maySay (Task _ Ready _)                        = START -- schedule first process
 maySay (Timer a 0.0 t _)                       = TICK  a
 maySay (Timer a t t0 _)   | t > 0.0            = DELTA t
 maySay (RInst a _ c ex code _)                 = maySay' (view code)
@@ -851,32 +813,32 @@ maySay (RInst a _ c ex code _)                 = maySay' (view code)
 maySay (Input a v)                             = WR a v
 maySay _                                       = VETO
 
-say :: ProcMap -> Label -> Proc -> [Update Proc]
-say pm (NEW _ _) (Run a _ Pending n m s b)                 = [ Update $ Run a (minstart s) Idle (n + 1) (m + 1) s b         
-                                                             , Update $ RInst a m Nothing [] (implementation s (toValue ())) b ]
-say pm (NEW _ _) (Run a _ (Serving (c:cs) (v:vs)) n m s b) = [ Update $ Run a (minstart s) (Serving cs vs) (n + 1) (m + 1) s b
-                                                             , Update $ RInst a m (Just c) [] (implementation s v) b ]
-say pm (DELTA d) (Run a t act n m s b)                     = [ Update $ Run a (t - d) act n m s b]
-say pm (TICK _)  (Timer a _ t n)                           = [ Update $ Timer a t t n]
-say pm (DELTA d) (Timer a t t0 n)                          = [ Update $ Timer a (t - d) t0 n]
-say pm START     (Task b Ready ts)                         = [ Update $ scheduleNext pm (Task b Active ts) ]
-say pm label     (RInst a n c ex code b)                   = say' label (view code)
-  where say' (ENTER _)      (Enter (EX x) :>>= cont)       = [ Update $ RInst a n c (x:ex)   (cont void) b]
-        say' (EXIT _)       (Exit (EX x)  :>>= cont)       = [ Update $ RInst a n c ex       (cont void) b]
-        say' (IRVR _ res)   (IrvRead _    :>>= cont)       = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
-        say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)       = [ Update $ RInst a n c ex       (cont void) b]
-        say' (RCV _ res)    (Receive _    :>>= cont)       = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
-        say' (SND _ _ res)  (Send _ _     :>>= cont)       = [ Update $ RInst a n c ex       (cont res) b]
-        say' (RD _ res)     (Read _       :>>= cont)       = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
-        say' (WR _ _)       (Write _ _    :>>= cont)       = [ Update $ RInst a n c ex       (cont void) b]
-        say' (UP _ res)     (IsUpdated _  :>>= cont)       = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
-        say' (INV _)        (Invalidate _ :>>= cont)       = [ Update $ RInst a n c ex       (cont void) b]
-        say' (CALL _ _ res) (Call _ _     :>>= cont)       = [ Update $ RInst a n c ex       (cont res) b]
-        say' (RES _    res) (Result _     :>>= cont)       = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
-        say' (RET _ _)      (Return v)                     = [ Update $ RInst a n Nothing ex (return (toValue ())) b]
-        say' (TERM _)       (Return _)                     = [ Remove $ RInst a n c ex code b] -- Can carry any payload so long as address and index is right
-        say' label          (Printlog i v :>>= cont)       = say' label (view (cont ()))
-say pm (WR _ _)  (Input a v)                               = [ Remove $ Input a v ] -- Can carry any payload
+say :: Label -> Proc -> [Update Proc]
+say (NEW _ _) (Run a _ Pending n m s b)                 = [ Update $ Run a (minstart s) Idle (n + 1) (m + 1) s b         
+                                                          , Update $ RInst a m Nothing [] (implementation s (toValue ())) b ]
+say (NEW _ _) (Run a _ (Serving (c:cs) (v:vs)) n m s b) = [ Update $ Run a (minstart s) (Serving cs vs) (n + 1) (m + 1) s b
+                                                          , Update $ RInst a m (Just c) [] (implementation s v) b ]
+say (DELTA d) (Run a t act n m s b)                     = [ Update $ Run a (t - d) act n m s b]
+say (TICK _)  (Timer a _ t n)                           = [ Update $ Timer a t t n]
+say (DELTA d) (Timer a t t0 n)                          = [ Update $ Timer a (t - d) t0 n]
+-- say START     (Task b Ready ts)                         = [ Update $ scheduleNext (Task b Active ts) ]
+say label     (RInst a n c ex code b)                   = say' label (view code)
+  where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [ Update $ RInst a n c (x:ex)   (cont void) b]
+        say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [ Update $ RInst a n c ex       (cont void) b]
+        say' (IRVR _ res)   (IrvRead _    :>>= cont)    = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
+        say' (IRVW _ _)     (IrvWrite _ _ :>>= cont)    = [ Update $ RInst a n c ex       (cont void) b]
+        say' (RCV _ res)    (Receive _    :>>= cont)    = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
+        say' (SND _ _ res)  (Send _ _     :>>= cont)    = [ Update $ RInst a n c ex       (cont res) b]
+        say' (RD _ res)     (Read _       :>>= cont)    = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
+        say' (WR _ _)       (Write _ _    :>>= cont)    = [ Update $ RInst a n c ex       (cont void) b]
+        say' (UP _ res)     (IsUpdated _  :>>= cont)    = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
+        say' (INV _)        (Invalidate _ :>>= cont)    = [ Update $ RInst a n c ex       (cont void) b]
+        say' (CALL _ _ res) (Call _ _     :>>= cont)    = [ Update $ RInst a n c ex       (cont res) b]
+        say' (RES _    res) (Result _     :>>= cont)    = [ Update $ RInst a n c ex       (cont (fromStdDyn res)) b]
+        say' (RET _ _)      (Return v)                  = [ Update $ RInst a n Nothing ex (return (toValue ())) b]
+        say' (TERM _)       (Return _)                  = [ Remove $ RInst a n c ex code b] -- Can carry any payload so long as address and index is right
+        say' label          (Printlog i v :>>= cont)    = say' label (view (cont ()))
+say (WR _ _)  (Input a v)                               = [ Remove $ Input a v ] -- Can carry any payload
 
 mayLog (RInst a n c ex code b)                          = mayLog' (view code)
   where mayLog' :: ProgramView (RTEop c) a -> Logs
@@ -926,46 +888,51 @@ mayHear conn (DELTA d)      (Run _ t _ _ _ _ _)
 mayHear conn (DELTA d)      (Timer _ t _ _)   | d > t          = VETO
 mayHear conn label          _                                  = label
 
-hear :: ProcMap -> ConnRel -> Label -> Proc -> Update Proc
-hear pm conn (ENTER a)     (Excl b Free)      | a==b         = Update $ Excl b Taken
-hear pm conn (EXIT a)      (Excl b Taken)     | a==b         = Update $ Excl b Free
-hear pm conn (IRVR a _)    (Irv b v)          | a==b         = Unchanged
-hear pm conn (IRVW a v)    (Irv b _)          | a==b         = Update $ Irv b v
-hear pm conn (RCV a _)     (QElem b n (v:vs)) | a==b         = Update $ QElem b n vs
-hear pm conn (RCV a _)     (QElem b n [])     | a==b         = Unchanged 
-hear pm conn (SND a v _)   (QElem b n vs)
-        | a `conn` b && length vs < n                        = Update $ QElem b n (vs++[v])
-        | a `conn` b                                         = Unchanged 
-hear pm conn (SND a _ _)   (Run b t _ n m s f)
-        | trig conn a s                                      = Update $ Run b t Pending n m s f
-hear pm conn (RD a _)      (DElem b _ v)      | a==b         = Update $ DElem b False v
-hear pm conn (WR a v)      (DElem b _ _)      | a `conn` b   = Update $ DElem b True (Ok v)
-hear pm conn (WR a _)      (Run b t _ n m s f)
-        | trig conn a s                                      = Update $ Run b t Pending n m s f
-hear pm conn (UP a _)      (DElem b u v)      | a==b         = Unchanged 
-hear pm conn (INV a)       (DElem b _ _)      | a `conn` b   = Update $ DElem b True NO_DATA
-hear pm conn (CALL a v _)  (Run b t (Serving cs vs) n m s f)
-        | trig (rev conn) a s && a `notElem` cs              = Update $ Run b t (Serving (cs++[a]) (vs++[v])) n m s f
-        | trig (rev conn) a s                                = Unchanged 
-hear pm conn (RES a _)     (Op b (v:vs))         | a==b      = Update $ Op b vs
-hear pm conn (RES a _)     (Op b [])             | a==b      = Unchanged 
-hear pm conn (RET a v)     (Op b vs)             | a==b      = Update $ Op b (vs++[v])
-hear pm conn (TERM a)      (Run b t act n m s f) | a==b      = Update $ Run b t act (n-1) m s f
-hear pm conn (TICK a)      (Run b t _ n m s f)   | a==b      = Update $ Run b t Pending n m s f
-hear pm conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged 
-hear pm conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
-hear pm conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
-hear pm conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
-hear pm conn (WR a _)      (Task b Inactive ts) 
-        | trigT conn a ts                                    = Update $ Task b Ready ts 
-hear pm conn (SND a _ _)   (Task b Inactive ts) 
-        | trigT conn a ts                                    = Update $ Task b Ready ts 
-hear pm conn (TICK a)      (Task b Inactive ts) | a == b     = Update $ Task b Ready ts
-hear pm conn (TERM a)      (Task b Active ts)
-        | a `isRunning` ts                                   = Update $ scheduleNext pm (Task b Active ts)
-hear pm conn (NEW a n)     (Task b Active ts)
-        | a `isRunning` ts                                   = Update $ scheduleInstance (Task b Active ts) a n 
-hear pm conn label         proc                              = Unchanged 
+hear :: ConnRel -> Label -> Proc -> Update Proc
+hear conn (ENTER a)     (Excl b Free)      | a==b         = Update $ Excl b Taken
+hear conn (EXIT a)      (Excl b Taken)     | a==b         = Update $ Excl b Free
+hear conn (IRVR a _)    (Irv b v)          | a==b         = Unchanged
+hear conn (IRVW a v)    (Irv b _)          | a==b         = Update $ Irv b v
+hear conn (RCV a _)     (QElem b n (v:vs)) | a==b         = Update $ QElem b n vs
+hear conn (RCV a _)     (QElem b n [])     | a==b         = Unchanged 
+hear conn (SND a v _)   (QElem b n vs)
+        | a `conn` b && length vs < n                     = Update $ QElem b n (vs++[v])
+        | a `conn` b                                      = Unchanged 
+hear conn (SND a _ _)   (Run b t _ n m s f)
+        | trig conn a s                                   = Update $ Run b t Pending n m s f
+hear conn (RD a _)      (DElem b _ v)      | a==b         = Update $ DElem b False v
+hear conn (WR a v)      (DElem b _ _)      | a `conn` b   = Update $ DElem b True (Ok v)
+hear conn (WR a _)      (Run b t _ n m s f)
+        | trig conn a s                                   = Update $ Run b t Pending n m s f
+hear conn (UP a _)      (DElem b u v)      | a==b         = Unchanged 
+hear conn (INV a)       (DElem b _ _)      | a `conn` b   = Update $ DElem b True NO_DATA
+hear conn (CALL a v _)  (Run b t (Serving cs vs) n m s f)
+        | trig (rev conn) a s && a `notElem` cs           = Update $ Run b t (Serving (cs++[a]) (vs++[v])) n m s f
+        | trig (rev conn) a s                             = Unchanged 
+hear conn (RES a _)     (Op b (v:vs))         | a==b      = Update $ Op b vs
+hear conn (RES a _)     (Op b [])             | a==b      = Unchanged 
+hear conn (RET a v)     (Op b vs)             | a==b      = Update $ Op b (vs++[v])
+hear conn (TERM a)      (Run b t act n m s f) | a==b      = Update $ Run b t act (n-1) m s f
+hear conn (TICK a)      (Run b t _ n m s f)   | a==b      = Update $ Run b t Pending n m s f
+hear conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged 
+hear conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
+hear conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
+hear conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
+
+-- Task triggering:
+hear conn (WR a _)      (Task b Inactive ts) 
+        | trigT conn a ts                                 = Update $ Task b (Active True (execProcs ts)) ts 
+hear conn (SND a _ _)   (Task b Inactive ts) 
+        | trigT conn a ts                                 = Update $ Task b (Active True (execProcs ts)) ts
+hear conn (TICK a)      (Task b Inactive ts) | a == b     = Update $ Task b (Active True (execProcs ts)) ts
+
+-- Tasks scheduling:
+hear conn (NEW a n)     (Task b (Active True (x:xs)) ts) 
+        | a `isRunning` x                                 = Update $ Task b (Active False (RInstAddr a n:xs)) ts
+hear conn (TERM a)      (Task b (Active False (x:xs)) ts)
+        | a `isRunning` x && null xs                      = Update $ Task b Inactive ts
+        | a `isRunning` x                                 = Update $ Task b (Active True xs) ts
+hear conn label         proc                              = Unchanged 
 
 -- * 'step' and 'explore'
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -991,13 +958,14 @@ step conn pm = explore conn pm procs sayers
     sayers    = scheduled ++ tasks ++ untasked
     untasked  = filter isUntasked   procs
     tasks     = filter isActiveTask procs 
-    scheduled = map (pmapLookup pm) $ mapMaybe (execCurrent . stateOf) tasks
+    scheduled = map (pmapLookup pm) $ mapMaybe schedIn tasks 
 
-    stateOf (Task _ _ ts) = ts
+    schedIn :: Proc -> Maybe ProcAddress
+    schedIn (Task _ (Active _ (x:_)) _) = Just x
+    schedIn _                           = Nothing
 
-    isActiveTask (Task _ Active _) = True
-    isActiveTask (Task _ Ready  _) = True
-    isActiveTask _                 = False
+    isActiveTask (Task _ (Active _ _) _) = True
+    isActiveTask _                       = False
 
     isUntasked (Run _ _ _ _ _ _ b) = not b
     isUntasked (RInst _ _ _ _ _ b) = not b
@@ -1012,7 +980,7 @@ explore conn pm h (p:ps) =
     VETO  ->          explore conn pm h ps
     label -> commit : explore conn pm h ps
       where
-        broadcast = say pm label p ++ hear1 conn label (pmapDelete p pm)
+        broadcast = say label p ++ hear1 conn label (pmapDelete p pm)
         commit    = (label, procAddress p, logs label, broadcast)
 
         logs (DELTA _) = []
@@ -1023,15 +991,15 @@ hear1 :: ConnRel -> Label -> ProcMap -> [Update Proc]
 hear1 conn label pm = 
   case label of
     -- On target
-    ENTER a   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    EXIT a    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    IRVR a _  -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    IRVW a _  -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    RCV a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    RD a _    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    UP a _    -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    RES a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
-    RET a _   -> [hear pm conn label (pmapLookup pm (UniqueAddr a))]
+    ENTER a   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    EXIT a    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    IRVR a _  -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    IRVW a _  -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    RCV a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    RD a _    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    UP a _    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    RES a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
+    RET a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
 
 --     TERM a    -> [hear conn label (pmapLookup pm (RunAddr a))]
 --     TICK a    -> [hear conn label (pmapLookup pm (RunAddr a))]
@@ -1039,14 +1007,14 @@ hear1 conn label pm =
 --  It would be possible to use applicative to try RunAddr first and then
 --  UniqueAddr on some of these 
     -- Not on target
-    CALL {}   -> map (hear pm conn label) (pmapElems pm)
-    INV {}    -> map (hear pm conn label) (pmapElems pm)
-    SND a _ _ -> map (hear pm conn label) (pmapElems pm)
-    WR a _    -> map (hear pm conn label) (pmapElems pm)
-    DELTA {}  -> map (hear pm conn label) (pmapElems pm)
-    TICK {}   -> map (hear pm conn label) (pmapElems pm)
-    TERM {}   -> map (hear pm conn label) (pmapElems pm)
-    NEW {}    -> map (hear pm conn label) (pmapElems pm)
+    CALL {}   -> map (hear conn label) (pmapElems pm)
+    INV {}    -> map (hear conn label) (pmapElems pm)
+    SND a _ _ -> map (hear conn label) (pmapElems pm)
+    WR a _    -> map (hear conn label) (pmapElems pm)
+    DELTA {}  -> map (hear conn label) (pmapElems pm)
+    TICK {}   -> map (hear conn label) (pmapElems pm)
+    TERM {}   -> map (hear conn label) (pmapElems pm)
+    NEW {}    -> map (hear conn label) (pmapElems pm)
     _         -> [Unchanged]
 
 -- | Agree on labels before broadcast.
@@ -1132,15 +1100,26 @@ type Logs = [(ProbeID, Value)]
 
 type SchedulerOption = (Label, ProcAddress, Logs, [Update Proc])
 
--- Transitions no longer carry processes, since we do not re-use them. This
--- reduces memory usage.
+newScheds :: [SchedulerOption] -> [ProcAddress]
+newScheds = mapMaybe (check . schedProc) 
+  where
+    schedProc (l, a, _, _) = (a, l)
+
+    check (a, NEW {}) = Just a
+    check _           = Nothing
+
+isDelta (DELTA _, _, _, _) = True
+isDelta _                  = False
+
+isTick (TICK _, _, _, _) = True
+isTick _                 = False
+
 data Transition = Trans 
   { transChoice :: Int
   , transLabel  :: Label
   , transActive :: ProcAddress 
   , transLogs   :: Logs
   } deriving Show
-
 
 type Scheduler m = [SchedulerOption] -> m (Maybe (Transition, [Update Proc]))
 
@@ -1222,7 +1201,7 @@ simulate withTasks sched conn procs =
      case next of
        Nothing ->
          return []
-       Just (trans, procs1) -> -- (show (transLabel trans)) `trace`
+       Just (trans, procs1) -> 
          (trans:) <$> simulate withTasks sched conn (pmapUpdate procs procs1)
 
 -- Progresses simulation until there are no more transition alternatives.
@@ -1245,35 +1224,49 @@ simulate1 withTasks sched conn procs
 -- NOTE: Global flag tells us if task assignments have been made to save us
 -- some trouble if not.
 maximumProgress :: Bool -> ProcMap -> Scheduler m -> Scheduler m
-maximumProgress withTasks pm sched alts 
+maximumProgress False pm sched alts 
   | null work = sched deltas 
-  | withTasks = taskProgress pm sched work
   | otherwise = sched work
   where 
-    (deltas,work)            = partition isDelta alts
-    isDelta (DELTA _, _,_,_) = True
-    isDelta _                = False
+    (deltas, work) = partition isDelta alts
+maximumProgress True pm sched alts = taskSched pm sched alts
 
 -- Finer control of the order of scheduling is needed when assigning runnables
--- to tasks. TODO: Simplify
-taskProgress :: ProcMap -> Scheduler m -> Scheduler m
-taskProgress pm sched alts = sched (head alts2)
+-- to tasks.
+taskSched :: ProcMap -> Scheduler m -> Scheduler m
+taskSched pm sched alts
+  | null ticks = schedNew pm sched rest
+  | otherwise  = sched ticks 
   where
-    alts2       = dropWhile null [ticks,start,tasks,rm]
-    (ticks, as) = partition isTick  alts
-    (start, bs) = partition isStart as
-    (tasks, rm) = partition hasTask bs 
+    (ticks, rest) = partition isTick alts
 
-    fst4 (a, _, _, _) = a
-    isTick  a = case fst4 a of { TICK _ -> True ; _ -> False }
-    isStart a = case fst4 a of { START -> True ; _ -> False }
-    tag     a = case pmapLookup pm (RunAddr a) of Run _ _ _ _ _ _ b -> b
-   
-    hasTask (l, _, _, _) = 
-      case l of 
-        NEW a _ -> tag a   
-        TERM a  -> tag a 
-        _       -> False
+-- Whenever TICK labels have been handled, ensure that all runnables under task
+-- control have produced their NEW labels.
+schedNew :: ProcMap -> Scheduler m -> Scheduler m
+schedNew pm sched alts
+  | not (null nonReady) = error $ "Task(s) with bad assignments: " ++ 
+                                  unwords (map nameOf nonReady)
+  | null news && null nond = sched deltas
+  | null news              = sched nond
+  | otherwise              = sched news
+  where
+    (news, as)     = partition isNew alts
+    (deltas, nond) = partition isDelta as
+
+    isNew (NEW a _, _, _, _) = case pmapLookup pm (RunAddr a) of
+                                 Run _ _ _ _ _ _ b -> b
+    isNew _                  = False
+
+    nonReady = check ready addrs
+    addrs    = newScheds alts
+    ready    = map (\t@(Task _ (Active True (x:_)) _) -> (x, t))
+             $ mapMaybe execReady (pmapElems pm)
+
+    check []          _  = []
+    check ((a, t):ts) bs
+      | a `elem` bs      = check ts bs
+      | otherwise        = t : check ts bs
+
 
 trivialSched :: Scheduler Identity
 trivialSched alts = return $ Just (Trans 0 label active logs, procs)
