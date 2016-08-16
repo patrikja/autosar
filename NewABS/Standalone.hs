@@ -121,5 +121,5 @@ main :: IO ()
 main = 
   do simulateStandalone 5.0 output (RandomSched (mkStdGen 112)) test
      return ()
-  where output trace = printLogs trace >> makePlot trace
+  where output trace = printAll trace >> makePlot trace
 
