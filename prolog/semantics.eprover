@@ -96,14 +96,14 @@ step( qelem(A, N, eps),                                  hear(A,rcv(nodata)),   
 step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,eps)),      rinst(r(R,I), C, Xs, ap(K,ok))        ).
 step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,As)),       rinst(r(R,I), C, Xs, ap(K,limit))     ) :-
     notequal(As,eps),
-    connect(ep(R,P,I),As).
+    connectAll(ep(R,P,I),As).
 step( qelem(B, N, Vs),                                   hear(A,snd(V,As)),              qelem(B, N, seq(Vs,V))                ) :-
-    connect(A,B), 
-    less(length(Vs),N), 
-    notmember(ep(E,P,I),As).
+    connect(A,B),
+    less(length(Vs),N),
+    notmember(B,As).
 step( qelem(B, N, Vs),                                   hear(A,snd(_,As)),              qelem(B, N, Vs)                       ) :-
-    connect(A,B), 
-    equal(length(Vs),N), 
+    connect(A,B),
+    equal(length(Vs),N),
     member(B,As).
 step( runnable(r(R,I), T, _, N),                         hear(A,snd(_,As)),              runnable(r(R,I), T, pending, N)       ) :-
     connect(A,ep(E,P,I)),
@@ -160,7 +160,7 @@ step( runnable(r(R,I), T, _, N),                    hear(op(O,P,I),ret(_,_)),   
     asynchronousServerCallReturnsEvent(r(R,I),o(O,P)).
 
 step( rinst(A, client(B,M,_), Xs, return(_)),       say(B,skip(M)),                     rinst(A, void, Xs, return(void))              ).
-step( oper(A, M, Srv),                              hear(A,skip(N)),                    oper(A, M, Srv)                               ) :- 
+step( oper(A, M, Srv),                              hear(A,skip(N)),                    oper(A, M, Srv)                               ) :-
     notequal(M,N).
 step( runnable(r(R,I), T, Act, N),                  hear(op(O,P,I),skip(_)),            runnable(r(R,I), T, Act, N)                   ) :-
     asynchronousServerCallReturnsEvent(r(R,I),o(O,P)).
@@ -221,8 +221,8 @@ step( irv(B, V),                   hear(A,_),      irv(B, V)                    
 step( oper(B, M, Srv),             hear(A,_),      oper(B, M, Srv)                    ) :-   notequal(A,B).
 step( qelem(B, N, Vs),             hear(A,_),      qelem(B, N, Vs)                    ) :-   notequal(A,B), notconnect(A,B).
 step( delem(B, U, V),              hear(A,_),      delem(B, U, V)                     ) :-   notequal(A,B), notconnect(A,B).
-step( runnable(r(R,I), T, Act, N), hear(A,_),      runnable(r(R,I), T, Act, N)        ) :-   
-    notequal(A,r(R,I)), 
+step( runnable(r(R,I), T, Act, N), hear(A,_),      runnable(r(R,I), T, Act, N)        ) :-
+    notequal(A,r(R,I)),
     not(and(connect(A,ep(E,P,I)),dataReceivedEvent(r(R,I),e(E,P)))),
     not(and(operationInvokedEvent(r(R,I),o(O,P)),connect(op(O,P,I),A))),
     not(asynchronousServerCallReturnsEvent(r(R,I),A)).

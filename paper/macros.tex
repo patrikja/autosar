@@ -139,6 +139,7 @@
 \newcommand{\Tseq}          [2]{#1{:}#2}
 
 %\newcommand{\Tconnect}      [2]{\mathrm{connect}(#1,#2)}
+\newcommand{\TconnectAll}   [2]{\ensuremath{#1 \Rightarrow a \text{~for all $\Tmember{a}{#2}$}}}
 \newcommand{\Tconnect}      [2]{\ensuremath{#1 \Rightarrow #2}}
 \newcommand{\Tnotconnect}   [2]{\ensuremath{#1 \nRightarrow #2}}
 
@@ -175,21 +176,23 @@
 \newcommand{\Tlength}       [1]{|#1|}
 
 %%% payload
-\newcommand{\Tcall}         [2]{\mathrm{call}(#1,#2)}
-\newcommand{\Tbusy}         {\mathrm{busy}}
-\newcommand{\Tsnd}          [2]{\mathrm{snd}(#1,#2)}
-\newcommand{\Tirvr}         [1]{\mathrm{irvr}(#1)}
-\newcommand{\Tirvw}         [1]{\mathrm{irvw}(#1)}
-\newcommand{\Trcv}          [1]{\mathrm{rcv}(#1)}
-\newcommand{\Trd}           [1]{\mathrm{rd}(#1)}
-\newcommand{\Twr}           [1]{\mathrm{wr}(#1)}
-\newcommand{\Tres}          [1]{\mathrm{res}(#1)}
-\newcommand{\Tret}          [2]{\mathrm{ret}(#1,#2)}
-\newcommand{\Tskip}         [1]{\mathrm{skip}(#1)}
-\newcommand{\Tup}           [1]{\mathrm{up}(#1)}
-\newcommand{\Tent}          {\mathrm{ent}}
-\newcommand{\Tex}           {\mathrm{ex}}
-\newcommand{\Tinv}          {\mathrm{inv}}
-\newcommand{\Tterm}         {\mathrm{term}}
-\newcommand{\Tnew}          {\mathrm{new}}
-\newcommand{\Ttick}         {\mathrm{tick}}
+%\newcommand{\payload}[1]{\mathrm{#1}}
+\newcommand{\payload}[1]{\textsc{#1}}
+\newcommand{\Tcall}         [2]{\payload{call}(#1,#2)}
+\newcommand{\Tbusy}         {\payload{busy}}
+\newcommand{\Tsnd}          [2]{\payload{snd}(#1,#2)}
+\newcommand{\Tirvr}         [1]{\payload{irvr}(#1)}
+\newcommand{\Tirvw}         [1]{\payload{irvw}(#1)}
+\newcommand{\Trcv}          [1]{\payload{rcv}(#1)}
+\newcommand{\Trd}           [1]{\payload{rd}(#1)}
+\newcommand{\Twr}           [1]{\payload{wr}(#1)}
+\newcommand{\Tres}          [1]{\payload{res}(#1)}
+\newcommand{\Tret}          [2]{\payload{ret}(#1,#2)}
+\newcommand{\Tskip}         [1]{\payload{skip}(#1)}
+\newcommand{\Tup}           [1]{\payload{up}(#1)}
+\newcommand{\Tent}          {\payload{ent}}
+\newcommand{\Tex}           {\payload{ex}}
+\newcommand{\Tinv}          {\payload{inv}}
+\newcommand{\Tterm}         {\payload{term}}
+\newcommand{\Tnew}          {\payload{new}}
+\newcommand{\Ttick}         {\payload{tick}}
