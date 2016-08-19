@@ -19,3 +19,5 @@ Main
 *.autosave
 *.original
 slprj
+*.*.swp
+*.*.swo

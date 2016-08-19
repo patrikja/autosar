@@ -387,9 +387,10 @@ execReady proc =
     Task _ (Active True (x:xs)) _ -> Just proc
     _                             -> Nothing
 
-nameOf :: Proc -> String
-nameOf (Task _ _ ts) = show (taskName ts)
-nameOf _             = "NON_TASK"
+active :: Proc -> String
+active (Task _ (Active _ (x:_)) ts) = show (taskName ts) ++ " expects " ++ 
+                                      "NEW from " ++ show x
+active _                            = "NON_TASK"
 
 -- The AR monad ---------------------------------------------------------------
 
@@ -821,7 +822,6 @@ say (NEW _ _) (Run a _ (Serving (c:cs) (v:vs)) n m s b) = [ Update $ Run a (mins
 say (DELTA d) (Run a t act n m s b)                     = [ Update $ Run a (t - d) act n m s b]
 say (TICK _)  (Timer a _ t n)                           = [ Update $ Timer a t t n]
 say (DELTA d) (Timer a t t0 n)                          = [ Update $ Timer a (t - d) t0 n]
--- say START     (Task b Ready ts)                         = [ Update $ scheduleNext (Task b Active ts) ]
 say label     (RInst a n c ex code b)                   = say' label (view code)
   where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [ Update $ RInst a n c (x:ex)   (cont void) b]
         say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [ Update $ RInst a n c ex       (cont void) b]
@@ -1100,17 +1100,16 @@ type Logs = [(ProbeID, Value)]
 
 type SchedulerOption = (Label, ProcAddress, Logs, [Update Proc])
 
-newScheds :: [SchedulerOption] -> [ProcAddress]
-newScheds = mapMaybe (check . schedProc) 
-  where
-    schedProc (l, a, _, _) = (a, l)
+isNew :: ProcMap -> SchedulerOption -> Bool
+isNew pm (NEW a _, _, _, _) = case pmapLookup pm (RunAddr a) of
+                                Run _ _ _ _ _ _ b -> b
+isNew _  _                  = False
 
-    check (a, NEW {}) = Just a
-    check _           = Nothing
-
+isDelta :: SchedulerOption -> Bool
 isDelta (DELTA _, _, _, _) = True
 isDelta _                  = False
 
+isTick :: SchedulerOption -> Bool
 isTick (TICK _, _, _, _) = True
 isTick _                 = False
 
@@ -1119,9 +1118,10 @@ data Transition = Trans
   , transLabel  :: Label
   , transActive :: ProcAddress 
   , transLogs   :: Logs
+  , transError  :: Maybe String
   } deriving Show
 
-type Scheduler m = [SchedulerOption] -> m (Maybe (Transition, [Update Proc]))
+type Scheduler m = [SchedulerOption] -> m (Warn (Transition, [Update Proc]))
 
 type Trace = (SimState, [Transition])
 
@@ -1174,6 +1174,20 @@ rankSet s = Map.fromDistinctAscList $ zip (Set.elems s) [0..]
 -- * Stand-alone simulation
 -------------------------------------------------------------------------------
 
+-- Since stacking Maybe with Either is verbose
+data Warn a
+  = None
+  | Warn String a
+  | Some a 
+
+-- Annotate something with a warning
+warn :: String -> Warn a -> Warn a 
+warn msg w =  
+  case w of 
+    None     -> None
+    Warn m x -> Warn (m ++ ", " ++ msg) x
+    Some x   -> Warn msg x
+
 -- | Initialize the simulator with an initial state and run it.
 simulation :: Monad m => Scheduler m -> AUTOSAR a -> m (a, Trace)
 simulation sched sys = 
@@ -1187,9 +1201,6 @@ simulation sched sys =
 
 -- Internal simulator function. Progresses simulation until there are no more
 -- transitions to take.
---
--- NOTE: Global flag tells us if task assignments have been made to save us
--- some trouble in 'maximumProgress' if not.
 simulate :: Monad m 
          => Bool           -- ^ Simulating with tasks
          -> Scheduler m 
@@ -1199,10 +1210,14 @@ simulate :: Monad m
 simulate withTasks sched conn procs = 
   do next <- simulate1 withTasks sched conn procs
      case next of
-       Nothing ->
-         return []
-       Just (trans, procs1) -> 
-         (trans:) <$> simulate withTasks sched conn (pmapUpdate procs procs1)
+       None                      -> return []
+       Some (trans, procs1)      -> update trans procs1 Nothing
+       Warn warn (trans, procs1) -> update trans procs1 (Just warn)
+  where
+    update ts ps err =
+      let trans  = ts { transError = err }
+          procs2 = pmapUpdate procs ps
+      in (trans:) <$> simulate withTasks sched conn procs2
 
 -- Progresses simulation until there are no more transition alternatives.
 simulate1 :: Monad m 
@@ -1210,55 +1225,103 @@ simulate1 :: Monad m
           -> Scheduler m 
           -> ConnRel 
           -> ProcMap
-          -> m (Maybe (Transition, [Update Proc]))
+          -> m (Warn (Transition, [Update Proc]))
 simulate1 withTasks sched conn procs
-  | null alts               = return Nothing
-  | otherwise               = maximumProgress withTasks procs sched alts
+  | null alts = return None
+  | otherwise = maximumProgress conn withTasks procs sched alts
   where 
-    alts :: [SchedulerOption]
     alts = step conn procs
+
+-- * External control of schedulers
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- TODO: There is nothing in this section that would suffer from a good cleanup,
+-- especially the functions which report warnings.
 
 -- Schedules work as long as work-steps are available. When no more work can be
 -- done, @DELTA@-steps are scheduled.
---
--- NOTE: Global flag tells us if task assignments have been made to save us
--- some trouble if not.
-maximumProgress :: Bool -> ProcMap -> Scheduler m -> Scheduler m
-maximumProgress False pm sched alts 
-  | null work = sched deltas 
-  | otherwise = sched work
-  where 
-    (deltas, work) = partition isDelta alts
-maximumProgress True pm sched alts = taskSched pm sched alts
+maximumProgress :: Monad m 
+                => ConnRel 
+                -> Bool 
+                -> ProcMap 
+                -> Scheduler m 
+                -> Scheduler m
+maximumProgress conn tasks pm sched alts =
+  case tasks of
+    True -> checkEarlyPending conn pm (taskSched pm sched) alts
+    False
+      | null work -> sched deltas
+      | otherwise -> checkEarlyPending conn pm sched work
+      where
+        (deltas, work) = partition isDelta alts
 
 -- Finer control of the order of scheduling is needed when assigning runnables
 -- to tasks.
-taskSched :: ProcMap -> Scheduler m -> Scheduler m
+taskSched :: Monad m => ProcMap -> Scheduler m -> Scheduler m
 taskSched pm sched alts
-  | null ticks = schedNew pm sched rest
+  | null ticks = checkReady pm (schedNonTick pm sched) rest
   | otherwise  = sched ticks 
   where
     (ticks, rest) = partition isTick alts
 
 -- Whenever TICK labels have been handled, ensure that all runnables under task
 -- control have produced their NEW labels.
-schedNew :: ProcMap -> Scheduler m -> Scheduler m
-schedNew pm sched alts
-  | not (null nonReady) = error $ "Task(s) with bad assignments: " ++ 
-                                  unwords (map nameOf nonReady)
+schedNonTick :: Monad m => ProcMap -> Scheduler m -> Scheduler m
+schedNonTick pm sched alts
   | null news && null nond = sched deltas
   | null news              = sched nond
   | otherwise              = sched news
   where
-    (news, as)     = partition isNew alts
+    (news, as)     = partition (isNew pm) alts
     (deltas, nond) = partition isDelta as
 
-    isNew (NEW a _, _, _, _) = case pmapLookup pm (RunAddr a) of
-                                 Run _ _ _ _ _ _ b -> b
-    isNew _                  = False
+-- Check if a runnable process went from status @Pending@ to status @Pending@
+-- again. This means that a runnable was triggered twice by events without being
+-- activated (i.e. spawned a runnable instance). Catches the labels which might
+-- cause such a transition and compares the processes to see if it occured.
+checkEarlyPending :: Monad m 
+                  => ConnRel
+                  -> ProcMap 
+                  -> Scheduler m 
+                  -> Scheduler m
+checkEarlyPending conn pm sched alts = do
+  res <- sched alts
+  let (label, us) = case res of 
+          -- Intended invariant: Some transition was made
+          Warn w (trans, ps) -> (transLabel trans, ps)
+          Some   (trans, ps) -> (transLabel trans, ps)
+  case label of 
+    TICK a    -> warnIf a us res
+    WR a _    -> warnIf a us res 
+    SND a _ _ -> warnIf a us res 
+    _         -> return res
+  where
+    warnIf a us res
+      | null (pendTwice a us) = return res
+      | otherwise             = return $ warn (errmsg a us) res
 
+    errmsg a us = "Runnables were triggered while Pending: " ++ 
+                  unwords (map (show . procAddress) (pendTwice a us))
+
+    affected a (Run b _ _ _ _ s _) = a == b || trig conn a s
+    affected _ _                   = False
+    
+    runs a us   = [ procAddress p | Update p <- us, affected a p ]
+    pendTwice a = filter isPending . map (pmapLookup pm) . runs a
+
+    isPending (Run _ _ Pending _ _ _ _) = True
+    isPending _                         = False
+
+
+-- Ready checking: Are there NEW transitions available for all runnables which
+-- are about to get scheduled in a task? Report warnings otherwise.
+checkReady :: Monad m => ProcMap -> Scheduler m -> Scheduler m 
+checkReady pm sched alts 
+  | null nonReady = sched alts
+  | otherwise     = warn errmsg <$> sched alts
+  where
+    errmsg   = "*** " ++ unwords (map active nonReady) ++ " ***"
     nonReady = check ready addrs
-    addrs    = newScheds alts
+    addrs    = [ a | (NEW {}, a, _, _) <- alts ]
     ready    = map (\t@(Task _ (Active True (x:_)) _) -> (x, t))
              $ mapMaybe execReady (pmapElems pm)
 
@@ -1267,9 +1330,11 @@ schedNew pm sched alts
       | a `elem` bs      = check ts bs
       | otherwise        = t : check ts bs
 
+-- * Schedulers
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 trivialSched :: Scheduler Identity
-trivialSched alts = return $ Just (Trans 0 label active logs, procs)
+trivialSched alts = return $ Some (Trans 0 label active logs Nothing, procs)
   where 
     (label, active, logs, procs) = head alts
 
@@ -1279,18 +1344,18 @@ roundRobinSched alts =
      let n = (m+1) `mod` length alts
          (label, active, logs, procs) = alts !! n
      put n
-     return $ Just (Trans n label active logs, procs)
+     return $ Some (Trans n label active logs Nothing, procs)
 
 randomSched :: Scheduler (State StdGen)
 randomSched alts = 
   do n <- state next
      let (label, active, logs, procs) = alts !! (n `mod` length alts)
-     return $ Just (Trans n label active logs, procs)
+     return $ Some (Trans n label active logs Nothing, procs)
 
 genSched :: Scheduler Gen
 genSched alts = do
   ((label, active, logs, procs), n) <- elements $ zip alts [0..]
-  return $ Just (Trans n label active logs, procs)
+  return $ Some (Trans n label active logs Nothing, procs)
 
 data SchedChoice            where
   TrivialSched        :: SchedChoice
@@ -1335,7 +1400,7 @@ replaySched :: Scheduler (State Trace)
 replaySched ls = do
   (init,steps) <- get
   case steps of
-    []       -> return Nothing -- Terminate
+    []       -> return None -- Terminate
     tr:rrs'  -> do
       put (init, rrs')
       let tlab  = transLabel tr
@@ -1353,7 +1418,7 @@ replaySched ls = do
         [] -> replaySched ls
                              
         ((lab, addr, logs, procs), n):xs -> 
-          return $ Just (Trans n lab addr logs, procs)
+          return $ Some (Trans n lab addr logs Nothing, procs)
 
 similarLabel :: Label -> Label -> Bool
 similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
@@ -1468,6 +1533,23 @@ limitTime t (a,trs) = (a,limitTimeTrs t trs) where
   limitTimeTrs t (del@Trans{transLabel = DELTA d}:trs) = del:limitTimeTrs (t-d) trs
   limitTimeTrs t []                        = []
   limitTimeTrs t (x:xs)                    = x : limitTimeTrs t xs
+
+-- Try to interleave logs and warnings.
+printAll :: Trace -> IO Trace
+printAll (a, ts) = do
+  let logs  = map transLogs ts
+      warns = map (fromMaybe "" . transError) ts
+  forM_ (logs `zip` warns) $ \(ls, w) -> do
+    unless (null w) $ putStrLn w
+    mapM_ (\(id,v) -> putStrLn (id ++ ":" ++ show v)) ls
+  return (a, ts)
+
+
+-- Like printLogs for warnings.
+printWarnings :: Trace -> IO Trace
+printWarnings (a, ts) = do
+  mapM_ putStrLn (mapMaybe transError ts) 
+  return (a, ts)
 
 printLogs :: Trace -> IO Trace
 printLogs trace = do
@@ -1790,7 +1872,7 @@ ioRandomSched alts =
     liftIO $ forM_ logs $ \(i, v) -> 
       putStrLn $ "[LOG] " ++ i ++ ":" ++ show v
 
-    return $ Just (Trans n label active logs, procs)
+    return $ Some (Trans n label active logs Nothing, procs)
 
 -- | Initialize the simulator with an initial state and run it. This provides
 -- the same basic functionality as 'simulation'.
@@ -1885,19 +1967,24 @@ simulate1Ext :: Scheduler RandStateIO
 simulate1Ext sched conn procs acc
   | null alts = return Nothing
   | otherwise =
-    do mtrans <- maximumProgress False procs sched alts
+    do mtrans <- maximumProgress conn False procs sched alts
        case mtrans of
          -- The trace finished - should we return a Just here?
-         Nothing -> return $ error "The trace finished. I don't know what to do."
-         Just (trans, procs1) ->
-           case pmapUpdate procs procs1 of 
-             procs2 -> case transLabel trans of
-               DELTA dt -> 
-                 return $ Just (dt, procs2, trans:acc)
-               _ -> 
-                 simulate1Ext sched conn procs2 (trans:acc)
+         None -> 
+           fail "The trace finished. I don't know what to do."
+         Warn warn (trans, procs1) -> do
+           logWrite warn
+           update trans procs1 (Just warn)
+         Some (trans, procs1) -> 
+           update trans procs1 Nothing
   where
     alts = step conn procs
+    update tr ps w =
+      let procs2 = pmapUpdate procs ps
+          trans2 = tr { transError = w }
+      in case transLabel tr of
+          DELTA dt -> return $ Just (dt, procs2, trans2:acc)
+          _        -> simulate1Ext sched conn procs2 (trans2:acc)
 
 -- * Simulation entry-points.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
