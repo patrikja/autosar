@@ -4,7 +4,7 @@
 \usepackage[a4paper,margin=1.4cm]{geometry}
 \usepackage[fleqn]{amsmath}
 \usepackage{mathpartir}
-\usepackage{ amssymb }
+\usepackage{amssymb}
 \usepackage[makeroom]{cancel}
 % \usepackage{minted}
 \title{A semantics of core AUTOSAR}
@@ -19,7 +19,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-
+TODO
 
 \end{abstract}
 
@@ -36,25 +36,24 @@ This paper takes an important step towards a remedy to these problems, by contri
 
 The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behaviour. At some points, the AUTOSAR documents have been found unclear; here a specific choice has been made but alternative interpretations will be discussed separately (Section~\ref{sec:DiscAmb}). At other points, the standard documents are clear but the resulting semantics is still dubious. These cases will also be emphasised and discussed, together with suggested ways forward (Section~\ref{sec:DiscImp}).
 
-
 TODO: Limitations
 
-TODO: Simple examples early (informally)
+TODO: Some simple (informal) example early to give the reader an early view of flavour of the results.
 
 \section{AUTOSAR}
 \label{sec:autosar}
 
 An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs). Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
 
-Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behaviour in terms of \textbf{runnables} and \textbf{inter-runnable variables}, primarily. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioural definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable  only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
+Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behaviour in terms of \textbf{runnables} and \textbf{inter-runnable variables}, primarily. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioural definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
 
-A runnable under execution is called a \textbf{runnable instance}, and these may execute concurrently even if they belong to the same SWC. Each runnable indicates whether or not it may be instantiated concurrently with itself. Runnable code can also use \textbf{exclusive areas} (a form of mutex semaphores) to further control concurrent behaviour.
+A runnable under execution is called a \textbf{runnable instance}, and several instances may execute concurrently even if they belong to the same SWC. Each runnable indicates whether or not it may be instantiated concurrently with itself. Runnable code can also use \textbf{exclusive areas} (a form of mutex semaphores) to further control concurrent behaviour.
 
 To interact with ports, inter-runnable variables and exclusive areas, runnables use what is abstractly known as the \textbf{virtual function bus} (VFB). Concretely, the VFB takes the shape of a C programming interface to the \textbf{run-time environment} (RTE), custom-generated for each runnable on the basis of its access constraints. Behind the RTE, a collection of OS kernels, communication stacks and other basic software modules implement the VFB services for the platform at hand. Complete AUTOSAR designs also typically contain \textbf{ECU} and \textbf{task assignments}, which are manually built tables that control how SWCs and runnables map onto the available hardware and OS resources, respectively.
 
 AUTOSAR models are completely static, which means that all components, runnables, ports, connectors, etc, are created ahead of execution time. Runnable instances are an exception, but they are only identified by AUTOSAR for conceptual purposes and are never part of any model syntax. This static nature renders AUTOSAR models very suitable to graphical notations, which by far is the most widespread representation format for AUTOSAR models. A graphical model example is shown in Figure~\ref{fig:model}.
 
-TODO: add fig:model
+TODO: add fig:model (from the slides)
 
 \section{Syntax and preliminaries}
 \label{sec:Calc}
@@ -92,7 +91,7 @@ Exclusive area $x$ of component $i$, with boolean occupation state $u$.
 \item $\Tirv {\Ts s i} v$ \newline
 Inter-runnable variable $s$ of component $i$, currently holding value $v$.
 \item $\Tdelem {\Tep e p i} u v$ \newline
-Non-queued sender-receiver data element $e$ in port $p$ of component $i$, currently holding value \V{V} with boolean update status flag $u$.
+Non-queued sender-receiver data element $e$ in port $p$ of component $i$, currently holding value $v$ with boolean update status flag $u$.
 \item $\Tqelem {\Tep e p i} n \Vs$ \newline
 Queued sender-receiver data element $e$ in port $p$ of component $i$ with maximum capacity $n$, currently holding value sequence $\Vs$.
 \item $\Toper {\Top o p i} m \Srv$ \newline
@@ -121,7 +120,7 @@ We write $\Vs$ for a sequence of values \V{V}, $\Cs$ for a sequence of clients \
 
 The $\Code$ part of a runnable instance should technically be a representation of the C or Matlab implementation that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in any detail, a more abstract notion of executable code will be required.
 
-To this end, we have chosen to ignore all internal computations and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. And because the result from an RTE call may in general affect subsequent runnable behaviour, we use a continuation-passing style where every $\Code$ term except the final function return literally contain the sequence that follows it, as a continuation parameter $\Cont$.
+To this end, we have chosen to ignore all internal computations and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. And because the result from an RTE call may in general affect subsequent runnable behaviour, we use a continuation-passing style where every $\Code$ term except the final function return literally contains the sequence that follows it, as a continuation parameter $\Cont$.
 %
 \[
 \begin{array}{lll}
@@ -204,6 +203,8 @@ Two processes $p$ and $q$ can make transitions in parallel if they agree on what
 
 
 The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behaviour serves us well, because in general, what one AUTOSAR runnable does may have impact on many (if not all) parts of the executing system. It is however important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over the parallel composition operator is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
+
+%% TODO: PaJa: continue reading from here.
 
 The initial process $p_0$ is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
 \begin{enumerate}
