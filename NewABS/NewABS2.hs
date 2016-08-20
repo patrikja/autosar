@@ -260,7 +260,9 @@ mainLoop = atomic $
      veloMem <- interRunnableVariable 0.0 
      state   <- interRunnableVariable S0
 
-     runnable (MinInterval 0) [TimingEvent deltaT] $ 
+     runnableT ["abs_mainloop_task" :-> 0] 
+               (MinInterval 0) 
+               [TimingEvent deltaT] $ 
        do velos  <- mapM (fmap fromOk . rteRead) velosIn
           Ok acc <- rteRead accelIn
           Ok s0  <- rteIrvRead state
@@ -406,6 +408,9 @@ absSystem = composition $
      let vs = map valve wheelCtrls
          ss = map slip  wheelCtrls
          is = map index wheelCtrls
+
+     declareTask "abs_mainloop_task" (TimingEvent 0.0015)
+
      return $ ABS (accelIn, zipWith3 WheelPorts velosIn vs is)
 
 instance External ABS where
