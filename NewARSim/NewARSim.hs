@@ -2034,8 +2034,8 @@ simulateStandalone time f sched = f . limitTime time . execSim sched
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
-simulateUsingExternal :: External a => AUTOSAR a -> IO ()
-simulateUsingExternal sys = exceptionHandler $
+simulateUsingExternal :: External a => AUTOSAR a -> IO (a, Trace)
+simulateUsingExternal sys =
   do args <- getArgs
      case args of
       [inFifo, outFifo] -> runWithFIFOs inFifo outFifo sys
@@ -2046,8 +2046,8 @@ simulateUsingExternal sys = exceptionHandler $
 
 -- | Run the simulation with external software (i.e. Simulink) by
 -- starting the external component from Haskell, and clean up afterwards.
-simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO ()
-simulateDriveExternal ext sys = exceptionHandler $
+simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO (a, Trace)
+simulateDriveExternal ext sys =
   do args <- getArgs
      (inFifo, outFifo) <- case args of
        [inFifo, outFifo] -> return (inFifo, outFifo)
@@ -2069,7 +2069,7 @@ simulateDriveExternal ext sys = exceptionHandler $
 entrypoint :: External a
            => AUTOSAR a                      -- ^ AUTOSAR program.
            -> (Fd, Fd)                       -- ^ (Input, Output)
-           -> IO ()
+           -> IO (a, Trace)
 entrypoint system fds =
   do -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
@@ -2090,9 +2090,9 @@ entrypoint system fds =
                    , labels_out 
                    )
 
-     runStateT (simulationExt fds system idx_in idx_out)
+     ((res, trace), _) <- runStateT (simulationExt fds system idx_in idx_out)
                (rstate0 (mkStdGen 111))
-     return ()
+     return (res, trace)
 
 -- | Run simulation of the system using the provided file descriptors as
 -- FIFOs.
@@ -2100,7 +2100,7 @@ runWithFIFOs :: External a
              => FilePath
              -> FilePath
              -> AUTOSAR a
-             -> IO ()
+             -> IO (a, Trace)
 runWithFIFOs inFifo outFifo sys =
   do logWrite $ "Input FIFO:  " ++ inFifo
      logWrite $ "Output FIFO: " ++ outFifo
