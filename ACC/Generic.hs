@@ -3,7 +3,9 @@
 -- | Generic components / skeletons. 
 -- 
 -- Provides some basic generic components/skeletons, such as Johan's sequencer
--- and the generic feedthrough component.
+-- and the generic feedthrough component. 
+-- 
+-- NOTE: Most things in here are largely unused at this point.
 module Generic
   ( -- * Sequencer skeleton
     SeqState(..), Ticks, Limit, Index

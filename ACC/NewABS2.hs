@@ -68,6 +68,11 @@ data BangBang = BangBang
 -- | Bang-bang controller using pulse width modulation control. Makes use of 
 -- a PD-controller to control input signal, and pulse-width modulates the
 -- control signal.
+--
+-- NOTE: The controller runs on a fixed 1 ms period regardless of what the rest
+-- of the system uses, since the actuator pulses need to be of a fairly high
+-- resolution. This also means that this is the bottleneck of the ACC example
+-- (since the rest of the system runs on a 20 ms period).
 bangBangCtrl :: AUTOSAR BangBang
 bangBangCtrl = atomic $ 
   do valvePort <- providedPort
@@ -76,9 +81,9 @@ bangBangCtrl = atomic $
      comSpec valvePort (InitValue (False, True))
 
      carrier <- interRunnableVariable (0 :: Int)
-  
-     let width = 20
-     -- Run on a 1 ms resolution
+ 
+     let width = 20 -- Maximum pulse width.
+     
      runnable (MinInterval 0) [TimingEvent 1e-3] $
        do Ok c  <- rteIrvRead carrier
           Ok s0 <- rteRead slips
