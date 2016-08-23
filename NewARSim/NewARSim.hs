@@ -1951,8 +1951,6 @@ simulateExt withTasks (fdInput, fdOutput) sched conn procs =
 
                    -- Signal OK and then data.
                    writeStatus OK fdOutput
-                   when (next < 1e-3) $ logWrite $
-                     "Warning: Small delta step of " ++ show next ++ " sent."
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
