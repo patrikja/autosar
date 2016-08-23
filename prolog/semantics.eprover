@@ -173,12 +173,12 @@ begingroup(SpawnTerminate).
 
 step( runnable(A, 0, pending, N),                   say(A,new),                         par( runnable(A, T, idle, plus(N,1)),
                                                                                               rinst(A, void, eps, ap(K,void)) )       ) :-
-    or(equal(N,0),canBeInvokedConcurrently(A,N)),
+    or(equal(N,0),canBeInvokedConcurrently(A)),
     minimumStartInterval(A,T),
     implementation(A,K).
 step( runnable(A, 0, cons(client(B,M,V),Cs), N),    say(A,new),                         par( runnable(A, T, Cs, plus(N,1)),
                                                                                              rinst(A, client(B,M,V), eps, ap(K,V)) )  ) :-
-    or(equal(N,0),canBeInvokedConcurrently(A,N)),
+    or(equal(N,0),canBeInvokedConcurrently(A)),
     minimumStartInterval(A,T),
     implementation(A,K).
 
