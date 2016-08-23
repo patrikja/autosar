@@ -85,11 +85,6 @@ import qualified Test.QuickCheck.Text as QCT
 import qualified Test.QuickCheck.Exception as QCE
 import qualified Test.QuickCheck.State as QCS
 
--- Debug imports
--- XXX REMOVE
-import Debug.Trace
-import GHC.Stack
-
 -- The RTE monad -------------------------------------------------------------
 
 type RTE c a                = Program (RTEop c) a
@@ -194,7 +189,7 @@ data SimState = SimState
   , simProbes   :: [Probe]
   , initvals    :: Map Address Value
   , nextA       :: Address
-  , tasks       :: Map String [(Int, ProcAddress)]
+  , tasks       :: Map String [(Int, ProcAddress, Int)]
   , taskDecl    :: Map Address String
   }
 
@@ -330,7 +325,7 @@ apInit conn mp p = p
 
 -- | Decorate a @Task@ process with its state, and check that all tasks have
 -- been assigned runnables.
-taskInit :: HasCallStack => Map String [(Int, ProcAddress)]
+taskInit :: Map String [(Int, ProcAddress, Int)]
          -> Map Address String
          -> Proc
          -> Proc
@@ -339,7 +334,9 @@ taskInit tp na p@(Task a _ ts) =
   in  case Map.lookup name tp of
         Nothing -> error $ "Task " ++ show name ++ " was assigned no runnables."
         Just prios ->
-          let prios' = map snd $ sortBy (compare `on` fst) prios 
+          let fst3 (x, _, _) = x
+              pick (_, x, y) = (x, 0, y)
+              prios' = map pick $ sortBy (compare `on` fst3) prios 
           in  Task a Inactive ts 
                 { taskName  = name 
                 , execProcs = prios' 
@@ -348,7 +345,7 @@ taskInit _  _  p = p
 
 -- | Check that all tasks which have been assigned runnables also have been 
 -- declared.
-checkTasks :: Map String [(Int, ProcAddress)] -> Map Address String -> ()
+checkTasks :: Map String a -> Map b String -> ()
 checkTasks tp na = check na' tp' 
   where
     na' = Map.elems na
@@ -366,7 +363,7 @@ checkTasks tp na = check na' tp'
 -- Static task state.
 data TaskState = TaskState
   { taskName    :: String 
-  , execProcs   :: [ProcAddress] -- Address?
+  , execProcs   :: [(ProcAddress, Int, Int)] -- ^ @(addr, curr_skip, max_skip)@
   , taskTrigger :: Maybe Address
   } deriving Show
 
@@ -387,9 +384,18 @@ execReady proc =
     Task _ (Active True (x:xs)) _ -> Just proc
     _                             -> Nothing
 
-nameOf :: Proc -> String
-nameOf (Task _ _ ts) = show (taskName ts)
-nameOf _             = "NON_TASK"
+active :: Proc -> String
+active (Task _ (Active _ (x:_)) ts) = show (taskName ts) ++ " expects " ++ 
+                                      "NEW from " ++ show x
+active _                            = "NON_TASK"
+
+-- | Activate a task. Increments counters in the task state, and activates only
+-- those tasks which has a zero counter after state modification.
+activate :: Proc -> Proc
+activate (Task b _ ts) = Task b (Active True procs) ts { execProcs = next }
+  where
+    next  = map (\(a, n, m) -> (a, (n + 1) `mod` m, m)) (execProcs ts)
+    procs = [ addr | (addr, 0, _) <- next ]
 
 -- The AR monad ---------------------------------------------------------------
 
@@ -404,9 +410,17 @@ data ARInstr c a where
     AssignTask    :: Address -> Task -> ARInstr c ()
     NewTask       :: String -> Address -> ARInstr c ()
 
---  ex: "my_task" :-> (my_prio :: Int)
 --  (T :-> x) < (T :-> y)   iff x < y
-data Task = String :-> Int
+-- | Task assignments can be made in two ways. @"my_task" :>> (p, s)@ maps the
+-- runnable to the task "my_task" with priority @p@, scheduling it every @s > 0@ 
+-- task activations. The @:->@ constructor is essentially a special case where 
+-- @s = 1@. Tasks are ordered on @p@ s.t. 
+--
+-- @T :-> x@ executes prior to @T :-> y@ iff @x < y@.
+data Task 
+  = String :-> Int        -- ^ @Task name :-> Priority@
+  | String :>> (Int, Int) -- ^ @Task name :>> (Priority, Skip)
+
   deriving (Eq, Ord, Show)
 
 type AR c a                 = Program (ARInstr c) a
@@ -439,8 +453,10 @@ runAR sys st                = run sys st
                             = run (sys ()) (st { conns = addTransitive conn (conns st) })
     run' (Return a) st      = (a,st)
 
-    run' (AssignTask a (s :-> p) :>>= sys) st 
-                            = run (sys ()) (st { tasks = Map.insertWith (++) s [(p, RunAddr a)] (tasks st) })
+    run' (AssignTask a (s :>> (p, n)) :>>= sys) st 
+      | n < 1 = error $ "Attempted to assign task " ++ show a ++ " with a" ++ 
+                        " non-positive skip parameter " ++ show n ++ "."
+      | otherwise = run (sys ()) (st { tasks = Map.insertWith (++) s [(p, RunAddr a, n)] (tasks st) })
     run' (NewTask n a :>>= sys) st 
                             = if n `elem` Map.elems (taskDecl st) then
                                 error $ "Task " ++ show n ++ " declared twice."
@@ -626,8 +642,7 @@ runnable :: Invocation -> [Event c] -> RTE c a -> Atomic c ()
 runnable = runnableT [] 
 
 -- | Task assigned runnable.
-runnableT :: HasCallStack
-          => [Task] 
+runnableT :: [Task] 
           -> Invocation 
           -> [Event c] 
           -> RTE c a 
@@ -717,9 +732,12 @@ probeWrite' s x f    = singleton $ NewProbe s g
 -}
 
 -- | Assign an address to a task.
--- XXX Not fixed
 assignTask :: Address -> Task -> AR c ()
-assignTask a (t :-> p) = singleton $ AssignTask a (t :-> p)
+assignTask a task =
+  singleton $ AssignTask a $
+    case task of 
+      t :-> p -> t :>> (p, 1)
+      _       -> task
 
 data Label                  = ENTER Address
                             | EXIT  Address
@@ -821,7 +839,6 @@ say (NEW _ _) (Run a _ (Serving (c:cs) (v:vs)) n m s b) = [ Update $ Run a (mins
 say (DELTA d) (Run a t act n m s b)                     = [ Update $ Run a (t - d) act n m s b]
 say (TICK _)  (Timer a _ t n)                           = [ Update $ Timer a t t n]
 say (DELTA d) (Timer a t t0 n)                          = [ Update $ Timer a (t - d) t0 n]
--- say START     (Task b Ready ts)                         = [ Update $ scheduleNext (Task b Active ts) ]
 say label     (RInst a n c ex code b)                   = say' label (view code)
   where say' (ENTER _)      (Enter (EX x) :>>= cont)    = [ Update $ RInst a n c (x:ex)   (cont void) b]
         say' (EXIT _)       (Exit (EX x)  :>>= cont)    = [ Update $ RInst a n c ex       (cont void) b]
@@ -917,16 +934,13 @@ hear conn (TICK a)      (Run b t _ n m s f)   | a==b      = Update $ Run b t Pen
 hear conn (DELTA d)     (Run b 0.0 act n m s _)           = Unchanged 
 hear conn (DELTA d)     (Run b t act n m s f)             = Update $ Run b (t-d) act n m s f
 hear conn (DELTA d)     (Timer b t t0 n)                  = Update $ Timer b (t-d) t0 n
-hear conn (WR a v)      (Output b _)       | a `conn` b   = Update $ Output b v
-
--- Task triggering:
+hear conn (WR a v)      (Output b _)       
+        | a `conn` b                                      = Update $ Output b v
 hear conn (WR a _)      (Task b Inactive ts) 
-        | trigT conn a ts                                 = Update $ Task b (Active True (execProcs ts)) ts 
+        | trigT conn a ts                                 = Update $ activate (Task b Inactive ts)
 hear conn (SND a _ _)   (Task b Inactive ts) 
-        | trigT conn a ts                                 = Update $ Task b (Active True (execProcs ts)) ts
-hear conn (TICK a)      (Task b Inactive ts) | a == b     = Update $ Task b (Active True (execProcs ts)) ts
-
--- Tasks scheduling:
+        | trigT conn a ts                                 = Update $ activate (Task b Inactive ts)
+hear conn (TICK a)      (Task b Inactive ts) | a == b     = Update $ activate (Task b Inactive ts) 
 hear conn (NEW a n)     (Task b (Active True (x:xs)) ts) 
         | a `isRunning` x                                 = Update $ Task b (Active False (RInstAddr a n:xs)) ts
 hear conn (TERM a)      (Task b (Active False (x:xs)) ts)
@@ -955,7 +969,7 @@ step :: ConnRel -> ProcMap -> [SchedulerOption]
 step conn pm = explore conn pm procs sayers
   where
     procs     = pmapElems pm
-    sayers    = scheduled ++ tasks ++ untasked
+    sayers    = scheduled ++ untasked
     untasked  = filter isUntasked   procs
     tasks     = filter isActiveTask procs 
     scheduled = map (pmapLookup pm) $ mapMaybe schedIn tasks 
@@ -1000,12 +1014,6 @@ hear1 conn label pm =
     UP a _    -> [hear conn label (pmapLookup pm (UniqueAddr a))]
     RES a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
     RET a _   -> [hear conn label (pmapLookup pm (UniqueAddr a))]
-
---     TERM a    -> [hear conn label (pmapLookup pm (RunAddr a))]
---     TICK a    -> [hear conn label (pmapLookup pm (RunAddr a))]
-
---  It would be possible to use applicative to try RunAddr first and then
---  UniqueAddr on some of these 
     -- Not on target
     CALL {}   -> map (hear conn label) (pmapElems pm)
     INV {}    -> map (hear conn label) (pmapElems pm)
@@ -1032,9 +1040,6 @@ response conn pm p h =
       UP a _   -> mayHear conn label (pmapLookup pm (UniqueAddr a))
       RES a _  -> mayHear conn label (pmapLookup pm (UniqueAddr a))
 
-      -- Try to find a task with the address @a@. If we dont find one,
-      -- we can safely leave the label as it is. (It's a bit expensive to
-      -- send these to /all/ processes).
       TICK a   -> 
         case Map.lookup (UniqueAddr a) pm of
           Just proc -> mayHear conn label proc
@@ -1046,8 +1051,7 @@ response conn pm p h =
       DELTA {} -> response' label 
       _        -> label
   where
-    response' = respond conn h -- (pmapElems (pmapDelete p pm))
---     response' = respond conn as . respond conn bs 
+    response' = respond conn h
 
 -- * Address-to-process
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1066,8 +1070,8 @@ pmapElems :: ProcMap -> [Proc]
 pmapElems = Map.elems
 
 -- | Lookup process by its address. 
-pmapLookup :: HasCallStack => ProcMap -> ProcAddress -> Proc
-pmapLookup pm pa = -- (Map.!)
+pmapLookup :: ProcMap -> ProcAddress -> Proc
+pmapLookup pm pa = 
   fromMaybe (error $ "Address " ++ show pa ++ " has no process.")
             (Map.lookup pa pm)
 
@@ -1076,11 +1080,11 @@ pmapInsert :: Proc -> ProcMap -> ProcMap
 pmapInsert p = Map.insert (procAddress p) p
 
 -- | Delete the (address, process) pair from the map.
-pmapDelete :: HasCallStack => Proc -> ProcMap -> ProcMap
+pmapDelete :: Proc -> ProcMap -> ProcMap
 pmapDelete = Map.delete . procAddress  
 
 -- | Bulk update of process map.
-pmapUpdate :: HasCallStack => ProcMap -> [Update Proc] -> ProcMap
+pmapUpdate :: ProcMap -> [Update Proc] -> ProcMap
 pmapUpdate pm ps = foldr pmapInsert (foldr pmapDelete pm removals) updates
   where
     updates  = [p | Update p <- ps]
@@ -1100,17 +1104,16 @@ type Logs = [(ProbeID, Value)]
 
 type SchedulerOption = (Label, ProcAddress, Logs, [Update Proc])
 
-newScheds :: [SchedulerOption] -> [ProcAddress]
-newScheds = mapMaybe (check . schedProc) 
-  where
-    schedProc (l, a, _, _) = (a, l)
+isNew :: ProcMap -> SchedulerOption -> Bool
+isNew pm (NEW a _, _, _, _) = case pmapLookup pm (RunAddr a) of
+                                Run _ _ _ _ _ _ b -> b
+isNew _  _                  = False
 
-    check (a, NEW {}) = Just a
-    check _           = Nothing
-
+isDelta :: SchedulerOption -> Bool
 isDelta (DELTA _, _, _, _) = True
 isDelta _                  = False
 
+isTick :: SchedulerOption -> Bool
 isTick (TICK _, _, _, _) = True
 isTick _                 = False
 
@@ -1119,9 +1122,10 @@ data Transition = Trans
   , transLabel  :: Label
   , transActive :: ProcAddress 
   , transLogs   :: Logs
+  , transError  :: Maybe String
   } deriving Show
 
-type Scheduler m = [SchedulerOption] -> m (Maybe (Transition, [Update Proc]))
+type Scheduler m = [SchedulerOption] -> m (Warn (Transition, [Update Proc]))
 
 type Trace = (SimState, [Transition])
 
@@ -1174,6 +1178,20 @@ rankSet s = Map.fromDistinctAscList $ zip (Set.elems s) [0..]
 -- * Stand-alone simulation
 -------------------------------------------------------------------------------
 
+-- Since stacking Maybe with Either is verbose
+data Warn a
+  = None
+  | Warn String a
+  | Some a 
+
+-- Annotate something with a warning
+warn :: String -> Warn a -> Warn a 
+warn msg w =  
+  case w of 
+    None     -> None
+    Warn m x -> Warn (m ++ ", " ++ msg) x
+    Some x   -> Warn msg x
+
 -- | Initialize the simulator with an initial state and run it.
 simulation :: Monad m => Scheduler m -> AUTOSAR a -> m (a, Trace)
 simulation sched sys = 
@@ -1187,9 +1205,6 @@ simulation sched sys =
 
 -- Internal simulator function. Progresses simulation until there are no more
 -- transitions to take.
---
--- NOTE: Global flag tells us if task assignments have been made to save us
--- some trouble in 'maximumProgress' if not.
 simulate :: Monad m 
          => Bool           -- ^ Simulating with tasks
          -> Scheduler m 
@@ -1199,10 +1214,14 @@ simulate :: Monad m
 simulate withTasks sched conn procs = 
   do next <- simulate1 withTasks sched conn procs
      case next of
-       Nothing ->
-         return []
-       Just (trans, procs1) -> 
-         (trans:) <$> simulate withTasks sched conn (pmapUpdate procs procs1)
+       None                      -> return []
+       Some (trans, procs1)      -> update trans procs1 Nothing
+       Warn warn (trans, procs1) -> update trans procs1 (Just warn)
+  where
+    update ts ps err =
+      let trans  = ts { transError = err }
+          procs2 = pmapUpdate procs ps
+      in (trans:) <$> simulate withTasks sched conn procs2
 
 -- Progresses simulation until there are no more transition alternatives.
 simulate1 :: Monad m 
@@ -1210,55 +1229,105 @@ simulate1 :: Monad m
           -> Scheduler m 
           -> ConnRel 
           -> ProcMap
-          -> m (Maybe (Transition, [Update Proc]))
+          -> m (Warn (Transition, [Update Proc]))
 simulate1 withTasks sched conn procs
-  | null alts               = return Nothing
-  | otherwise               = maximumProgress withTasks procs sched alts
+  | null alts = return None
+  | otherwise = maximumProgress conn withTasks procs sched alts
   where 
-    alts :: [SchedulerOption]
     alts = step conn procs
+
+-- * External control of schedulers
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 -- Schedules work as long as work-steps are available. When no more work can be
 -- done, @DELTA@-steps are scheduled.
---
--- NOTE: Global flag tells us if task assignments have been made to save us
--- some trouble if not.
-maximumProgress :: Bool -> ProcMap -> Scheduler m -> Scheduler m
-maximumProgress False pm sched alts 
-  | null work = sched deltas 
-  | otherwise = sched work
-  where 
-    (deltas, work) = partition isDelta alts
-maximumProgress True pm sched alts = taskSched pm sched alts
+maximumProgress :: Monad m 
+                => ConnRel 
+                -> Bool 
+                -> ProcMap 
+                -> Scheduler m 
+                -> Scheduler m
+maximumProgress conn tasks pm sched alts =
+  case tasks of
+    True -> checkEarlyPending conn pm (taskSched pm sched) alts
+    False
+      | null work -> sched deltas
+      | otherwise -> checkEarlyPending conn pm sched work
+      where
+        (deltas, work) = partition isDelta alts
 
 -- Finer control of the order of scheduling is needed when assigning runnables
 -- to tasks.
-taskSched :: ProcMap -> Scheduler m -> Scheduler m
+taskSched :: Monad m => ProcMap -> Scheduler m -> Scheduler m
 taskSched pm sched alts
-  | null ticks = schedNew pm sched rest
+  | null ticks = checkReady pm (schedNonTick pm sched) rest
   | otherwise  = sched ticks 
   where
     (ticks, rest) = partition isTick alts
 
 -- Whenever TICK labels have been handled, ensure that all runnables under task
 -- control have produced their NEW labels.
-schedNew :: ProcMap -> Scheduler m -> Scheduler m
-schedNew pm sched alts
-  | not (null nonReady) = error $ "Task(s) with bad assignments: " ++ 
-                                  unwords (map nameOf nonReady)
+schedNonTick :: Monad m => ProcMap -> Scheduler m -> Scheduler m
+schedNonTick pm sched alts
   | null news && null nond = sched deltas
   | null news              = sched nond
   | otherwise              = sched news
   where
-    (news, as)     = partition isNew alts
+    (news, as)     = partition (isNew pm) alts
     (deltas, nond) = partition isDelta as
 
-    isNew (NEW a _, _, _, _) = case pmapLookup pm (RunAddr a) of
-                                 Run _ _ _ _ _ _ b -> b
-    isNew _                  = False
+-- Check if a runnable process went from status @Pending@ to status @Pending@
+-- again. This means that a runnable was triggered twice by events without being
+-- activated (i.e. spawned a runnable instance). Catches the labels which might
+-- cause such a transition and compares the processes to see if it occured.
+checkEarlyPending :: Monad m 
+                  => ConnRel
+                  -> ProcMap 
+                  -> Scheduler m 
+                  -> Scheduler m
+checkEarlyPending conn pm sched alts = do
+  res <- sched alts
+  case res of 
+    None -> return None
+    _ -> do
+      let (label, us) = case res of 
+              -- Invariant: A transition was made, result is never @None@ 
+              Warn w (trans, ps) -> (transLabel trans, ps)
+              Some   (trans, ps) -> (transLabel trans, ps)
+      case label of 
+        TICK a    -> warnIf a us res
+        WR a _    -> warnIf a us res 
+        SND a _ _ -> warnIf a us res 
+        _         -> return res
+  where
+    warnIf a us res
+      | null (pendTwice a us) = return res
+      | otherwise             = return $ warn (errmsg a us) res
 
+    errmsg a us = "*** Runnables were triggered while Pending: " ++ 
+                  unwords (map (show . procAddress) (pendTwice a us)) ++
+                  " ***" 
+
+    affected a (Run b _ _ _ _ s _) = a == b || trig conn a s
+    affected _ _                   = False
+    
+    runs a us   = [ procAddress p | Update p <- us, affected a p ]
+    pendTwice a = filter isPending . map (pmapLookup pm) . runs a
+
+    isPending (Run _ _ Pending _ _ _ _) = True
+    isPending _                         = False
+
+
+-- Ready checking: Are there NEW transitions available for all runnables which
+-- are about to get scheduled in a task? Report warnings otherwise.
+checkReady :: Monad m => ProcMap -> Scheduler m -> Scheduler m 
+checkReady pm sched alts 
+  | null nonReady = sched alts
+  | otherwise     = warn errmsg <$> sched alts
+  where
+    errmsg   = "*** " ++ unwords (map active nonReady) ++ " ***"
     nonReady = check ready addrs
-    addrs    = newScheds alts
+    addrs    = [ a | (NEW {}, a, _, _) <- alts ]
     ready    = map (\t@(Task _ (Active True (x:_)) _) -> (x, t))
              $ mapMaybe execReady (pmapElems pm)
 
@@ -1267,9 +1336,11 @@ schedNew pm sched alts
       | a `elem` bs      = check ts bs
       | otherwise        = t : check ts bs
 
+-- * Schedulers
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 trivialSched :: Scheduler Identity
-trivialSched alts = return $ Just (Trans 0 label active logs, procs)
+trivialSched alts = return $ Some (Trans 0 label active logs Nothing, procs)
   where 
     (label, active, logs, procs) = head alts
 
@@ -1279,18 +1350,18 @@ roundRobinSched alts =
      let n = (m+1) `mod` length alts
          (label, active, logs, procs) = alts !! n
      put n
-     return $ Just (Trans n label active logs, procs)
+     return $ Some (Trans n label active logs Nothing, procs)
 
 randomSched :: Scheduler (State StdGen)
 randomSched alts = 
   do n <- state next
      let (label, active, logs, procs) = alts !! (n `mod` length alts)
-     return $ Just (Trans n label active logs, procs)
+     return $ Some (Trans n label active logs Nothing, procs)
 
 genSched :: Scheduler Gen
 genSched alts = do
   ((label, active, logs, procs), n) <- elements $ zip alts [0..]
-  return $ Just (Trans n label active logs, procs)
+  return $ Some (Trans n label active logs Nothing, procs)
 
 data SchedChoice            where
   TrivialSched        :: SchedChoice
@@ -1335,7 +1406,7 @@ replaySched :: Scheduler (State Trace)
 replaySched ls = do
   (init,steps) <- get
   case steps of
-    []       -> return Nothing -- Terminate
+    []       -> return None -- Terminate
     tr:rrs'  -> do
       put (init, rrs')
       let tlab  = transLabel tr
@@ -1353,7 +1424,7 @@ replaySched ls = do
         [] -> replaySched ls
                              
         ((lab, addr, logs, procs), n):xs -> 
-          return $ Just (Trans n lab addr logs, procs)
+          return $ Some (Trans n lab addr logs Nothing, procs)
 
 similarLabel :: Label -> Label -> Bool
 similarLabel (IRVR n1 _)   (IRVR n2 _)   = n1 == n2
@@ -1468,6 +1539,23 @@ limitTime t (a,trs) = (a,limitTimeTrs t trs) where
   limitTimeTrs t (del@Trans{transLabel = DELTA d}:trs) = del:limitTimeTrs (t-d) trs
   limitTimeTrs t []                        = []
   limitTimeTrs t (x:xs)                    = x : limitTimeTrs t xs
+
+-- Try to interleave logs and warnings.
+printAll :: Trace -> IO Trace
+printAll (a, ts) = do
+  let logs  = map transLogs ts
+      warns = map (fromMaybe "" . transError) ts
+  forM_ (logs `zip` warns) $ \(ls, w) -> do
+    unless (null w) $ putStrLn w
+    mapM_ (\(id,v) -> putStrLn (id ++ ":" ++ show v)) ls
+  return (a, ts)
+
+
+-- Like printLogs for warnings.
+printWarnings :: Trace -> IO Trace
+printWarnings (a, ts) = do
+  mapM_ putStrLn (mapMaybe transError ts) 
+  return (a, ts)
 
 printLogs :: Trace -> IO Trace
 printLogs trace = do
@@ -1790,7 +1878,7 @@ ioRandomSched alts =
     liftIO $ forM_ logs $ \(i, v) -> 
       putStrLn $ "[LOG] " ++ i ++ ":" ++ show v
 
-    return $ Just (Trans n label active logs, procs)
+    return $ Some (Trans n label active logs Nothing, procs)
 
 -- | Initialize the simulator with an initial state and run it. This provides
 -- the same basic functionality as 'simulation'.
@@ -1813,18 +1901,20 @@ simulationExt fds sys idx_in idx_out =
          a `conn` b    = (a, b) `elem` conns state1 || a==b
          outs          = [ Output a (toValue (0.0 :: Double)) 
                          | (a,i) <- idx_out ]
+         withTasks     = not . Map.null $ tasks state1
      
-     trs <- simulateExt fds ioRandomSched conn procs1
+     trs <- simulateExt withTasks fds ioRandomSched conn procs1
      return (res, (state1, trs))
 
 -- | Internal simulator function. Blocks until we receive input from the
 -- input file descriptor, which drives the simulation forward.
-simulateExt :: (Fd, Fd)                          -- ^ (Input, Output)
-         -> Scheduler RandStateIO
-         -> ConnRel
-         -> ProcMap
-         -> RandStateIO [Transition]
-simulateExt (fdInput, fdOutput) sched conn procs =
+simulateExt :: Bool                              -- ^ With task assignments?
+            -> (Fd, Fd)                          -- ^ (Input, Output)
+            -> Scheduler RandStateIO
+            -> ConnRel
+            -> ProcMap
+            -> RandStateIO [Transition]
+simulateExt withTasks (fdInput, fdOutput) sched conn procs =
   do status <- readStatus fdInput
      case status of
        OK ->
@@ -1841,7 +1931,7 @@ simulateExt (fdInput, fdOutput) sched conn procs =
             newPrevIn <- copyVector vec
             modify $ \st -> st { prevIn = newPrevIn }
 
-            progress <- simulate1Ext sched conn newProcs []
+            progress <- simulate1Ext withTasks sched conn newProcs []
             case progress of
               Nothing ->
                 do logWrite "Ran out of alternatives, requesting halt."
@@ -1866,7 +1956,8 @@ simulateExt (fdInput, fdOutput) sched conn procs =
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
-                   (ts++) <$> simulateExt (fdInput, fdOutput) sched conn procs1
+                   (ts++) <$> 
+                     simulateExt withTasks (fdInput, fdOutput) sched conn procs1
 
        -- In case this happened we did not receive OK and we should die.
        DIE ->
@@ -1877,27 +1968,33 @@ simulateExt (fdInput, fdOutput) sched conn procs =
 -- advancing time. When @maximumProgress@ returns a @DELTA@ labeled
 -- transition, @simulate1Ext@ returns @Just (time, procs, transitions)@. If the
 -- simulator runs out of alternatives, @Nothing@ is returned.
-simulate1Ext :: Scheduler RandStateIO
+simulate1Ext :: Bool 
+             -> Scheduler RandStateIO
              -> ConnRel
              -> ProcMap
              -> [Transition]
              -> RandStateIO (Maybe (Time, ProcMap, [Transition]))
-simulate1Ext sched conn procs acc
+simulate1Ext withTasks sched conn procs acc
   | null alts = return Nothing
   | otherwise =
-    do mtrans <- maximumProgress False procs sched alts
+    do mtrans <- maximumProgress conn withTasks procs sched alts
        case mtrans of
          -- The trace finished - should we return a Just here?
-         Nothing -> return $ error "The trace finished. I don't know what to do."
-         Just (trans, procs1) ->
-           case pmapUpdate procs procs1 of 
-             procs2 -> case transLabel trans of
-               DELTA dt -> 
-                 return $ Just (dt, procs2, trans:acc)
-               _ -> 
-                 simulate1Ext sched conn procs2 (trans:acc)
+         None -> 
+           fail "The trace finished. I don't know what to do."
+         Warn warn (trans, procs1) -> do
+           logWrite warn
+           update trans procs1 (Just warn)
+         Some (trans, procs1) -> 
+           update trans procs1 Nothing
   where
     alts = step conn procs
+    update tr ps w =
+      let procs2 = pmapUpdate procs ps
+          trans2 = tr { transError = w }
+      in case transLabel tr of
+          DELTA dt -> return $ Just (dt, procs2, trans2:acc)
+          _        -> simulate1Ext withTasks sched conn procs2 (trans2:acc)
 
 -- * Simulation entry-points.
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
