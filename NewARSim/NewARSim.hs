@@ -1287,15 +1287,18 @@ checkEarlyPending :: Monad m
                   -> Scheduler m
 checkEarlyPending conn pm sched alts = do
   res <- sched alts
-  let (label, us) = case res of 
-          -- Invariant: A transition was made, result is never @None@ 
-          Warn w (trans, ps) -> (transLabel trans, ps)
-          Some   (trans, ps) -> (transLabel trans, ps)
-  case label of 
-    TICK a    -> warnIf a us res
-    WR a _    -> warnIf a us res 
-    SND a _ _ -> warnIf a us res 
-    _         -> return res
+  case res of 
+    None -> return None
+    _ -> do
+      let (label, us) = case res of 
+              -- Invariant: A transition was made, result is never @None@ 
+              Warn w (trans, ps) -> (transLabel trans, ps)
+              Some   (trans, ps) -> (transLabel trans, ps)
+      case label of 
+        TICK a    -> warnIf a us res
+        WR a _    -> warnIf a us res 
+        SND a _ _ -> warnIf a us res 
+        _         -> return res
   where
     warnIf a us res
       | null (pendTwice a us) = return res
