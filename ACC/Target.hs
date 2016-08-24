@@ -1,3 +1,4 @@
+-- | TODO: Complete rewrite
 module Target 
   ( -- * Magic moving target
     MovingTarget(..)
@@ -6,7 +7,7 @@ module Target
 
 import Control.Monad
 import Data.Maybe           (fromMaybe)
-import NewARSim      hiding (void)
+import NewARSim
 
 type Velo = Double
 type Dist = Double

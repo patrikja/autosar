@@ -1,8 +1,8 @@
 -- | AUTOSAR PID controller.
 --
--- TODO: Apply digital low-pass filter to input; somewhat sensitive to noise/
---       rapid changes.
---
+-- A set of P/PI/PD/PID controllers. Note that these are somewhat sensitive to
+-- parameters, sample times and noise in the input. It's a good idea to filter
+-- noisy inputs for this reason.
 module PID 
   ( -- * Full PID controller
     PIDCtrl(..)
@@ -72,7 +72,3 @@ piController :: Time
              -> AUTOSAR PIDCtrl
 piController deltaT = pidController deltaT 0
 
--- * Digital low-pass filter
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- TODO: FIR filter seems simple
