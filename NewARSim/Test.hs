@@ -59,7 +59,7 @@ softw = composition $ do
   (c1, c2) <- comp3
   connect a c1
   connect b c2
-  declareTask "task1" (TimingEvent 0.2)
+  declareTask "task1" (TimingEvent 0.1)
   declareTask "task2" (DataReceivedEvent c2)
 
 
@@ -70,7 +70,7 @@ exampleQC = traceProp softw $ \trs ->
 main :: IO ()
 main = do 
   g <- newStdGen
-  simulateStandalone 2.0 printAll (RandomSched g) softw
+  simulateStandalone True 2.0 printAll (RandomSched g) softw
   return ()
 
 main2 :: IO ()

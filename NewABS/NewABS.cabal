@@ -61,7 +61,8 @@ executable NewABSExtD
     build-depends:      
       base == 4.*, 
       NewARSim,
-      random
+      random,
+      QuickCheck
   
     default-language:    Haskell2010
 

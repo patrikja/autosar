@@ -2072,8 +2072,8 @@ simulateStandalone ts time f sched = f . limitTime time . execSim ts sched
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
-simulateUsingExternal :: External a => Bool -> AUTOSAR a -> IO ()
-simulateUsingExternal useTasks sys = exceptionHandler $
+simulateUsingExternal :: External a => Bool -> AUTOSAR a -> IO (a, Trace)
+simulateUsingExternal useTasks sys =
   do args <- getArgs
      case args of
       [inFifo, outFifo] -> runWithFIFOs useTasks inFifo outFifo sys
@@ -2084,8 +2084,8 @@ simulateUsingExternal useTasks sys = exceptionHandler $
 
 -- | Run the simulation with external software (i.e. Simulink) by
 -- starting the external component from Haskell, and clean up afterwards.
-simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO ()
-simulateDriveExternal ext sys = exceptionHandler $
+simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO (a, Trace)
+simulateDriveExternal ext sys =
   do args <- getArgs
      (inFifo, outFifo) <- case args of
        [inFifo, outFifo] -> return (inFifo, outFifo)
@@ -2108,7 +2108,7 @@ entrypoint :: External a
            => Bool
            -> AUTOSAR a                      -- ^ AUTOSAR program.
            -> (Fd, Fd)                       -- ^ (Input, Output)
-           -> IO ()
+           -> IO (a, Trace)
 entrypoint useTasks system fds =
   do -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
@@ -2131,9 +2131,8 @@ entrypoint useTasks system fds =
 
      -- It's possible to fix this if you'd like.
      gen <- newStdGen
-     runStateT (simulationExt useTasks fds system idx_in idx_out)
-               (rstate0 gen)
-     return ()
+     ((res, trace), _) <- runStateT (simulationExt useTasks fds system idx_in idx_out) (rstate0 gen)
+     return (res, trace)
 
 -- | Run simulation of the system using the provided file descriptors as
 -- FIFOs.
@@ -2142,7 +2141,7 @@ runWithFIFOs :: External a
              -> FilePath
              -> FilePath
              -> AUTOSAR a
-             -> IO ()
+             -> IO (a, Trace)
 runWithFIFOs useTasks inFifo outFifo sys =
   do logWrite $ "Input FIFO:  " ++ inFifo
      logWrite $ "Output FIFO: " ++ outFifo
