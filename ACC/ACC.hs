@@ -1,9 +1,6 @@
 -- | Adaptive Cruise Control. 
---
--- TODO: Fix panic braking.
 
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module ACC 
   ( -- * ACC system
@@ -17,7 +14,7 @@ import Control.Monad
 import Data.Maybe
 import Generic
 import Revlimit 
-import NewARSim      hiding (void)
+import NewARSim
 import PID
 
 -- * Types 
@@ -110,7 +107,8 @@ cruiseCtrl deltaT = atomic $
 
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
-     runnable (MinInterval 0) [TimingEvent deltaT] $
+--      runnable (MinInterval 0) [TimingEvent deltaT] $
+     runnableT ["core1" :>> (3, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
           Ok m <- rteRead target

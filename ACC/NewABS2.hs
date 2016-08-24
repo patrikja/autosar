@@ -84,7 +84,8 @@ bangBangCtrl = atomic $
  
      let width = 20 -- Maximum pulse width.
      
-     runnable (MinInterval 0) [TimingEvent 1e-3] $
+--      runnable (MinInterval 0) [TimingEvent 1e-3] $
+     runnableT ["core1" :>> (2, 1)] (MinInterval 0) [TimingEvent 1e-3] $ 
        do Ok c  <- rteIrvRead carrier
           Ok s0 <- rteRead slips
           Ok s  <- rteCall pidCall (0.2, s0)
@@ -210,7 +211,8 @@ mainLoop = atomic $
       
      mapM_ (`comSpec` InitValue 0.0) slipsOut
       
-     runnable (MinInterval 0) [DataReceivedEvent velo] $
+--      runnable (MinInterval 0) [DataReceivedEvent velo] $
+     runnableT ["core1" :>> (1, 10)] (MinInterval 0) [DataReceivedEvent velo] $ 
        do velos <- mapM (fmap fromOk . rteRead) velosIn
           Ok v1 <- rteRead velo
           forM (velos `zip` slipsOut) $ \(v, p) -> rteWrite p (slipRatio v1 v)

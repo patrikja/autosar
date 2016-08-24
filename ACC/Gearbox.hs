@@ -40,7 +40,8 @@ gearController deltaT =
      gears <- interRunnableVariable initialGear
      timer <- interRunnableVariable (True, 0.8 * timerLimit)
 
-     runnable (MinInterval 0) [TimingEvent deltaT] $
+--      runnable (MinInterval 0) [TimingEvent deltaT] $
+     runnableT ["core1" :>> (6, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
        do res <- rteRead engineRPM
           case res of 
             Ok rpm1 -> do

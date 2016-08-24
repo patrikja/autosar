@@ -12,7 +12,7 @@ module Generic
   , sequencer
     -- * Feedthrough component
   , Feedthrough(..)
-  , feedthrough
+  , feedthrough, feedthroughT 
     -- * Signal routing
   , Switch(..)
   , switchRoute
@@ -100,10 +100,23 @@ data Feedthrough a b = Feedthrough
   , feedOut :: DataElem Unqueued b Provided
   }
 
+-- | Task assigned feedthrough component.
+feedthroughT :: (Data a, Data b)
+             => [Task]
+             -> (a -> b)
+             -> b
+             -> AUTOSAR (Feedthrough a b)
+feedthroughT tasks f init = atomic $ do
+  feedIn  <- requiredPort
+  feedOut <- providedPort
+  comSpec feedOut (InitValue init)
+
+  runnableT tasks (MinInterval 0) [DataReceivedEvent feedIn] $
+    do Ok t <- rteRead feedIn
+       rteWrite feedOut (f t)
+  return $ sealBy Feedthrough feedIn feedOut
+
 -- | Feedthrough component.
---
--- *** TODO ***
---  
 -- * Initial value not useful anymore.
 feedthrough :: (Data a, Data b)
             => (a -> b)
@@ -111,16 +124,7 @@ feedthrough :: (Data a, Data b)
             -> b 
             -- ^ Initial value for output
             -> AUTOSAR (Feedthrough a b)
-feedthrough f init = atomic $ do
-     feedIn  <- requiredPort
-     feedOut <- providedPort
-     comSpec feedOut (InitValue init)
-
-     -- Perform some sort of normalisation here
-     runnable (MinInterval 0) [DataReceivedEvent feedIn] $
-       do Ok t <- rteRead feedIn
-          rteWrite feedOut (f t)
-     return $ sealBy Feedthrough feedIn feedOut
+feedthrough = feedthroughT [] 
 
 -- * Signal routing
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
