@@ -342,7 +342,7 @@ $$
   p \Opar {\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} \ldots \\
 \end{array}
 $$
-This means that any runnable instance in $p$ wishing to enter $x$ is effectively blocked from making progress until some other process in $p$ chooses to exit $x$. In the same manner, a process wishing to exit an exclusive area not taken is also effectively blocked. The conditions on exiting are actually stronger than those that govern entering, since axiom (11) is only applicable to a runnable instance for which the exited area $x$ is at the top of its stack of acquired exclusive areas (as expressed by the sequence pattern $\Tcons x \Xs$). An exclusive area can thus only be exited by the process that entered it, and only in the reverse order of entering. Section~\ref{sect:DiscExcl} will bring up some alternatives to this semantics, and also discuss the interpretation of blocked processes in more detail.
+This means that any runnable instance in $p$ wishing to enter $i.x$ is effectively blocked from making progress until some other process in $p$ chooses to exit $i.x$. In the same manner, a process wishing to exit an exclusive area not taken is also effectively blocked. The conditions on exiting are actually stronger than those that govern entering, since axiom (11) is only applicable to a runnable instance for which the exited area $x$ is at the top of its stack of acquired exclusive areas (as expressed by the sequence pattern $\Tcons x \Xs$). An exclusive area can thus only be exited by the process that entered it, and only in the reverse order of entering. Section~\ref{sec:ExclNest} will bring up some alternatives to this semantics, and also discuss the interpretation of blocked processes in more detail.
 
 
 \subsection{Unbuffered sending/receiving}
@@ -652,7 +652,10 @@ One could argue that replacing the {\bf pending}/{\bf idle} flag of runnables wi
 
 The formal semantics presented in this report is aimed to be a faithful capture of the AUTOSAR specification, especially its Software Components template and RTE specification \cite{AR:SWC, AR:RTE}. Still, there are several areas where we have found the specification open to interpretation, or at least in need of some further clarification. We detail a few of these areas here, as an illustration to the kind of design decisions that may surface as the result of a formalization undertaking.
 
-Unqueued data elements that are read before first written should return the error code {\bf neverReceived} \cite[ch.~5.6.10]{AR:RTE}. Since no exceptions are mentioned in the specification, our intepretation is that this holds even when a data element possesses an {\em initValue} attribute  (third parameter of the initial {\bf delem} state defined in Section~\ref{sec:Sem}). However, as this renders any such assignments entirely redundant, an alternative interpretation creates a term
+
+\subsection{Data initialization}
+
+Unqueued data elements that are read before first written should return the error code {\bf neverReceived} \cite[ch.~5.6.10]{AR:RTE}. Since no exceptions to this rule are mentioned in the specification, our intepretation is that this holds even when a data element possesses an {\em initValue} attribute  (initial {\bf delem} state in Section~\ref{sec:Sem}). However, as this renders any such initial value assignments entirely redundant, an alternative interpretation would be to create a term
 $$
   \Tdelem {i.p.e} \Tfalse v
 $$
@@ -664,28 +667,136 @@ $$
 $$
 where $v$ is the {\em initValue} of $s$ if it exists, and the error code {\bf nodata} otherwise.
 
-The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple {\em OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
 
-Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, that might even carry identical periods. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:Parallelism}) also renders the resolution of any coinciding timer events highly non-deterministic. Restricting 
+\subsection{Activation of server runnables}
 
-It may further be noted that an alternative interpretation where conflicting timers are outruled just means a static model restriction, with no semantic implications on the timer configurations that are actually allowed.
-
-Related to multiple timers is the 
+The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple {\em OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
 
 
-DataReceivedEvent at Invalidate?
+\subsection{Interleaving of timing events}
 
-DataReceivedEvent at limit response?
+Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing in the specification that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, perhaps even with identical periods \cite[table~7.1, ch.~7.2.3]{AR:SWC}. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:Parallelism}) also renders the resolution of coinciding timing events highly non-deterministic. As an example, consider the event patterns of two timers with distinct periods that occasionally coincide:
+\begin{center}
+\rule{3mm}{1pt}%
+						\rule[-9pt]{1mm}{10pt}%
+\rule{2mm}{1pt}%
+													\rule{1mm}{10pt}%
+\rule{7mm}{1pt}%
+						\rule[-9pt]{1mm}{10pt}%
+\rule{1mm}{1pt}%
+													\rule{1mm}{10pt}%
+\rule{9mm}{1pt}%
+									\rule[-9pt]{1mm}{19pt}%
+\rule{9mm}{1pt}%
+													\rule{1mm}{10pt}%
+\rule{1mm}{1pt}%
+						\rule[-9pt]{1mm}{10pt}%
+\rule{4mm}{1pt}%
+\end{center}
+If the timers were activating two distinct runnables, the fragment above would be guaranteed to result in eight instantiations in total. But if directed towards a single runnable, the number of instances created could be seven as well as eight, with no means for the programmer to control the outcome.
 
-Exclusive area nesting
+This anomaly may lead to the conclusion that the AUTOSAR specification does not really intend more than one timing event to be defined per runnable. Luckily, our formalization is also compatible with this interpretation, as the restriction only concerns what set of static models to expect as starting states, not their dynamic behavior. 
 
-Return value of qelem write with fanout > 1 and *some* LIMIT failures
+Closely related to the interleaving of timing events, and of interest even if only distinct runnables are being triggered, is the notion of initial timer offsets. That is, at what time will each timer tick for the first time --- immediately at startup or at some other (later) time? The specification documents are totally silent on the issue, and the simplest conclusion is arguably to let all timers fire simultaneously at $0$ seconds from startup. Our {\bf timer} terms are thus initialized to the dynamic value $0$ (Section~\ref{sec:Sem}), although it is not hard to see that other values could be equally reasonable, like
+$$
+	\Ttimer {i.r} {t_p} {t_p}
+$$ 
+which lets each timer wait one full cycle before triggering for the first time. However, real systems tend to exhibit an arbitrary delay before each timer gets started, and if that behavior is meant to count as legal, the initial timer state must rather be
+$$
+	\Ttimer {i.r} {t_p} {t_r}
+$$ 
+for some arbitrarily chosen non-negative $t_r$. One might even want to add the condition $t_r < t_p$, but it must be emphasized that all these initilization options are mere semantic speculations --- the AUTOSAR specification must be clarified before any particular choice can be put on firm ground.
 
-Rule and examples of provided delegation port compatibility don't match
 
-Multiple inconsistent CompSpecs
+\subsection{Interpretation of data reception events}
 
-Crashed runnables
+Activation of runnables due to {\em DataReceivedEvent}s is faithfully captured in the formal semantics for unqueued as well as queued data elements (c.f.~axioms (17) and (29) with \cite[ch.~7.5.1.6]{AR:SWC}). But for unqueued elements AUTOSAR also provides an invalidation operation, whose net effect is very similar to that of a data write (see axiom (21)). Whether data invalidation should count as a reception event is not clear from the specification; we have chosen not to include it as a conservative conjecture. Revising this choice would not be hard, though: all that is necessary is to add an axiom that mimics (17) but matches on {\sc inv} rather than {\sc wr} labels.
+
+A similar specification ambiguity concerns {\em DataReceivedEvent}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a reciever must be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
+
+
+\subsection{Exclusive area nesting} \label{sec:ExclNest}
+
+The AUTOSAR specification is apparently ambiguous when it comes to exclusive areas, stating that "The RTE is not required to support nested invocations of [enter/exit] for the same exclusive area" \cite[ch.~5.6.28-29]{AR:RTE}. Whether entering a previously acquired area should succeed or not is thus left entirely open, something we have taken as a justification not to support it formally (axioms (9) to (12)). Still, it is interesting to ponder what would be required to actually allow this optional behavior. One aspect is that the referenced exclusive areas themselves need not really be involved in the resulting transitions; they must already be in the occupied state they should retain. Another detail is that if a runnable is already holding its referenced exclusive area, both the enter and exit commands essentially turn into {\em no-operations}. Thus, the necessary additions to the axiom set would look something like this:
+$$
+\begin{array}{lcll}
+		{\Trinst {i.r} c \Xs {\TrteEnter x k}}
+		\;\; \red{\Tsay {i.r} \Tnop} \\
+		{\Trinst {i.r} c {\Tcons x \Xs} {\Tap k \Tvoid}}
+		& \Pif\;x \in \Xs
+\\ \\
+		{\Trinst {i.r} c {\Tcons x \Xs} {\TrteExit x k}}
+		\;\; \red{\Tsay {i.r} \Tnop} \\
+		{\Trinst {i.r} c \Xs {\Tap k \Tvoid}}
+		& \Pif\;x \in \Xs
+\end{array}
+$$
+
+Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$ and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed nor able to flag an error due to a {\em void} return type. This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to a runnable instance about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
+$$
+\begin{array}{lcll}
+		{\Trinst {i.r} c {\Tcons y \Xs} {\TrteExit x k}}
+		\;\; \red{\Tsay {i.r} \Tnop} \\
+		{\Trinst {i.r} c {\Tcons y \Xs} {\Tap k {\kw{orderErr}}}}
+		& \Pif\;x \neq y
+\\ \\
+		{\Trinst {i.r} c \Teps {\TrteExit x k}}
+		\;\; \red{\Tsay {i.r} \Tnop} \\
+		{\Trinst {i.r} c \Teps {\Tap k {\kw{orderErr}}}}
+
+\end{array}
+$$
+
+
+\subsection{Failing runnables}
+
+A transition semantics like the one defined in this report provides rules for deriving the correct behaviors, while leaving the incorrect behaviors without derivation alternatives. This has the effect that a process term which attempts to do something illegal is assigned no meaningful remaining trace; it appears indefinitely stuck in its current state as if it were deadlocked and can participate in subsequent transitions only by ignoring what is being said.
+
+An alternative way of handling program failures in general is of course to throw exceptions or trigger some other non-local error-handling mechanism. AUTOSAR actually specifies a set of such generic error-handling approaches, but it does so in terms of implementation artefacts like tasks and memory partitions only, rather than the software component concepts under study in this report \cite{AR:ERR}. Still, the presence of exceptional errors raises a string of questions when combined with the concurrency and communication features of software components, and a clarification of this aspect could go a long way towards making AUTOSAR a self-contained programming model in its own right. We outline one possible way of formalizing the semantics of failing runnables below.
+
+First the code syntax needs to be extended so that failing computations can be represented:
+$$
+\begin{array}{lll}
+  \Code & ::= & \ldots               \\
+        & |   & \Return v            \\
+        & |   & \Throw
+\end{array}
+$$
+A "throw" command has no continuation and is thus similar to the exception generating commands of many modern programming languages. It could be given an informative value parameter as well, but this will not be needed in our simplistic approach. Throw commands can appear explicitly in the code to indicate software-detected errors, or they can be the result of special failure transitions, like the following alternative handling of an exit order violation:
+$$
+\begin{array}{lcll}
+		{\Trinst {i.r} c {\Tcons y \Xs} {\TrteExit x k}}
+		\;\; \red {\Tsay {i.r} \Tfail} \\
+		{\Trinst {i.r} c {\Tcons y \Xs} \Throw}
+		& \Pif\;x \neq y
+\\ \\
+		{\Trinst {i.r} c \Teps {\TrteExit x k}}
+		\;\; \red {\Tsay {i.r} \Tfail}  \\
+		{\Trinst {i.r} c \Teps \Throw}
+\end{array}
+$$
+Because a failed runnable instance now has an explicit representation, we can specify details of how such a process should interact with its enviroment. We may for example wish to define that a special error code is returned if our runnable is running on behalf of a client, and that any exclusive areas held are automatically exited in the right order (c.f.~axioms (42) and (11)):
+$$
+\begin{array}{lcll}
+		{\Trinst a {\Tclient b m \_} \Xs \Throw}
+		\;\; \red{\Tsay b {\Tret m {\kw{serverErr}}}} \\
+		{\Trinst a \Tvoid \Xs \Throw}
+\\ \\
+		{\Trinst {i.r} \Tvoid {\Tcons x \Xs} \Throw}
+		\;\; \red{\Tsay {i.x} \Tex} \\
+		{\Trinst {i.r} \Tvoid \Xs \Throw}
+\end{array}
+$$
+Finally, we can ensure that the instance counter of a runnable is properly decremented even if an instance terminates due to a failure (in interaction with axiom (52)):
+$$
+\begin{array}{rcll}
+		{\Trinst a \Tvoid \Teps \Throw}
+		& \red{\Tsay a \Tterm}
+		\Tzero
+\end{array}
+$$
+Other design choices are of course perfectly possible, and more elaborate rules, for example defining an explicit exception-catching mechanism, could be considered as well. We must emphasize, though, that the rules in this section are just hypothetical examples; they are not based on the current AUTOSAR specification and are only presented to illustrate the succinctness and level of detail that can be obtained by chosing a formal semantics aproach.
+
 
 
 \section{Conclusions and Future Work}
