@@ -13,6 +13,8 @@
 \input{macros.tex}
 \input{semantics.tex}
 
+\bibliographystyle{splncs03} % Latest bibtex style for llncs
+
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt plus 2pt minus 1pt}
 
@@ -26,7 +28,7 @@ TODO
 \section{Introduction}
 \label{sec:Intro}
 
-The AUTOSAR standard is an open software component architecture for the automotive industry. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology.
+The AUTOSAR standard is an open software component architecture for the automotive industry \cite{AR:Homepage}. Its main purpose is to enable interoperability of software modules among different vendors and on heterogeneous platforms, via an extensive set of standardized interfaces and libraries, and a common software development methodology.
 
 The standard has a rather wide scope and covers many features normally associated with complex operating systems, like I/O abstraction, concurrency, communication, distribution and real-time predictability. Unlike existing operating systems, however, AUTOSAR is not de facto defined in terms of a particular implementation. Instead, an explicit goal of AUTOSAR is to constitute an abstract specification that allows multiple and competing realizations, and even systems built as an assembly of fragments from many different (and competing) vendors. Such a goal naturally puts a heavy focus on the standard specification itself.
 
@@ -43,13 +45,13 @@ TODO: Some simple (informal) example early to give the reader an early view of f
 \section{AUTOSAR}
 \label{sec:autosar}
 
-An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs). Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
+An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs) \cite{AR:SWC}. Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
 
 Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behaviour in terms of \textbf{runnables} and \textbf{inter-runnable variables}, primarily. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioural definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
 
 A runnable under execution is called a \textbf{runnable instance}, and several instances may execute concurrently even if they belong to the same SWC. Each runnable indicates whether or not it may be instantiated concurrently with itself. Runnable code can also use \textbf{exclusive areas} (a form of mutex semaphores) to further control concurrent behaviour.
 
-To interact with ports, inter-runnable variables and exclusive areas, runnables use what is abstractly known as the \textbf{virtual function bus} (VFB). Concretely, the VFB takes the shape of a C programming interface to the \textbf{run-time environment} (RTE), custom-generated for each runnable on the basis of its access constraints. Behind the RTE, a collection of OS kernels, communication stacks and other basic software modules implement the VFB services for the platform at hand. Complete AUTOSAR designs also typically contain \textbf{ECU} and \textbf{task assignments}, which are manually built tables that control how SWCs and runnables map onto the available hardware and OS resources, respectively.
+To interact with ports, inter-runnable variables and exclusive areas, runnables use what is abstractly known as the \textbf{virtual function bus} (VFB). Concretely, the VFB takes the shape of a C programming interface to the \textbf{run-time environment} (RTE), custom-generated for each runnable on the basis of its access constraints \cite{AR:RTE}. Behind the RTE, a collection of OS kernels, communication stacks and other basic software modules implement the VFB services for the platform at hand. Complete AUTOSAR designs also typically contain \textbf{ECU} and \textbf{task assignments}, which are manually built tables that control how SWCs and runnables map onto the available hardware and OS resources, respectively.
 
 AUTOSAR models are completely static, which means that all components, runnables, ports, connectors, etc, are created ahead of execution time. Runnable instances are an exception, but they are only identified by AUTOSAR for conceptual purposes and are never part of any model syntax. This static nature renders AUTOSAR models very suitable to graphical notations, which by far is the most widespread representation format for AUTOSAR models. A graphical model example is shown in Figure~\ref{fig:model}.
 
@@ -390,7 +392,7 @@ $$
 $$
 
 
-\subsection{Calling a server}
+\subsection{Calling a server} \label{sect:Call}
 
 The behaviour of client-server communication in AUTOSAR depends on whether a client lists the required server port operation as a synchronous or an asynchronous callpoint (which are mutually exclusive model attributes). In the former case, the call command is treated as if it were immediately followed by a command for retrieving the server result (axiom (31)), whereas in the latter case, the call succeeds immediately and the result has to be retrieved explicitly by the client's continuation code (axiom (32)). In both cases, however, an attempt to call the server before it is done processing a previous asynchronous call leads to immediate abortion with the error code \textbf{limit} (axiom (35)).
 
@@ -410,7 +412,7 @@ $$
 $$
 
 
-\subsection{Passing back a server result}
+\subsection{Passing back a server result} \label{sect:Res}
 
 The \emph{result} command can appear as an implicit effect of a previous call command, if the operation invoked is marked as an \emph{synchronousServerCallPoint} (c.f.\ axiom (31)). It can also be referenced explicitly in a client runnable's code, if the current runnable lists the operation as an \emph{asynchronousServerCallPoint}). For the synchronous case, axiom (38) excludes \textbf{nodata} values, which effectively blocks progress of the caller until a server result distinct from \textbf{nodata} has been produced. The asynchronous case of axiom (39) has no value restrictions, so it will happily pass back the \textbf{nodata} tag as well as an indication that a result is not yet available.
 
@@ -468,7 +470,7 @@ The differences all emanate from the server/non-server distinction:
 \begin{itemize}
 \item The non-server runnable instance gets a $\Tvoid$ client parameter whereas the server instance is assigned the client tuple from the head of the server's client queue.
 \item The non-server runnable toggles back to the $\Tidle$ activation state, while the server just chops of the head of its client queue.
-\item Only the server runnable instance is given a non-void parameter, which is taken from the same client queue head.
+\item Only the server runnable instance is given a non-void code parameter, which is taken from the same client queue head.
 \end{itemize}
 The transition label of axioms (49) and (59) is noteworthy because it is not matched by a corresponding hearing transition; all other process terms just ignore the information that a new runnable instance has been spawned. An example of process instantiation within a parallel context will thus merely be a trivial variant of one of the instantiation axioms, and is therefore left out.
 
@@ -560,79 +562,116 @@ TODO: some links from rules and choices made here to the AUTOSAR spec
 \section{Parallelism}
 \label{sec:Parallelism}
 
+The transition relation defined in Appendix~\ref{sec:Rules} is non-deterministic; i.e., it may very well be that for some process $p$,
 $$
 \begin{array}{c}
-  {\Trunnable a 0 \Tidle 0} \Opar
-  {\Tqelem b 2 \Teps} \vspace{0.6ex} \\
-
-  \red{\hear{b}{\Tsnd {v_1} \Teps}} \\
-
-  {\Trunnable a 0 \Tpending 0} \Opar
-  {\Tqelem b 2 {v_1}} \vspace{0.6ex} \\
-
-  \red{\say{a}{\Tnew}} \\
-
-  {\Trunnable a 0 \Tidle 1} \Opar
-  {\Tqelem b 2 {v_1}} \,\Opar  \\
-  {\Trinst a \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
-
-  \red{\hear{b}{\Tsnd {v_2} \Teps}} \\
-
-  {\Trunnable a 0 \Tpending 1} \Opar
-  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \,\Opar  \\
-  {\Trinst a \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
-
-  \red{\say{a}{\Tnew}} \\
-
-  {\Trunnable a 0 \Tidle 2} \Opar
-  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \,\Opar  \\
-  {\Trinst a \Tvoid \Teps {\Code}} \Opar
-  {\Trinst a \Tvoid \Teps {\Code}}
+	p \red{l_1} p_1 \hspace{10mm}\text{and}\hspace{10mm} p \red{l_2} p_2
 \end{array}
 $$
-
+are both possible. If it also holds that
 $$
 \begin{array}{c}
-  {\Trunnable a 0 \Tidle 0} \Opar
-  {\Tqelem b 2 \Teps} \vspace{0.6ex} \\
-
-  \red{\hear{b}{\Tsnd {v_1} \Teps}} \\
-
-  {\Trunnable a 0 \Tpending 0} \Opar
-  {\Tqelem b 2 {v_1}} \vspace{0.6ex} \\
-
-  \red{\hear{b}{\Tsnd {v_2} \Teps}} \\
-
-  {\Trunnable a 0 \Tpending 0} \Opar
-  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \vspace{0.6ex} \\
-
-  \red{\say{a}{\Tnew}} \\
-
-  {\Trunnable a 0 \Tidle 2} \Opar
-  {\Tqelem b 2 {\Tcons{v_1}{v_2}}} \,\Opar  \\
-  {\Trinst a \Tvoid \Teps {\Code}}
+	p_1 \red{l_2} q \hspace{10mm}\text{and}\hspace{10mm} p_2 \red{l_1} q
 \end{array}
 $$
+are derivable, we note that process $p$ may evolve into state $q$ either via an $l_1$ step followed by $l_2$, or by first taking the $l_2$ step and then $l_1$. Such freedom of choice is commonly taken as the definition of {\em parallelism} in the process calculus literature --- if the sequential ordering of steps $l_1$ and $l_2$ has no significance, they might just as well be considered to occur in parallel.
+
+However, it may also be that two possible step orderings do not lead to identical results. That happens if, instead of the two transitions leading to $q$ above, we have
+$$
+\begin{array}{c}
+	p_1 \red{l_2} q_1 \hspace{10mm}\text{and}\hspace{10mm} p_2 \red{l_1} q_2
+\end{array}
+$$
+where $q_1$ and $q_2$ are "similar" but not identical states. This non-determinism also has a concrete interpretation, either reflecting the non-deterministic nature of a system's environment (messages $l_1$ and $l_2$ just happen to arrive in some particular order) or its internals (processor speed or a scheduling choice just happens to pick $l_1$ before $l_2$). It is one of the primary merits of the process calculus approach to allow the scope of such inherent non-determinism to be precisely defined, because although a given system state may render many different behaviors possible, many more are not. A formal semantics makes it possible to clearly draw the line between these groups of behaviors.
+
+The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$. A scenario where two values $v_1$ and $v_2$ are sent on a port connected to $a$ may lead to the following trace:
+$$
+\begin{array}{c}
+  {\Tqelem a 2 \Teps} \Opar 
+  {\Trunnable b 0 \Tidle 0} \vspace{0.6ex} \\
+
+  \red{\hear{i.p.e}{\Tsnd {v_1} \Teps}} \\
+
+  {\Tqelem a 2 {v_1}} \Opar 
+  {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
+
+  \red{\say{b}{\Tnew}} \\
+
+  {\Tqelem a 2 {v_1}} \Opar 
+  {\Trunnable b 0 \Tidle 1} \,\Opar  \\
+  {\Trinst b \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
+
+  \red{\hear{i.p.e}{\Tsnd {v_2} \Teps}} \\
+
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Trunnable b 0 \Tpending 1} \,\Opar  \\
+  {\Trinst b \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
+
+  \red{\say{b}{\Tnew}} \\
+
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Trunnable b 0 \Tidle 2} \,\Opar  \\
+  {\Trinst b \Tvoid \Teps {\Code}} \Opar 
+  {\Trinst b \Tvoid \Teps {\Code}}
+\end{array}
+$$
+That is, a resulting state where $a$ holds the two received values together with two concurrent instances of $b$ ready to start reacting upon the two reception events.
+
+However, an alternative trace is equally valid for the same scenario:
+$$
+\begin{array}{c}
+  {\Tqelem a 2 \Teps} \Opar 
+  {\Trunnable b 0 \Tidle 0} \vspace{0.6ex} \\
+
+  \red{\hear{i.p.e}{\Tsnd {v_1} \Teps}} \\
+
+  {\Tqelem a 2 {v_1}} \Opar 
+  {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
+
+  \red{\hear{i.p.e}{\Tsnd {v_2} \Teps}} \\
+
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
+
+  \red{\say{b}{\Tnew}} \\
+
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Trunnable b 0 \Tidle 1} \,\Opar  \\
+  {\Trinst b \Tvoid \Teps {\Code}}
+\end{array}
+$$
+Here there is only one $b$ instance created and none is pending, even though $a$ correctly contains the two values received. The reason is that by swapping the order of the first instantiation and the second data reception steps, the system is put in a state where its inability to count pending instantiations becomes fatal.
+
+Unfortunately there is very little a programmer can do to influence which of these two traces is taken. Giving $b$ a positive {\em minimumStartInterval} just guarantees that any subsequent events are lost during that interval. Long delays between reception events will reduce the likelihood of losses, but the choice of when to take an instantiation step is still fully internal to the operating system scheduler. Moreover, when messages are produced by multiple parallel senders, maintaining control over their time distribution may be highly impractical. Non-concurrent runnables can work around the problem by iterating over all received data at each invocation, but that solution is not very attractive if concurrent processing of each received item is desired.
+
+One could argue that replacing the {\bf pending}/{\bf idle} flag of runnables with a small counter variable would render the event triggering mechanism in AUTOSAR much more robust. The standard explicitly excludes event counting for all events but operation invocation, though, so the possibility that events may be lost is undeniably intentional \cite[ch.~4.2.3]{AR:RTE}. However, should this design decision ever be revisited, the two trace alternatives above could serve as a succinct problem characterization.
 
 
+\section{Ambiguities and clarification proposals}
+\label{sec:Amb}
 
+The formal semantics presented in this report is aimed to be a faithful capture of the AUTOSAR specification, especially its Software Components template and RTE specification \cite{AR:SWC, AR:RTE}. Still, there are several areas where we have found the specification open to interpretation, or at least in need of some further clarification. We detail a few of these areas here, as an illustration to the kind of design decisions that may surface as the result of a formalization undertaking.
 
-\section{Discussion / results}
-\label{sec:Disc}
+Unqueued data elements that are read before first written should return the error code {\bf neverReceived} \cite[ch.~5.6.10]{AR:RTE}. Since no exceptions are mentioned in the specification, our intepretation is that this holds even when a data element possesses an {\em initValue} attribute  (third parameter of the initial {\bf delem} state defined in Section~\ref{sec:Sem}). However, as this renders any such assignments entirely redundant, an alternative interpretation creates a term
+$$
+  \Tdelem {i.p.e} \Tfalse v
+$$
+for each unqueued data element $i.p.e$, where $v$ is the {\em initValue} of $e$ if it exists, and $\TneverReceived$ otherwise.
 
-\subsection{Ambiguities and alternative interpretations}
-\label{sec:DiscAmb}
+Inter-runnable variables can also be read before written, although here there is no special error code defined in the specification for the uninitialized case \cite[ch.~5.6.26]{AR:RTE}. Section~\ref{sec:Sem} sets each {\bf irv} contents to {\bf void} to indicate a truly non-existing value, although an entirely reasonable alternative would be
+$$
+  \Tirv {i.s} v
+$$
+where $v$ is the {\em initValue} of $s$ if it exists, and the error code {\bf nodata} otherwise.
 
-\subsection{Clarification proposals and improvements}
-\label{sec:DiscImp}
+The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple {\em OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
 
-irv without initValue vs.\ delem without initValue -- ``undefined'' vs.\ NO\_DATA at initial read.
+Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, that might even carry identical periods. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:Parallelism}) also renders the resolution of any coinciding timer events highly non-deterministic. Restricting 
 
-Multiple runnables triggered by same OperationInvokedEvent?
+It may further be noted that an alternative interpretation where conflicting timers are outruled just means a static model restriction, with no semantic implications on the timer configurations that are actually allowed.
 
-Multiple timingEvent for same runnable, possibly with same period?
+Related to multiple timers is the 
 
-Timer initial offsets
 
 DataReceivedEvent at Invalidate?
 
@@ -653,6 +692,8 @@ Crashed runnables
 \label{sec:Conc}
 
 Return to the limitation - what is the next step (which can be lifted more easily)
+
+\bibliography{refs}
 
 \onecolumn
 \appendix
