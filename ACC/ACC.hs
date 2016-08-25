@@ -49,7 +49,7 @@ accSystem timeStep = composition $
      -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
      -- Create a PD controller for the ACC. Parameters are 
      -- found by trial-and-error.
-     pidCtrl <- pdController (timeStep / 10) 5e-3 5e-2
+     pidCtrl <- pdController (timeStep / 10) 5e-3 5e-1
 
      -- Connections
      connect (pidOp pidCtrl)    (ctrl accECU)
@@ -107,12 +107,11 @@ cruiseCtrl deltaT = atomic $
 
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
---      runnable (MinInterval 0) [TimingEvent deltaT] $
      runnableT ["core1" :>> (3, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
           Ok m <- rteRead target
-          let (vt, st) = fromMaybe (c, 100) m
+          let (vt, st) = maybe (c, 100) (\(r, d) -> (v + r, d)) m
 
           Ok sig <- if v > vt then 
                       rteCall ctrl (0.9 * vt, v)

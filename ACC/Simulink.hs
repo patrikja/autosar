@@ -7,23 +7,28 @@ import NewARSim
 
 -- * External simulation
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- 
--- The example is parametrised on the target vehicle parameters. Cruise speed
--- is set externally (by the vehicle model). (Perhaps change this?)
---
--- The vehicle will need some time to accelerate to full speed (i.e. 5 - 10s)
--- depending on cruise setting.
 
-time = 9
-dist = 10
-velo = 5
-dur  = 5
+-- Current task assignment:
+--
+--  TASK "core1", 1 ms
+--  ORDER    Runnable       Execution policy
+--  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+--  0        velocityCtrl   Every 10 cycles, 10 ms 
+--  1        mainLoop       (Data reception)
+--  2        bangBang       Every cycle, 1 ms
+--  3        radarCtrl      Every 10 cycles, 10 ms
+--  4        cruiseCtrl     Every 10 cycles, 10 ms
+--  5        brakeCtrl      (Data reception)
+--  6        throttleCtrl   (Data reception)
+--  7        gearController Every 10 cycles, 10 ms
+--
 
 system :: AUTOSAR IOModule
 system = do
-  sys <- vehicleIO time dist velo dur
   declareTask "core1" (TimingEvent 1e-3)
-  return sys
+  vehicleIO 
 
 main :: IO ()
-main = simulateUsingExternal True system 
+main = do 
+  simulateUsingExternal True system 
+  return ()
