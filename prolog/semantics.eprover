@@ -121,9 +121,9 @@ endgroup(SendingReceiving).
 begingroup(CallServer).
 
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(_,V)),           rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))    ) :-
-    synchronousServerCallPoint(r(R,I),o(O,P,I)).
+    synchronousServerCallPoint(r(R,I),op(O,P,I)).
 step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(_,V)),           rinst(r(R,I), C, Xs, ap(K,ok))                ) :-
-    asynchronousServerCallPoint(r(R,I),o(O,P,I)).
+    asynchronousServerCallPoint(r(R,I),op(O,P,I)).
 step( oper(A, M, done(_)),                          hear(A,call(M,V)),                  oper(A, M, calling(T))                        ) :-
     serverCallPointTimeout(A,T).
 step( runnable(r(R,I), T, Cs, N),                   hear(A,call(M,V)),                  runnable(r(R,I), T, seq(Cs,client(A,M,V)), N) ) :-
@@ -143,10 +143,10 @@ endgroup(CallServer).
 begingroup(ServerResult).
 
 step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),              rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
-    synchronousServerCallPoint(r(R,I),o(O,P,I)),
+    synchronousServerCallPoint(r(R,I),op(O,P,I)),
     notequal(V,nodata).
 step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),              rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
-    asynchronousServerCallPoint(r(R,I),o(O,P,I)).
+    asynchronousServerCallPoint(r(R,I),op(O,P,I)).
 
 step( oper(A, M, calling(T)),                       hear(A,res(nodata)),                oper(A, M, calling(T))                        ).
 step( oper(A, M, done(V)),                          hear(A,res(V)),                     oper(A, M, done(V))                           ).
