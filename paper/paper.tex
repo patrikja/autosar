@@ -280,9 +280,9 @@ We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTO
 
 The semantic transition axioms are written in full in Appendix~\ref{sec:Rules}. We will discuss each group of axioms in turn, starting with the relatively simple behaviour of inter-runnable variables and exclusive areas. In most cases, the driving force behind a transition is some runnable instance wishing to say something which other processes either react to or ignore. How the runnable instances themselves come into existence will be detailed in Section~\ref{sect:SpawnTerm}.
 
-%% TODO: PaJa: continue reading from here.
-
 \subsection{Inter-runnable variables}
+
+TODO: Perhaps match up the order of introducing the terms of the initial process term \V{P_0} with these subsections
 
 An inter-runnable variable (irv) represents state that is local to a particular component and accessible by all runnables of that component. Axioms (5) and (7) show the \emph{say} transitions taken by a runnable instance wishing to read and write an irv $s$. In both cases the embedded continuation $k$ is applied to the command result. The corresponding \emph{hear} transitions of an irv appear as rules (6) and (8). Thanks to inference rule (1), a runnable instance and an irv can now engage in a parallel transition, for example expressing the writing of shared data.
 $$
@@ -344,10 +344,11 @@ $$
 $$
 This means that any runnable instance in $p$ wishing to enter $x$ is effectively blocked from making progress until some other process in $p$ chooses to exit $x$. In the same manner, a process wishing to exit an exclusive area not taken is also effectively blocked. The conditions on exiting are actually stronger than those that govern entering, since axiom (11) is only applicable to a runnable instance for which the exited area $x$ is at the top of its stack of acquired exclusive areas (as expressed by the sequence pattern $\Tcons x \Xs$). An exclusive area can thus only be exited by the process that entered it, and only in the reverse order of entering. Section~\ref{sect:DiscExcl} will bring up some alternatives to this semantics, and also discuss the interpretation of blocked processes in more detail.
 
+TODO: Dangling pointer to Section~\ref{sect:DiscExcl}
 
 \subsection{Unbuffered sending/receiving}
 
-Axioms (13) and (15) define unbuffered inter-process communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (7)). A data element (\textbf{delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (14) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-condition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns such that $\Tconnect {i.p.e} a$ and $\Tconnect {i.p.e} b$ are simultaneously true, parallel data element updates like the following are possible:
+Axioms (13) and (15) define unbuffered inter-process communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (7)). A data element (\textbf{delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (14) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-condition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns to be one-to-many (such as $\Tconnect {i.p.e} a$ and $\Tconnect {i.p.e} b$), parallel data element updates like the following are possible:
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
@@ -358,6 +359,8 @@ $$
 \end{array}
 $$
 As an aside, note that the associativity of the parallel composition operator is made entirely irrelevant by the symmetric shape of transition rules (1) and (2).
+
+TODO: ? I don't get that aside ? (associativity is about equality of terms: (a|b)|c == a|(b|c) but the rules deal with transitions, not equality.)
 
 Axiom (17) provides another means of interpreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $a$ should be marked as \textbf{pending} whenever a write occurs on an element connected to $a$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
 $$
@@ -373,12 +376,13 @@ Transitions that actually create an instance of a pending runnable will be intro
 
 A data element can also be queried for its update status flag, and be marked as carrying no valid value. Axioms (18)-(21) define the corresponding transitions.
 
-
 \subsection{Buffered sending/receiving} \label{sect:BufSndRcv}
 
 Buffered inter-process communication (axioms (22) - (30)) is just a minor variant of the unbuffered mechanism, where the single-value store of a \textbf{delem} term is replaced by a \textbf{qelem} process holding a sequence of values. The buffer is consumed from the left (axiom (23)) and extended to the right (axiom (27)). When the buffer is empty, the special value (error code) \textbf{nodata} is returned to receiving runnable instances (axiom (24)). When the buffer is at its maximum capacity, the communicated value is simply dropped (axiom (28)).
 
 However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the \emph{snd} transition, listing the addresses of connected \textbf{qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. By requiring connectivity for all $a$ in $\Tvar{as}$ in axiom (26), the possibility of letting irrelevant addresses in $\Tvar{as}$ cause bogus \textbf{limit} results is ruled out.
+
+%% TODO: PaJa: continue reading from here.
 
 The following example illustrates a scenario where a sent value is only stored in a subset of the connected buffers. Assuming $\Tconnect {\Tep e p i} a$ and $\Tconnect {\Tep e p i} b$:
 $$
@@ -587,31 +591,31 @@ where $q_1$ and $q_2$ are "similar" but not identical states. This non-determini
 The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$. A scenario where two values $v_1$ and $v_2$ are sent on a port connected to $a$ may lead to the following trace:
 $$
 \begin{array}{c}
-  {\Tqelem a 2 \Teps} \Opar 
+  {\Tqelem a 2 \Teps} \Opar
   {\Trunnable b 0 \Tidle 0} \vspace{0.6ex} \\
 
   \red{\hear{i.p.e}{\Tsnd {v_1} \Teps}} \\
 
-  {\Tqelem a 2 {v_1}} \Opar 
+  {\Tqelem a 2 {v_1}} \Opar
   {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
 
   \red{\say{b}{\Tnew}} \\
 
-  {\Tqelem a 2 {v_1}} \Opar 
+  {\Tqelem a 2 {v_1}} \Opar
   {\Trunnable b 0 \Tidle 1} \,\Opar  \\
   {\Trinst b \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
 
   \red{\hear{i.p.e}{\Tsnd {v_2} \Teps}} \\
 
-  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar
   {\Trunnable b 0 \Tpending 1} \,\Opar  \\
   {\Trinst b \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
 
   \red{\say{b}{\Tnew}} \\
 
-  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar
   {\Trunnable b 0 \Tidle 2} \,\Opar  \\
-  {\Trinst b \Tvoid \Teps {\Code}} \Opar 
+  {\Trinst b \Tvoid \Teps {\Code}} \Opar
   {\Trinst b \Tvoid \Teps {\Code}}
 \end{array}
 $$
@@ -620,22 +624,22 @@ That is, a resulting state where $a$ holds the two received values together with
 However, an alternative trace is equally valid for the same scenario:
 $$
 \begin{array}{c}
-  {\Tqelem a 2 \Teps} \Opar 
+  {\Tqelem a 2 \Teps} \Opar
   {\Trunnable b 0 \Tidle 0} \vspace{0.6ex} \\
 
   \red{\hear{i.p.e}{\Tsnd {v_1} \Teps}} \\
 
-  {\Tqelem a 2 {v_1}} \Opar 
+  {\Tqelem a 2 {v_1}} \Opar
   {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
 
   \red{\hear{i.p.e}{\Tsnd {v_2} \Teps}} \\
 
-  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar
   {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
 
   \red{\say{b}{\Tnew}} \\
 
-  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar 
+  {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar
   {\Trunnable b 0 \Tidle 1} \,\Opar  \\
   {\Trinst b \Tvoid \Teps {\Code}}
 \end{array}
@@ -666,11 +670,11 @@ where $v$ is the {\em initValue} of $s$ if it exists, and the error code {\bf no
 
 The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple {\em OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
 
-Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, that might even carry identical periods. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:Parallelism}) also renders the resolution of any coinciding timer events highly non-deterministic. Restricting 
+Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, that might even carry identical periods. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:Parallelism}) also renders the resolution of any coinciding timer events highly non-deterministic. Restricting
 
 It may further be noted that an alternative interpretation where conflicting timers are outruled just means a static model restriction, with no semantic implications on the timer configurations that are actually allowed.
 
-Related to multiple timers is the 
+Related to multiple timers is the
 
 
 DataReceivedEvent at Invalidate?
