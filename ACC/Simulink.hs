@@ -19,5 +19,11 @@ dist = 10
 velo = 5
 dur  = 5
 
+system :: AUTOSAR IOModule
+system = do
+  sys <- vehicleIO time dist velo dur
+  declareTask "core1" (TimingEvent 1e-3)
+  return sys
+
 main :: IO ()
-main = simulateUsingExternal (vehicleIO time dist velo dur)
+main = simulateUsingExternal True system 

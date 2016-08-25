@@ -31,8 +31,8 @@ data ThrottleCtrl = ThrottleCtrl
 
 -- | Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
 -- range. Makes use of the rev-limiter.
-throttleCtrl :: Time -> AUTOSAR ThrottleCtrl 
-throttleCtrl deltaT = atomic $ do -- feedthrough (max (-1) . min 1) 0.0
+throttleCtrl :: AUTOSAR ThrottleCtrl 
+throttleCtrl = atomic $ do 
   thrIn  <- requiredPort
   rpmIn  <- requiredPort
   revLim <- requiredPort
@@ -40,7 +40,8 @@ throttleCtrl deltaT = atomic $ do -- feedthrough (max (-1) . min 1) 0.0
 
   comSpec thrOut (InitValue 0.0)
 
-  runnable (MinInterval 0) [DataReceivedEvent thrIn] $ do
+--   runnable (MinInterval 0) [DataReceivedEvent thrIn] $ do
+  runnableT ["core1" :>> (5, 10)] (MinInterval 0) [DataReceivedEvent thrIn] $ do
     Ok thr0 <- rteRead thrIn
     Ok rpm  <- rteRead rpmIn
     Ok thr1 <- rteCall revLim (thr0, rpm)
@@ -54,7 +55,8 @@ throttleCtrl deltaT = atomic $ do -- feedthrough (max (-1) . min 1) 0.0
 
 -- | Vehicle brake controller. Limits throughput signal to the @[0, 1]@ range.
 brakeCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
-brakeCtrl = feedthrough (min 1) 0.0
+-- brakeCtrl = feedthrough (min 1) 0.0
+brakeCtrl = feedthroughT ["core1" :>> (4, 10)] (min 1) 0.0
 
 -- * Vehicle module
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -103,11 +105,11 @@ instance External IOModule where
 vehicleIO :: Time -> Dist -> Velo -> Time -> AUTOSAR IOModule
 vehicleIO time dist velo dur = composition $
   do let timeStep = 1e-2
-     
+
      -- Car subsystems
      -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
      brakes   <- brakeCtrl
-     engine   <- throttleCtrl   timeStep
+     engine   <- throttleCtrl
      gearCtrl <- gearController timeStep
      veloCtrl <- velocityCtrl   timeStep
      acc      <- accSystem      timeStep 
@@ -190,7 +192,8 @@ velocityCtrl deltaT = atomic $
      veloMem <- interRunnableVariable 0.0 
      state   <- interRunnableVariable S0
 
-     runnable (MinInterval 0) [TimingEvent deltaT] $ 
+--      runnable (MinInterval 0) [TimingEvent deltaT] $ 
+     runnableT ["core1" :>> (0, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
        do velos  <- mapM (fmap fromOk . rteRead) wheels
           Ok acc <- rteRead accel
           Ok s0  <- rteIrvRead state

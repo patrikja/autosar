@@ -100,7 +100,7 @@ run example = do c <- getCPUTime
 
 
 example0 :: Data a => SchedChoice -> t -> Int -> [Measure a]
-example0 sched g n = probes ["Read","Write","Ticket"] $ limitTrans (abs n + 1) $ execSim sched system
+example0 sched g n = probes ["Read","Write","Ticket"] $ limitTrans (abs n + 1) $ execSim False sched system
 
 example_triv g n = example0 TrivialSched g n
 

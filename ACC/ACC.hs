@@ -1,9 +1,6 @@
 -- | Adaptive Cruise Control. 
---
--- TODO: Fix panic braking.
 
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module ACC 
   ( -- * ACC system
@@ -17,7 +14,7 @@ import Control.Monad
 import Data.Maybe
 import Generic
 import Revlimit 
-import NewARSim      hiding (void)
+import NewARSim
 import PID
 
 -- * Types 
@@ -108,21 +105,14 @@ cruiseCtrl deltaT = atomic $
      comSpec vhVel  (InitValue 0.0)
      comSpec target (InitValue Nothing)
 
---      counter <- interRunnableVariable (0 :: Int)
-
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
-     runnable (MinInterval 0) [TimingEvent deltaT] $
+--      runnable (MinInterval 0) [TimingEvent deltaT] $
+     runnableT ["core1" :>> (3, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
           Ok m <- rteRead target
-
           let (vt, st) = fromMaybe (c, 100) m
-
---           Ok n <- rteIrvRead counter
---           rteIrvWrite counter ((n + 1) `mod` truncate (1 / deltaT / 10))
--- 
---           when (st + (vt - v) <= 0) $ printlog "ACC" "PANIC."
 
           Ok sig <- if v > vt then 
                       rteCall ctrl (0.9 * vt, v)
@@ -137,18 +127,4 @@ cruiseCtrl deltaT = atomic $
             rteWrite brkCtrl 0
 
      return $ sealBy CruiseCtrl crVel vhVel ctrl target thrCtrl brkCtrl
-
--- countLog :: Int -> String -> RTE c ()
--- countLog 0 str = printlog "ACC" str
--- countLog n _   = return ()
-
--- * Panic braking
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---   s_t = distance to target
---   v_t = target velocity
---   v   = vehicle velocity
---   T   = some time measure
---
---   if s_t + T(v_t - v) falls below some threshold (for instance zero), for 
---   some T, take control of brakes (i.e. panic brake).
 

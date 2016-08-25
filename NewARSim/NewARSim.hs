@@ -54,14 +54,14 @@ import           Data.Char                         (ord, chr)
 import           Data.Function                     (on)
 import           Data.List
 import           Data.Map                          (Map)
-import qualified Data.Map.Strict                 as Map
+import qualified Data.Map.Strict                as Map
 import           Data.Set                          (Set)
-import qualified Data.Set                        as Set
+import qualified Data.Set                       as Set
 import           Data.Maybe
-import qualified Data.Vector.Storable            as SV
+import qualified Data.Vector.Storable           as SV
 import           Data.Vector.Storable              ((!), (//))
-import qualified Data.Vector.Storable.Mutable    as MSV
-import           Data.Tuple                         (swap)
+import qualified Data.Vector.Storable.Mutable   as MSV
+import           Data.Tuple                        (swap)
 import           Dynamics
 import           Foreign.C
 import           Foreign.Marshal            hiding (void)
@@ -69,21 +69,25 @@ import           Foreign.Ptr
 import           Foreign.Storable
 import           System.Environment
 import           System.Exit
-import           System.FilePath (FilePath)
-import           System.Directory (removeFile)
+import           System.FilePath                   (FilePath)
+import           System.Directory                  (removeFile)
 import           System.IO
 import           System.IO.Error
 import           System.IO.Unsafe
 import           System.Random
-import           System.Posix hiding (getEnvironment)
-import           System.Process (ProcessHandle, createProcess, env, proc, terminateProcess)
+import           System.Posix               hiding (getEnvironment)
+import           System.Process                    ( ProcessHandle
+                                                   , createProcess
+                                                   , env, proc
+                                                   , terminateProcess
+                                                   )
 import qualified Unsafe.Coerce
-import           Test.QuickCheck hiding (collect)
-import           Test.QuickCheck.Property (unProperty)
-import qualified Test.QuickCheck.Property as QCP
-import qualified Test.QuickCheck.Text as QCT
-import qualified Test.QuickCheck.Exception as QCE
-import qualified Test.QuickCheck.State as QCS
+import           Test.QuickCheck            hiding (collect)
+import           Test.QuickCheck.Property          (unProperty)
+import qualified Test.QuickCheck.Property       as QCP
+import qualified Test.QuickCheck.Text           as QCT
+import qualified Test.QuickCheck.Exception      as QCE
+import qualified Test.QuickCheck.State          as QCS
 
 -- The RTE monad -------------------------------------------------------------
 
@@ -343,6 +347,15 @@ taskInit tp na p@(Task a _ ts) =
                 }
 taskInit _  _  p = p
 
+-- | Disable task assignment flags on runnables even if task declarations are
+-- present in the model (we'd like to be able to turn them off w/o rewriting the
+-- code).
+disableTasks :: [Proc] -> [Proc]
+disableTasks = map disable 
+  where
+    disable (Run a t i m n c _) = Run a t i m n c False
+    disable proc                = proc
+
 -- | Check that all tasks which have been assigned runnables also have been 
 -- declared.
 checkTasks :: Map String a -> Map b String -> ()
@@ -357,6 +370,18 @@ checkTasks tp na = check na' tp'
       | otherwise   = error $ "Task " ++ show x ++ " was assigned a runnable" ++
                               " but is lacking a declaration."
 
+-- | Print out a table containing all task assignments.
+taskTable :: Trace -> IO Trace
+taskTable tr@(st, _) = do
+  putStrLn $ "\nTask assignments:\n" ++ 
+             unlines (map printTask (Map.assocs (tasks st)))
+  return tr
+  where
+    printTask (t, ps) = show t ++ ": " ++ intercalate ", " (map go ps') 
+      where
+        ps' = sortBy (compare `on` (\(x, _, _) -> x)) ps
+        go (p, addr, n) = "{" ++ show p ++ "," ++ show addr ++ ":" ++ show n ++ "}"
+
 -- * Handling task state
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -367,6 +392,7 @@ data TaskState = TaskState
   , taskTrigger :: Maybe Address
   } deriving Show
 
+-- | Check if events from the address triggers the task.
 trigT :: ConnRel -> Address -> TaskState -> Bool
 trigT conn a ts = 
   case taskTrigger ts of
@@ -378,12 +404,15 @@ isRunning a (RunAddr b)     = a == b
 isRunning a (RInstAddr b _) = a == b
 isRunning _ _               = False
 
+-- | Check if the task is ready to be scheduled (i.e. if it may call 'say').
 execReady :: Proc -> Maybe Proc
 execReady proc = 
   case proc of 
     Task _ (Active True (x:xs)) _ -> Just proc
     _                             -> Nothing
 
+-- | Produce an error message, this is called from the scheduler section, should
+-- be placed there.
 active :: Proc -> String
 active (Task _ (Active _ (x:_)) ts) = show (taskName ts) ++ " expects " ++ 
                                       "NEW from " ++ show x
@@ -463,7 +492,9 @@ runAR sys st                = run sys st
                               else 
                                 run (sys ()) (st { taskDecl = Map.insert a n (taskDecl st) })
 
-addTransitive (a,b) conns   = (a,b) : [ (a,c) | (x,c) <- conns, b==x ] ++ [ (c,b) | (c,x) <- conns, a==x ] ++ conns
+addTransitive (a,b) conns = (a,b) : [ (a,c) | (x,c) <- conns, b==x ] ++ 
+                                    [ (c,b) | (c,x) <- conns, a==x ] ++ 
+                                    conns
 
 initialize :: AUTOSAR a -> (a, SimState)
 initialize sys = (a, st1)
@@ -498,7 +529,6 @@ instance Data a => ComSpec (DataElement Unqueued a Required) where
       where
         f (DElem b s _) | a==b  = DElem b s (Ok (toValue x))
         f p                     = p
-
 
 instance Data a => Port (DataElement Unqueued a) where
     providedPort = do
@@ -560,10 +590,8 @@ instance Port (ClientServerOperation a b) where
         mapM_ newConnection [ (a,p) | OP p <- ps ]
         return (OP a)
 
-
 connectEach :: Port p => [p Provided Closed] -> [p Required Closed] -> AUTOSAR ()
 connectEach prov req = forM_ (prov `zip` req) $ uncurry connect 
-
 
 class Addressed a where
     type Payload a              :: *
@@ -581,7 +609,6 @@ instance Addressed (ClientServerOperation a b r c) where
     type Payload (ClientServerOperation a b r c) = a
     address (OP n)              = n
 
-
 type family Seal a where
     Seal (k Required c)             = k Required Closed
     Seal (k Provided c)             = k Provided Closed
@@ -594,7 +621,6 @@ type family Seal a where
     Seal (k a b)                    = k (Seal a) (Seal b)
     Seal (k a)                      = k (Seal a)
     Seal k                          = k
-
 
 seal                                :: a -> Seal a
 seal                                = Unsafe.Coerce.unsafeCoerce
@@ -613,18 +639,16 @@ instance Sealer b => Sealer (a -> b) where
 instance {-# OVERLAPPABLE #-} (Unseal a ~ a) => Sealer a where
     sealBy                          = id
 
-
-
-
 -- Derived AR operations ------------------------------------------------------
 
--- | Declare a task.
+-- | Declare a task. Ex:
+-- 
+-- @
 --
--- TODO:
---   Some warnings could be emitted:
---     * Task time period is GTE max runnable period in task
---     * Corresponding events
---     * Concurrent
+-- declareTask "my_task" (TimingEvent 2.0)      -- triggered by timer
+-- declareTask "my_task" (DataReceivedEvent de) -- triggered by data reception 
+--
+-- @
 declareTask :: String -> Event c -> AUTOSAR ()
 declareTask n event = do 
   a <- newAddress
@@ -641,7 +665,8 @@ declareTask n event = do
 runnable :: Invocation -> [Event c] -> RTE c a -> Atomic c ()
 runnable = runnableT [] 
 
--- | Task assigned runnable.
+-- | Task assigned runnable. Note that a runnable may be assigned to several
+-- tasks.
 runnableT :: [Task] 
           -> Invocation 
           -> [Event c] 
@@ -951,7 +976,7 @@ hear conn label         proc                              = Unchanged
 -- * 'step' and 'explore'
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--- Replaces fold of @(mayHear conn)@.
+-- Replaces fold of @mayHear conn@.
 respond :: ConnRel -> [Proc] -> Label -> Label
 respond _    _      VETO      = VETO
 respond _    _      (TERM a)  = TERM a
@@ -963,8 +988,8 @@ respond _    []     label     = label
 respond conn (p:ps) label     = respond conn ps acc
   where acc = mayHear conn label p
 
--- Instead of actively querying for active processes inside tasks we extract
--- the scheduled processes of the currently active tasks from the process map.
+-- Filter out processes that may say, and perform broadcasts (@explore@) where
+-- each of these get a say.
 step :: ConnRel -> ProcMap -> [SchedulerOption]
 step conn pm = explore conn pm procs sayers
   where
@@ -987,6 +1012,7 @@ step conn pm = explore conn pm procs sayers
     isUntasked Input {}            = True
     isUntasked _                   = False
 
+-- | Explore all valid transitions.
 explore :: ConnRel -> ProcMap -> [Proc] -> [Proc] -> [SchedulerOption]
 explore _    _  _ []     = []
 explore conn pm h (p:ps) =
@@ -1000,7 +1026,7 @@ explore conn pm h (p:ps) =
         logs (DELTA _) = []
         logs _         = mayLog p
 
--- | Let only those concerned hear the broadcast (to some extent).
+-- | Let only those concerned (to some extent) hear the broadcast.
 hear1 :: ConnRel -> Label -> ProcMap -> [Update Proc]
 hear1 conn label pm = 
   case label of
@@ -1141,7 +1167,6 @@ traceProbes = simProbes . fst
 traceLogs :: Trace -> Logs
 traceLogs = concatMap transLogs . traceTrans
 
-
 printRow :: Int -> Int -> (Int -> String) -> String
 printRow width tot prt =
   intercalate "|" [ take width $ prt i ++ repeat ' ' | i <- [0..tot-1]]
@@ -1193,15 +1218,18 @@ warn msg w =
     Some x   -> Warn msg x
 
 -- | Initialize the simulator with an initial state and run it.
-simulation :: Monad m => Scheduler m -> AUTOSAR a -> m (a, Trace)
-simulation sched sys = 
+simulation :: Monad m => Bool -> Scheduler m -> AUTOSAR a -> m (a, Trace)
+simulation useTasks sched sys = 
   do trs <- simulate withTasks sched conn procs1
      return (res, (state1, trs))
   where 
-    procs1        = pmapFromList (procs state1)
+    procs1 
+      | useTasks  = pmapFromList (procs state1)
+      | otherwise = pmapFromList (disableTasks (procs state1))
+
     (res, state1) = initialize sys
     a `conn` b    = (a, b) `elem` conns state1 || a == b
-    withTasks     = not . Map.null $ tasks state1
+    withTasks     = not (Map.null (tasks state1)) && useTasks
 
 -- Internal simulator function. Progresses simulation until there are no more
 -- transitions to take.
@@ -1363,24 +1391,25 @@ genSched alts = do
   ((label, active, logs, procs), n) <- elements $ zip alts [0..]
   return $ Some (Trans n label active logs Nothing, procs)
 
-data SchedChoice            where
-  TrivialSched        :: SchedChoice
-  RoundRobinSched     :: SchedChoice
-  RandomSched         :: StdGen -> SchedChoice
+data SchedChoice where
+  TrivialSched    :: SchedChoice
+  RoundRobinSched :: SchedChoice
+  RandomSched     :: StdGen -> SchedChoice
   -- This can be used to define all the other cases
-  AnySched            :: Monad m => Scheduler m -> (forall a. m a -> a) -> SchedChoice
+  AnySched        :: Monad m => Scheduler m -> (forall a. m a -> a) 
+                  -> SchedChoice
 
-runSim                         :: SchedChoice -> AUTOSAR a -> (a,Trace)
-runSim TrivialSched sys        = runIdentity (simulation trivialSched sys)
-runSim RoundRobinSched sys     = evalState (simulation roundRobinSched sys) 0
-runSim (RandomSched g) sys     = evalState (simulation randomSched sys) g
-runSim (AnySched sch run) sys  = run (simulation sch sys)
+runSim :: Bool -> SchedChoice -> AUTOSAR a -> (a,Trace)
+runSim t TrivialSched sys       = runIdentity (simulation t trivialSched sys)
+runSim t RoundRobinSched sys    = evalState (simulation t roundRobinSched sys) 0
+runSim t (RandomSched g) sys    = evalState (simulation t randomSched sys) g
+runSim t (AnySched sch run) sys = run (simulation t sch sys)
 
-execSim :: SchedChoice -> AUTOSAR a -> Trace
-execSim sch sys = snd $ runSim sch sys
+execSim :: Bool -> SchedChoice -> AUTOSAR a -> Trace
+execSim t sch sys = snd $ runSim t sch sys
 
 simulationRandG :: AUTOSAR a -> Gen (a, Trace)
-simulationRandG a = simulation genSched a
+simulationRandG a = simulation True genSched a
 
 {-
 rerunSched :: Scheduler (State Trace)
@@ -1460,7 +1489,7 @@ siblingTo _                _                = False
 replaySimulation :: forall a. Trace -> AUTOSAR a -> (Trace, a)
 replaySimulation tc m = swap $ evalState m' tc
     where m' :: State Trace (a, Trace)
-          m' = simulation replaySched m
+          m' = simulation True replaySched m
 
 -- The original list represented by (pre, x, suf)
 -- is pre ++ [x] ++ suf
@@ -1882,12 +1911,13 @@ ioRandomSched alts =
 
 -- | Initialize the simulator with an initial state and run it. This provides
 -- the same basic functionality as 'simulation'.
-simulationExt :: (Fd, Fd)                      -- ^ (Input, Output)
+simulationExt :: Bool
+              -> (Fd, Fd)                      -- ^ (Input, Output)
               -> AUTOSAR a                     -- ^ AUTOSAR system.
               -> [(Int, Address)]              -- ^ ...
               -> [(Address, Int)]              -- ^ ...
               -> RandStateIO (a, Trace)
-simulationExt fds sys idx_in idx_out =
+simulationExt useTasks fds sys idx_in idx_out =
   do -- Initialize state.
      modify $ \st ->
        st { prevIn  = SV.replicate (length idx_in) (1/0)
@@ -1896,13 +1926,17 @@ simulationExt fds sys idx_in idx_out =
           , addrOut = Map.fromList idx_out
           }
 
-     let procs1        = pmapFromList (procs state1 ++ outs)
+     let procs1 
+           | useTasks  = pmapFromList (procs state1 ++ outs)
+           | otherwise = pmapFromList (disableTasks (procs state1) ++ outs)
+
          (res, state1) = initialize sys
          a `conn` b    = (a, b) `elem` conns state1 || a==b
          outs          = [ Output a (toValue (0.0 :: Double)) 
                          | (a,i) <- idx_out ]
-         withTasks     = not . Map.null $ tasks state1
+         withTasks     = not (Map.null (tasks state1)) && useTasks 
      
+     liftIO $ taskTable (state1, [])
      trs <- simulateExt withTasks fds ioRandomSched conn procs1
      return (res, (state1, trs))
 
@@ -1951,8 +1985,6 @@ simulateExt withTasks (fdInput, fdOutput) sched conn procs =
 
                    -- Signal OK and then data.
                    writeStatus OK fdOutput
-                   when (next < 1e-3) $ logWrite $
-                     "Warning: Small delta step of " ++ show next ++ " sent."
                    sendCDouble next fdOutput
                    sendVector output fdOutput
 
@@ -2005,23 +2037,29 @@ simulate1Ext withTasks sched conn procs acc
 -- software, an entry point can be created using
 --
 -- > main :: IO ()
--- > main = simulateUsingExternal sys
+-- > main = simulateUsingExternal useTasks sys
 --
 -- Or likewise, we could run an internal simulation (provided the system is
 -- self-contained). This example limits execution at @5.0@ seconds, using the
 -- random scheduler for scheduling and calls @makePlot@ on the resulting trace.
 --
 -- > main :: IO ()
--- > main = simulateStandalone 5.0 makePlot (RandomSched (mkStdGen 111)) sys
+-- > main = do 
+-- >   gen <- newStdGen 
+-- >   simulateStandalone useTasks 5.0 makePlot (RandomSched gen) sys
+--
+-- @useTasks@ is a boolean flag which allows us to temporarily disable all task
+-- assignments done in the model by setting it to @False@.
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when running the simulator standalone.
-simulateStandalone :: Time             -- ^ Time limit
+simulateStandalone :: Bool             -- ^ Use task assignments?
+                   -> Time             -- ^ Time limit
                    -> (Trace -> IO a)  -- ^ Trace processing function
                    -> SchedChoice      -- ^ Scheduler choice
                    -> AUTOSAR b        -- ^ AUTOSAR system
                    -> IO a
-simulateStandalone time f sched = f . limitTime time . execSim sched
+simulateStandalone ts time f sched = f . limitTime time . execSim ts sched
 
 {- There are two ways to run the Simulink model. One way is to run the simulation
  - from Simulink directly (for example by using the MATLAB gui). In this case
@@ -2034,15 +2072,15 @@ simulateStandalone time f sched = f . limitTime time . execSim sched
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
-simulateUsingExternal :: External a => AUTOSAR a -> IO (a, Trace)
-simulateUsingExternal sys =
+simulateUsingExternal :: External a => Bool -> AUTOSAR a -> IO (a, Trace)
+simulateUsingExternal useTasks sys =
   do args <- getArgs
      case args of
-      [inFifo, outFifo] -> runWithFIFOs inFifo outFifo sys
+      [inFifo, outFifo] -> runWithFIFOs useTasks inFifo outFifo sys
       _ ->
         do logWrite $ "Wrong number of arguments. Proceeding with default " ++
                       "FIFOs."
-           runWithFIFOs "/tmp/infifo" "/tmp/outfifo" sys
+           runWithFIFOs useTasks "/tmp/infifo" "/tmp/outfifo" sys
 
 -- | Run the simulation with external software (i.e. Simulink) by
 -- starting the external component from Haskell, and clean up afterwards.
@@ -2062,15 +2100,16 @@ simulateDriveExternal ext sys =
          cur_env <- getEnvironment
          let procSpec = (proc ext []) { env = Just $ cur_env ++ [("ARSIM_DRIVER", "")] }
          bracket (createProcess procSpec) (\ (_, _, _, h) -> terminateProcess h) $ \_ -> 
-           runWithFIFOs inFifo outFifo sys
+           runWithFIFOs True inFifo outFifo sys
 
 -- | The external simulation entry-point. Given two file descriptors for
 -- input/output FIFOs we can start the simulation of the AUTOSAR program.
 entrypoint :: External a
-           => AUTOSAR a                      -- ^ AUTOSAR program.
+           => Bool
+           -> AUTOSAR a                      -- ^ AUTOSAR program.
            -> (Fd, Fd)                       -- ^ (Input, Output)
            -> IO (a, Trace)
-entrypoint system fds =
+entrypoint useTasks system fds =
   do -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
      let (res, _)               = initialize system
@@ -2090,23 +2129,25 @@ entrypoint system fds =
                    , labels_out 
                    )
 
-     ((res, trace), _) <- runStateT (simulationExt fds system idx_in idx_out)
-               (rstate0 (mkStdGen 111))
+     -- It's possible to fix this if you'd like.
+     gen <- newStdGen
+     ((res, trace), _) <- runStateT (simulationExt useTasks fds system idx_in idx_out) (rstate0 gen)
      return (res, trace)
 
 -- | Run simulation of the system using the provided file descriptors as
 -- FIFOs.
 runWithFIFOs :: External a
-             => FilePath
+             => Bool
+             -> FilePath
              -> FilePath
              -> AUTOSAR a
              -> IO (a, Trace)
-runWithFIFOs inFifo outFifo sys =
+runWithFIFOs useTasks inFifo outFifo sys =
   do logWrite $ "Input FIFO:  " ++ inFifo
      logWrite $ "Output FIFO: " ++ outFifo
      fdInput  <- openFd inFifo  ReadOnly Nothing defaultFileFlags
      fdOutput <- openFd outFifo WriteOnly Nothing defaultFileFlags
-     entrypoint sys (fdInput, fdOutput)
+     entrypoint useTasks sys (fdInput, fdOutput)
 
 -- Exception handling for 'simulateUsingExternal'.
 exceptionHandler :: IO () -> IO ()

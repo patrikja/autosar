@@ -1,12 +1,12 @@
 -- | Automatic transmission for Simulink 4-speed gearbox.
 --
--- TODO: 
---  * Does not allow us to skip several gears, or go from neutral to a
---    feasible gear at high speeds.
---  * The torque converter allows us to brake to full stop w/o halting engine;
---    can remove neutral gear.
+-- The transmission component 'gearController' runs on a set sample time
+-- (preferably but not necessarily the same as the rest of the system) and
+-- periodically reads engine RPM and attempts to shift up/down based on this.
 --
---
+-- The code is not intended as a faithful model of an automatic transmission,
+-- but is rather there to give us larger freedom with speed settings in
+-- Simulink, since the vehicle's engine model is somewhat sensitive to RPM.
 module Gearbox 
   ( GearCtrl(..)
   , gearController
@@ -14,7 +14,7 @@ module Gearbox
 
 import Control.Monad
 import Generic
-import NewARSim      hiding (void)
+import NewARSim
 
 -- | The gear logic requires engine rpm as input, and provides a gear signal
 -- in the range @[-1, 4]@ as output.
@@ -23,12 +23,12 @@ data GearCtrl = GearCtrl
   , gearSignal :: DataElem Unqueued Integer Provided
   }
 
--- | @'gearController' dt@ creates a gear controller polling for inputs on 
--- intervals of length @dt@.
+-- | @'gearController' dt@ creates a gear controller reading RPM inputs
+-- periodically with an interval length of @dt@. 
 gearController :: Time -> AUTOSAR GearCtrl
-gearController resolution = 
-  let initialGear = -1
-      timerLimit  = 0.5
+gearController deltaT = 
+  let initialGear = -1   -- Initial gear setting
+      timerLimit  = 0.5  -- Time delay after a gear change has been made.
   in atomic $ 
   do engineRPM  <- requiredPort
      gearSignal <- providedPort
@@ -40,7 +40,8 @@ gearController resolution =
      gears <- interRunnableVariable initialGear
      timer <- interRunnableVariable (True, 0.8 * timerLimit)
 
-     runnable (MinInterval 0) [TimingEvent resolution] $
+--      runnable (MinInterval 0) [TimingEvent deltaT] $
+     runnableT ["core1" :>> (6, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
        do res <- rteRead engineRPM
           case res of 
             Ok rpm1 -> do
@@ -50,21 +51,22 @@ gearController resolution =
               -- Check timer, we want delays between shifts to let the engine
               -- adjust revs.
               Ok (counting, t) <- rteIrvRead timer
-              -- One second delay:
               case (counting, t >= timerLimit) of
                 (True, True)  -> 
                   do rteIrvWrite timer (False, 0.0)
                      rteWrite gearSignal gear0
                 (True, False) -> 
-                  do rteIrvWrite timer (True, t + resolution)
+                  do rteIrvWrite timer (True, t + deltaT)
                      rteWrite gearSignal gear0
                 (False, _)    -> 
                   do let gear1 = nextGear rpm1 rpm0 gear0
 
                      rteIrvWrite gears gear1
                      rteIrvWrite revs  rpm1
-                     unless (gear1 == gear0) $ void $ 
+                     unless (gear1 == gear0) $ do
                        rteIrvWrite timer (True, 0.0)
+                       return ()
+
                      rteWrite gearSignal gear1
 
             _ -> rteWrite gearSignal 1 
