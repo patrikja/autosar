@@ -202,9 +202,7 @@ Two processes $p$ and $q$ can make transitions in parallel if they agree on what
 }
 
 
-The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behaviour serves us well, because in general, what one AUTOSAR runnable does may have impact on many (if not all) parts of the executing system. It is however important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over the parallel composition operator is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
-
-%% TODO: PaJa: continue reading from here.
+The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behaviour serves us well, because in general, what one AUTOSAR runnable does may have impact on many (if not all) parts of the executing system. It is, however, important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over the parallel composition operator is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
 
 The initial process $p_0$ is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
 \begin{enumerate}
@@ -264,9 +262,9 @@ where $\V{T_p}$ is the period of the event.
 
 \end{enumerate}
 
-The AUTOSAR naming scheme guarantees that all processes terms in such an initial composition will carry unique addresses, with exception of timer terms which share addresses with the runnables they belong to. We will later see how runnable instances reuse the address of their runnables in the same manner.
+The AUTOSAR naming scheme guarantees that all processes terms in such an initial composition will carry unique addresses, with the exception of timer terms which share addresses with the runnables they belong to. We will later see how runnable instances reuse the address of their runnables in the same manner.
 
-Some further static model information will also be referenced by the transition rules. We refer to the connectors of a model using a binary relation $\Rightarrow$ on port addresses, where the arrow points in the \emph{provided-to-required} direction. We also assume that $\Rightarrow$ is transitively closed (i.e., it expresses end-to-end connectivity across \emph{Delegation-} as well as \emph{AssemblySwConnector}s), and that every connection $a \Rightarrow b$ is lifted to the \emph{DataElement}s and \emph{ClientServerOperation}s of the connected ports such that
+Some further static model information will also be referenced by the transition rules. We refer to the connectors of a model using a binary relation $\Tconnect{}{}$ on port addresses, where the arrow points in the \emph{provided-to-required} direction. We also assume that $\Tconnect{}{}$ is transitively closed (i.e., it expresses end-to-end connectivity across \emph{Delegation-} as well as \emph{AssemblySwConnector}s), and that every connection $\Tconnect{a}{b}$ is lifted to the \emph{DataElement}s and \emph{ClientServerOperation}s of the connected ports such that
 \[
 \begin{array}{lll}
   \Tconnect{a.e}{b.e} & \text{for all elements $e$ common to $a$ and $b$} \\
@@ -279,6 +277,8 @@ We expect the implementation of a runnable to be available as a continuation fun
 We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\TdataReceivedEvent {i.r} {i.p.e}$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $i.p.e$. Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
 
 The semantic transition axioms are written in full in Appendix~\ref{sec:Rules}. We will discuss each group of axioms in turn, starting with the relatively simple behaviour of inter-runnable variables and exclusive areas. In most cases, the driving force behind a transition is some runnable instance wishing to say something which other processes either react to or ignore. How the runnable instances themselves come into existence will be detailed in Section~\ref{sect:SpawnTerm}.
+
+%% TODO: PaJa: continue reading from here.
 
 \subsection{Inter-runnable variables}
 
