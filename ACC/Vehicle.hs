@@ -1,8 +1,7 @@
 -- | This module contains all vehicle-related things, such as IO/control of
 -- vehicle subsystems, velocity and slip estimation, et cetera. 
 
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Vehicle 
   ( IOModule(..)
@@ -35,7 +34,10 @@ radarCtrl deltaT thresh = atomic $ do
   relIn  <- requiredPort
   out    <- providedPort
 
-  comSpec out (InitValue Nothing)
+  comSpec out    (InitValue Nothing)
+  comSpec distIn (InitValue 100)
+  comSpec relIn  (InitValue 0.0)
+
   runnable (MinInterval 0) [TimingEvent deltaT] $ do
     Ok d <- rteRead distIn
     Ok r <- rteRead relIn

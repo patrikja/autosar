@@ -114,7 +114,7 @@ cruiseCtrl deltaT = atomic $
           let (vt, st) = maybe (c, 100) (\(r, d) -> (v + r, d)) m
 
           Ok sig <- if v > vt then 
-                      rteCall ctrl (0.9 * vt, v)
+                      rteCall ctrl (0.95 * vt, v)
                     else 
                       rteCall ctrl (min c vt, v)
 
