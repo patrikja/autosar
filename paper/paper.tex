@@ -34,20 +34,20 @@ The standard has a rather wide scope and covers many features normally associate
 
 Unfortunately, the AUTOSAR specification is not very rigorous, despite a sheer size of more than 12,500 pages of text and UML diagrams in total. It is also not very abstract, in that it makes frequent references to assumed implementation techniques for the purpose of defining its semantics. In practice, the AUTOSAR standard becomes blurred with the specific behaviour of one's chosen platform and development tools. And because the standard is open to interpretation, the interoperability of software components across tools and platforms is often seriously hampered. What is more, a single software component cannot easily be studied and understood in isolation, since its interactive behaviour is only indirectly defined in terms of the concrete C-code and OS tasks that realize it and its interaction environment.
 
-This paper takes an important step towards a remedy to these problems, by contributing a formal specification of a substantial core of the AUTOSAR standard. The formalization covers most of the Software Component Template and its accompanying Run-Time Environment (RTE) (Section~\ref{sec:Calc}), and is able to directly express every legal way a system of software components can evolve at run-time on an arbitrarily fast platform (Section~\ref{sec:Sem}). It can thus serve as a basis for both a concrete AUTOSAR implementation on a specific platform (whose supported behaviours must be a subset of those defined by the formal semantics), and a platform-independent AUTOSAR simulator (where behaviours from the legal set can be picked at random). Examples of semantic derivations and their applications are found in Section~\ref{sec:Examples}.
+This paper takes a first step towards a remedy to these problems, by contributing a formal specification of a substantial core of the AUTOSAR standard. The formalization covers most of the Software Component Template and its accompanying Run-Time Environment (RTE) (Section~\ref{sec:Calc}), and is able to directly express every legal way a system of software components can evolve at run-time on an arbitrarily fast platform (Section~\ref{sec:Sem}). It can thus serve as a basis for both a concrete AUTOSAR implementation on a specific platform (whose supported behaviours must be a subset of those defined by the formal semantics), and a platform-independent AUTOSAR simulator (where behaviours from the legal set can be picked at random). Examples of semantic derivations and their applications can be found throughout the presentation.
 
-The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behaviour. At some points, the AUTOSAR documents have been found unclear; here a specific choice has been made but alternative interpretations will be discussed separately (Section~\ref{sec:DiscAmb}). At other points, the standard documents are clear but the resulting semantics is still dubious. These cases will also be emphasised and discussed, together with suggested ways forward (Section~\ref{sec:DiscImp}).
+The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behaviour. At some points, the standard documents are clear but the resulting semantics is dubious. These cases will be emphasised and discussed, together with suggested ways forward (Section~\ref{sec:NonDet}). At other points, the AUTOSAR documents have been found unclear; here a specific choice has been made but alternative interpretations will be discussed separately (Section~\ref{sec:Amb}).
 
 TODO: Limitations
 
-TODO: Some simple (informal) example early to give the reader an early view of flavour of the results.
+%TODO: Some simple (informal) example early to give the reader an early view of flavour of the results.
 
 \section{AUTOSAR}
 \label{sec:autosar}
 
 An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs) \cite{AR:SWC}. Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
 
-Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behaviour in terms of \textbf{runnables} and \textbf{inter-runnable variables}, primarily. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioural definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
+Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behaviour, primarily in terms of \textbf{runnables} and \textbf{inter-runnable variables}. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioural definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
 
 A runnable under execution is called a \textbf{runnable instance}, and several instances may execute concurrently even if they belong to the same SWC. Each runnable indicates whether or not it may be instantiated concurrently with itself. Runnable code can also use \textbf{exclusive areas} (a form of mutex semaphores) to further control concurrent behaviour.
 
@@ -122,7 +122,7 @@ We write $\Vs$ for a sequence of values \V{V}, $\Cs$ for a sequence of clients \
 
 The $\Code$ part of a runnable instance should technically be a representation of the C or Matlab implementation that must accompany an AUTOSAR runnable definition once it is complete. However, since our task in this report is not to investigate the semantics of these languages in any detail, a more abstract notion of executable code will be required.
 
-To this end, we have chosen to ignore all internal computations and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. And because the result from an RTE call may in general affect subsequent runnable behaviour, we use a continuation-passing style where every $\Code$ term except the final function return literally contains the sequence that follows it, as a continuation parameter $\Cont$.
+To this end, we have chosen to ignore all internal computations and just capture the observable effects of runnable execution as a pure sequence of RTE (VFB) calls. And because the result from an RTE call may in general affect subsequent runnable behaviour, we use a continuation-passing style where every $\Code$ term except the final return command literally contains the sequence that follows it, as a continuation parameter $\Cont$.
 %
 \[
 \begin{array}{lll}
@@ -164,8 +164,6 @@ In contrast to code sequences, process terms are completely unordered. This is e
 
 TODO: links from syntax and concepts introduced here to the AUTOSAR spec
 
-TODO: details on limitations: what's not covered by the calculus
-
 
 \section{Semantics}
 \label{sec:Sem}
@@ -198,7 +196,7 @@ Two processes $p$ and $q$ can make transitions in parallel if they agree on what
 {
 \renewcommand{\Prule}[2]{#1 \quad \Pif\; #2\\}
 \renewcommand{\Tstep}[3]{#1 \red{#2} #3}
-\renewcommand\Pcomma{\;\text{and}\;}
+\renewcommand\Pcomma{\;\wedge\;}
 
 \begin{eqnarray}  \CombRed  \notag \end{eqnarray}
 }
@@ -262,7 +260,6 @@ if the \emph{swImplPolicy} attribute of element $e$ is \emph{queued} (with capac
 \end{array}
 \]
 where $\V{T_p}$ is the period of the event.
-%TODO: This means that all timed runnables want to act _immediately_ (at the same time - with no init delay).
 
 \end{enumerate}
 
@@ -559,8 +556,8 @@ $$
 
 TODO: some links from rules and choices made here to the AUTOSAR spec
 
-\section{Parallelism}
-\label{sec:Parallelism}
+\section{Non-determinism}
+\label{sec:NonDet}
 
 The transition relation defined in Appendix~\ref{sec:Rules} is non-deterministic; i.e., it may very well be that for some process $p$,
 $$
@@ -582,7 +579,7 @@ $$
 	p_1 \red{l_2} q_1 \hspace{10mm}\text{and}\hspace{10mm} p_2 \red{l_1} q_2
 \end{array}
 $$
-where $q_1$ and $q_2$ are "similar" but not identical states. This non-determinism also has a concrete interpretation, either reflecting the non-deterministic nature of a system's environment (messages $l_1$ and $l_2$ just happen to arrive in some particular order) or its internals (processor speed or a scheduling choice just happens to pick $l_1$ before $l_2$). It is one of the primary merits of the process calculus approach to allow the scope of such inherent non-determinism to be precisely defined, because although a given system state may render many different behaviors possible, many more are not. A formal semantics makes it possible to clearly draw the line between these groups of behaviors.
+where $q_1$ and $q_2$ are "similar" but not identical states. This non-determinism also has a concrete interpretation, either reflecting the non-deterministic nature of a system's environment (messages $l_1$ and $l_2$ just happen to arrive in some particular order) or its internals (processor speed or a scheduling choice just happens to pick $l_1$ before $l_2$). It is one of the primary merits of the process calculus approach to allow the scope of such inherent non-determinism to be precisely defined, because although a given system state may render many different behaviors possible, many more are not. A formal semantics enables us to clearly draw the line between these groups of behaviors.
 
 The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$. A scenario where two values $v_1$ and $v_2$ are sent on a port connected to $a$ may lead to the following trace:
 $$
@@ -675,7 +672,7 @@ The specification restricts client-server connections such that a client may not
 
 \subsection{Interleaving of timing events}
 
-Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing in the specification that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, perhaps even with identical periods \cite[table~7.1, ch.~7.2.3]{AR:SWC}. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:Parallelism}) also renders the resolution of coinciding timing events highly non-deterministic. As an example, consider the event patterns of two timers with distinct periods that occasionally coincide:
+Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing in the specification that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, perhaps even with identical periods \cite[table~7.1, ch.~7.2.3]{AR:SWC}. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:NonDet}) also renders the resolution of coinciding timing events highly non-deterministic. As an example, consider the event patterns of two timers with distinct periods that occasionally coincide:
 \begin{center}
 \rule{3mm}{1pt}%
 						\rule[-9pt]{1mm}{10pt}%
@@ -697,15 +694,15 @@ If the timers were activating two distinct runnables, the fragment above would b
 
 This anomaly may lead to the conclusion that the AUTOSAR specification does not really intend more than one timing event to be defined per runnable. Luckily, our formalization is also compatible with this interpretation, as the restriction only concerns what set of static models to expect as starting states, not their dynamic behavior. 
 
-Closely related to the interleaving of timing events, and of interest even if only distinct runnables are being triggered, is the notion of initial timer offsets. That is, at what time will each timer tick for the first time --- immediately at startup or at some other (later) time? The specification documents are totally silent on the issue, and the simplest conclusion is arguably to let all timers fire simultaneously at $0$ seconds from startup. Our {\bf timer} terms are thus initialized to the dynamic value $0$ (Section~\ref{sec:Sem}), although it is not hard to see that other values could be equally reasonable, like
+Closely related to the interleaving of timing events, and of interest even if only distinct runnables are being triggered, is the notion of initial timer offsets. That is, at what time will each timer tick for the first time --- immediately at startup or at some other (later) time? The AUTOSAR specification only introduces the notion of timing offset in relation to the operating system tasks that are expected to implement runnables; the Software Component Template itself is totally silent on the issue \cite{AR:SWC}. Lacking an abstract definition of runnable offsets, we have chosen to simply fire all timers simultaneously at $0$ seconds from startup (hence the value $0$ in the initial {\bf timer} term definition in Section~\ref{sec:Sem}). It is not hard to see that other values may be equally reasonable, though, like
 $$
 	\Ttimer {i.r} {t_p} {t_p}
 $$ 
-which lets each timer wait one full cycle before triggering for the first time. However, real systems tend to exhibit an arbitrary delay before each timer gets started, and if that behavior is meant to count as legal, the initial timer state must rather be
+which lets each timer wait one full cycle before triggering for the first time. However, should we really want to take the assumed implementation offsets into account, the initial timer state would rather be
 $$
-	\Ttimer {i.r} {t_p} {t_r}
+	\Ttimer {i.r} {t_p} {t_o}
 $$ 
-for some arbitrarily chosen non-negative $t_r$. One might even want to add the condition $t_r < t_p$, but it must be emphasized that all these initilization options are mere semantic speculations --- the AUTOSAR specification must be clarified before any particular choice can be put on firm ground.
+for some arbitrarily chosen non-negative $t_o$. One might even want to add the condition $t_o < t_p$, but it must be emphasized that all these initilization options are speculative --- the AUTOSAR Software Component Template must be clarified before a sufficiently abstract model of timed behavior can be obtained.
 
 
 \subsection{Interpretation of data reception events}
@@ -732,7 +729,7 @@ $$
 \end{array}
 $$
 
-Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$ and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed nor able to flag an error due to a {\em void} return type. This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to a runnable instance about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
+Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$, and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed nor able to flag an error due to a {\em void} return type. This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to a runnable instance about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
 $$
 \begin{array}{lcll}
 		{\Trinst {i.r} c {\Tcons y \Xs} {\TrteExit x k}}
@@ -798,6 +795,43 @@ $$
 Other design choices are of course perfectly possible, and more elaborate rules, for example defining an explicit exception-catching mechanism, could be considered as well. We must emphasize, though, that the rules in this section are just hypothetical examples; they are not based on the current AUTOSAR specification and are only presented to illustrate the succinctness and level of detail that can be obtained by chosing a formal semantics aproach.
 
 
+\section{Limitations}
+
+We claim that the formalized AUTOSAR semantics of this report covers a substantial core of the Software Component Template and Specification of RTE \cite{AR:SWC, AR:RTE}. But even these two documents alone add up to almost 2000 pages of specification text in total, covering a wide range of features on many levels of abstraction. We have therefore found it necessary to further limit our scope; both by leaving out parts that have very little to do with the concurrency and communication aspects that are our primary interest, and by ignoring parts that to some extent duplicate the features that we are already covering. We discuss the chosen omissions in more detail below.
+
+\subsection{Out of scope}
+
+All aspects of the AUTOSAR specification that concern the representation and selection of data values are beyond the scope of the present study. This includes
+\begin{itemize}
+\item Data types on any level of abstraction, and their associated mappings.
+\item Port interface mapping and data scaling.
+\item Measurements and calibration parameters.
+\item Variant handling.
+\end{itemize}
+These modelling elements only impose restrictions and demands on the values $v$ and continuations $k$ we reference in our semantics, and which we in turn do not constrain in any way.
+
+
+\subsection{Minor variants}
+
+The only atomic software component type we include on our formalization is the {\em ApplicationSwComponentType}. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type ({\em SensorActuatorSwComponentType}, {\em ComplexDeviceDriverSwComponentType}, {\em ServiceSwComponentType}, {\em ServiceProxySwComponentType}), or trivial in comparison ({\em NvBlockSwComponentType}, {\em EcuAbstractionSwComponentType}, {\em ParameterSwComponentType}).
+
+A similar argument justifies our decision to omit port types beyond sender-receiver and client-server, as well as per instance memories. A port typed by a {\em TriggerInterface} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well. Per instance memories essentially duplicate the behavior of inter-runnable variables.
+
+Basic Software modules implement behaviors that cannot be captured as ordinary software components due to their dependency on hardware and other platform artefacts. However, our abstract treatment of computation dependencies in general confines such differences to one's choice of $k$ continuations, which elimiates the need to formalize Basic Software components through any special means.
+
+
+\subsection{Left out for brevity}
+
+A few areas of the AUTOSAR SWC and RTE specifications have been omitted for the purpose of keeping the size of the resulting formalism at a reasonable level. These are areas where a worked out formalization could prove interesting, and possibly even discover new design ambiguities. However, we also believe that the techniques required for undertaking such an effort are already demonstrated by our current work, and that making the resulting semantics accessible is an even more important goal than striving for completeness. The major omissions of this kind are:
+\begin{itemize}
+\item Implicit communication, where designated port elements are automatically read/written at the start/end the of runnables that access them.
+\item Category 2 runnables, which declare certain read or receive operations as {\em WaitPoints} that block progress until the associated events occur. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the implicit result command that follows from calling a {\em synchronousServerCallPoint} already defines the essence of such a blocking {\em WaitPoint}.
+\item Most details found in the {\em ComSpec} annotations that can be attached to ports (currently only {\em initValues} are acknowledged).
+\item COM layer
+\item DataWriteCompletedEvent, DataSendCompletedEvent, DataReceiveErrorEvent, the feedback command
+\item RTE lifecycle and callback APIs
+\end{itemize}
+
 
 \section{Conclusions and Future Work}
 \label{sec:Conc}
@@ -811,7 +845,16 @@ Return to the limitation - what is the next step (which can be lifted more easil
 \section{Semantic rules}
 \label{sec:Rules}
 
-\setcounter{equation}{4}
+\setcounter{equation}{0}
+
+\subsection{Parallel composition}
+{
+\renewcommand{\Prule}[2]{#1 \quad \Pif\; #2\\}
+\renewcommand{\Tstep}[3]{#1 \red{#2} #3}
+\renewcommand\Pcomma{\;\text{and}\;}
+
+\begin{eqnarray}  \CombRed  \notag \end{eqnarray}
+}
 
 \subsection{Inter-runnable variables}
 \begin{eqnarray}      \InterrunnableVariables  \notag \end{eqnarray}
