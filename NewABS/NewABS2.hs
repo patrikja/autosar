@@ -409,7 +409,7 @@ absSystem = composition $
          ss = map slip  wheelCtrls
          is = map index wheelCtrls
 
-     declareTask "abs_mainloop_task" (TimingEvent 0.0015)
+     declareTask "abs_mainloop_task" (TimingEvent 1e-3)
 
      return $ ABS (accelIn, zipWith3 WheelPorts velosIn vs is)
 

@@ -5,5 +5,7 @@ import NewABS2
 import System.Random
 
 main :: IO ()
-main = simulateUsingExternal absSystem >> return ()
+main = do
+  simulateUsingExternal True absSystem
+  return ()
 
