@@ -5,3 +5,5 @@
 *.log
 paper.pdf
 *.pyg
+*.blg
+*.bbl

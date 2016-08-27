@@ -1,4 +1,4 @@
-paper.pdf: paper.tex semantics.tex macros.tex
+paper.pdf: paper.tex semantics.tex macros.tex refs.bib
 	latexmk -pdf paper.tex
 
 semantics.tex: ../prolog/semantics.eprover ../prolog/tool/LaTeX.hs

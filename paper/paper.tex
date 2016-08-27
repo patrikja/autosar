@@ -50,7 +50,8 @@ TODO: Limitations
 An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs) \cite{AR:SWC}. Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
 
 \begin{figure*}
-\includegraphics[page=1,scale=0.73]{Fig}
+\includegraphics[page=1,width=\textwidth]{Fig}
+%\includegraphics[page=1,scale=0.73]{Fig}
 \caption{\label{fig:model}{Example of a graphical AUTOSAR software components model.}}
 \end{figure*}
 
@@ -545,14 +546,14 @@ $$
 
 \subsection{Ignoring broadcasts} \label{sect:Ignore}
 
-Although our chosen mechanism for coordinating transitions among process terms goes under the name {\em broadcast}, there is no implication that every process must react to everything being said --- the intent is rather that a process term not directly or indirectly addressed in a transition should be allowed to ignore it. One could try to express this as some form of "catch-up" rule $p \red{l} p$, that would apply only if none of the axioms (5) to (64) match $p$ and $l$. However, such a rule would be too liberal, as it would also enable transitions that are deliberately omitted from the previous axioms, like ${\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} {\Texcl {i.x} \Ttrue}$ (granting entry to an exclusive area already taken).
+Although our chosen mechanism for coordinating transitions among process terms goes under the name \emph{broadcast}, there is no implication that every process must react to everything being said --- the intent is rather that a process term not directly or indirectly addressed in a transition should be allowed to ignore it. One could try to express this as some form of "catch-up" rule $p \red{l} p$, that would apply only if none of the axioms (5) to (64) match $p$ and $l$. However, such a rule would be too liberal, as it would also enable transitions that are deliberately omitted from the previous axioms, like ${\Texcl {i.x} \Ttrue} \red{\say{i.x}{\Tent}} {\Texcl {i.x} \Ttrue}$ (granting entry to an exclusive area already taken).
 
 Instead we need a more restrictive rule, that applies to processes not addressed by earlier axioms but avoids those previously excluded by restrictive patterns and other side-conditions. To make this idea precise, however, we need to split the rule according to the different forms of $p$ so that the addressing notion of each process type can be individually captured. Axioms (65) to (72) contain the resulting definitions.
 
 Runnable instances and timers can ignore everything being said by others, as they define no hearing transitions proper that need to be excluded here (axioms (65) and (66)). Exclusive areas, inter-runnable variables and operation terms have hearing transitions previously defined, but only for label addresses matching their own; they can thus safely ignore transitions labelled with any other address.
 Axioms (70) to (72) constitute the non-trivial cases, because here there are multiple earlier definitions to exclude, which also link label and process addresses via static model references. Still, it can be verified that each of the axioms (70) to (72) is guarded by an exact negation of the addressing conditions of any previously defined hearing transition for the same process type.
 
-As an concrete illustration, consider the example of Section~\ref{sect:BufSndRcv}. The axioms that enable each individual process transition in that example are (26), (27) and (28), respectively (and rules (1) and (3) allow them to be combined). In particular, axiom (28) is applicable because of the assumption $\Tconnect {i.p.e} b$, which simultaneously blocks applicability of axiom (70). However, under the different assumption that there is no connection from ${i.p.e}$ to $b$, axioms (28) and (70) must trade places. This also forces the removal of $b$ from the second argument of the {\sc snd} payload (i.e., the list of connected buffers not able to store the value sent). As a consequence, axiom (26) is no longer applicable and must be replaced by axiom (25). The resulting parallel transition looks as follows, illustrating the correct generation of an {\bf ok} result despite the presence of a full (but unconnected) buffer.
+As an concrete illustration, consider the example of Section~\ref{sect:BufSndRcv}. The axioms that enable each individual process transition in that example are (26), (27) and (28), respectively (and rules (1) and (3) allow them to be combined). In particular, axiom (28) is applicable because of the assumption $\Tconnect {i.p.e} b$, which simultaneously blocks applicability of axiom (70). However, under the different assumption that there is no connection from ${i.p.e}$ to $b$, axioms (28) and (70) must trade places. This also forces the removal of $b$ from the second argument of the \payload{snd} payload (i.e., the list of connected buffers not able to store the value sent). As a consequence, axiom (26) is no longer applicable and must be replaced by axiom (25). The resulting parallel transition looks as follows, illustrating the correct generation of an \Tatom{ok} result despite the presence of a full (but unconnected) buffer.
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
@@ -582,7 +583,7 @@ $$
 	p_1 \red{l_2} q \hspace{10mm}\text{and}\hspace{10mm} p_2 \red{l_1} q
 \end{array}
 $$
-are derivable, we note that process $p$ may evolve into state $q$ either via an $l_1$ step followed by $l_2$, or by first taking the $l_2$ step and then $l_1$. Such freedom of choice is commonly taken as the definition of {\em parallelism} in the process calculus literature --- if the sequential ordering of steps $l_1$ and $l_2$ has no significance, they might just as well be considered to occur in parallel.
+are derivable, we note that process $p$ may evolve into state $q$ either via an $l_1$ step followed by $l_2$, or by first taking the $l_2$ step and then $l_1$. Such freedom of choice is commonly taken as the definition of \emph{parallelism} in the process calculus literature --- if the sequential ordering of steps $l_1$ and $l_2$ has no significance, they might just as well be considered to occur in parallel.
 
 However, it may also be that two possible step orderings do not lead to identical results. That happens if, instead of the two transitions leading to $q$ above, we have
 $$
@@ -650,7 +651,7 @@ $$
 $$
 Here there is only one $b$ instance created and none is pending, even though $a$ correctly contains the two values received. The reason is that by swapping the order of the first instantiation and the second data reception steps, the system is put in a state where its inability to count pending instantiations becomes fatal.
 
-Unfortunately there is very little a programmer can do to influence which of these two traces is taken. Giving $b$ a positive {\em minimumStartInterval} just guarantees that any subsequent events are lost during that interval. Long delays between reception events will reduce the likelihood of losses, but the choice of when to take an instantiation step is still fully internal to the operating system scheduler. Moreover, when messages are produced by multiple parallel senders, maintaining control over their time distribution may be highly impractical. Non-concurrent runnables can work around the problem by iterating over all received data at each invocation, but that solution is not very attractive if concurrent processing of each received item is desired.
+Unfortunately there is very little a programmer can do to influence which of these two traces is taken. Giving $b$ a positive \emph{minimumStartInterval} just guarantees that any subsequent events are lost during that interval. Long delays between reception events will reduce the likelihood of losses, but the choice of when to take an instantiation step is still fully internal to the operating system scheduler. Moreover, when messages are produced by multiple parallel senders, maintaining control over their time distribution may be highly impractical. Non-concurrent runnables can work around the problem by iterating over all received data at each invocation, but that solution is not very attractive if concurrent processing of each received item is desired.
 
 One could argue that replacing the {\bf pending}/{\bf idle} flag of runnables with a small counter variable would render the event triggering mechanism in AUTOSAR much more robust. The standard explicitly excludes event counting for all events but operation invocation, though, so the possibility that events may be lost is undeniably intentional \cite[ch.~4.2.3]{AR:RTE}. However, should this design decision ever be revisited, the two trace alternatives above could serve as a succinct problem characterization.
 
@@ -663,27 +664,27 @@ The formal semantics presented in this report is aimed to be a faithful capture 
 
 \subsection{Data initialization}
 
-Unqueued data elements that are read before first written should return the error code {\bf neverReceived} \cite[ch.~5.6.10]{AR:RTE}. Since no exceptions to this rule are mentioned in the specification, our intepretation is that this holds even when a data element possesses an {\em initValue} attribute  (initial {\bf delem} state in Section~\ref{sec:Sem}). However, as this renders any such initial value assignments entirely redundant, an alternative interpretation would be to create a term
+Unqueued data elements that are read before first written should return the error code {\bf neverReceived} \cite[ch.~5.6.10]{AR:RTE}. Since no exceptions to this rule are mentioned in the specification, our intepretation is that this holds even when a data element possesses an \emph{initValue} attribute  (initial {\bf delem} state in Section~\ref{sec:Sem}). However, as this renders any such initial value assignments entirely redundant, an alternative interpretation would be to create a term
 $$
   \Tdelem {i.p.e} \Tfalse v
 $$
-for each unqueued data element $i.p.e$, where $v$ is the {\em initValue} of $e$ if it exists, and $\TneverReceived$ otherwise.
+for each unqueued data element $i.p.e$, where $v$ is the \emph{initValue} of $e$ if it exists, and $\TneverReceived$ otherwise.
 
 Inter-runnable variables can also be read before written, although here there is no special error code defined in the specification for the uninitialized case \cite[ch.~5.6.26]{AR:RTE}. Section~\ref{sec:Sem} sets each {\bf irv} contents to {\bf void} to indicate a truly non-existing value, although an entirely reasonable alternative would be
 $$
   \Tirv {i.s} v
 $$
-where $v$ is the {\em initValue} of $s$ if it exists, and the error code {\bf nodata} otherwise.
+where $v$ is the \emph{initValue} of $s$ if it exists, and the error code {\bf nodata} otherwise.
 
 
 \subsection{Activation of server runnables}
 
-The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple {\em OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
+The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
 
 
 \subsection{Interleaving of timing events}
 
-Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing in the specification that precludes such runnables from being triggered by additional events as well --- including other {\em TimingEvent}s, perhaps even with identical periods \cite[table~7.1, ch.~7.2.3]{AR:SWC}. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:NonDet}) also renders the resolution of coinciding timing events highly non-deterministic. As an example, consider the event patterns of two timers with distinct periods that occasionally coincide:
+Although the AUTOSAR specification only motivates timed runnable activation with the need to support plain periodic execution, there is really nothing in the specification that precludes such runnables from being triggered by additional events as well --- including other \emph{TimingEvent}s, perhaps even with identical periods \cite[table~7.1, ch.~7.2.3]{AR:SWC}. Our formulation naturally supports this generality, but it should be observed that the inability of AUTOSAR runnables to count pending activations (see Section~\ref{sec:NonDet}) also renders the resolution of coinciding timing events highly non-deterministic. As an example, consider the event patterns of two timers with distinct periods that occasionally coincide:
 \begin{center}
 \rule{3mm}{1pt}%
 						\rule[-9pt]{1mm}{10pt}%
@@ -703,29 +704,29 @@ Although the AUTOSAR specification only motivates timed runnable activation with
 \end{center}
 If the timers were activating two distinct runnables, the fragment above would be guaranteed to result in eight instantiations in total. But if directed towards a single runnable, the number of instances created could be seven as well as eight, with no means for the programmer to control the outcome.
 
-This anomaly may lead to the conclusion that the AUTOSAR specification does not really intend more than one timing event to be defined per runnable. Luckily, our formalization is also compatible with this interpretation, as the restriction only concerns what set of static models to expect as starting states, not their dynamic behavior. 
+This anomaly may lead to the conclusion that the AUTOSAR specification does not really intend more than one timing event to be defined per runnable. Luckily, our formalization is also compatible with this interpretation, as the restriction only concerns what set of static models to expect as starting states, not their dynamic behavior.
 
 Closely related to the interleaving of timing events, and of interest even if only distinct runnables are being triggered, is the notion of initial timer offsets. That is, at what time will each timer tick for the first time --- immediately at startup or at some other (later) time? The AUTOSAR specification only introduces the notion of timing offset in relation to the operating system tasks that are expected to implement runnables; the Software Component Template itself is totally silent on the issue \cite{AR:SWC}. Lacking an abstract definition of runnable offsets, we have chosen to simply fire all timers simultaneously at $0$ seconds from startup (hence the value $0$ in the initial {\bf timer} term definition in Section~\ref{sec:Sem}). It is not hard to see that other values may be equally reasonable, though, like
 $$
 	\Ttimer {i.r} {t_p} {t_p}
-$$ 
+$$
 which lets each timer wait one full cycle before triggering for the first time. However, should we really want to take the assumed implementation offsets into account, the initial timer state would rather be
 $$
 	\Ttimer {i.r} {t_p} {t_o}
-$$ 
+$$
 for some arbitrarily chosen non-negative $t_o$. One might even want to add the condition $t_o < t_p$, but it must be emphasized that all these initilization options are speculative --- the AUTOSAR Software Component Template must be clarified before a sufficiently abstract model of timed behavior can be obtained.
 
 
 \subsection{Interpretation of data reception events}
 
-Activation of runnables due to {\em DataReceivedEvent}s is faithfully captured in the formal semantics for unqueued as well as queued data elements (c.f.~axioms (17) and (29) with \cite[ch.~7.5.1.6]{AR:SWC}). But for unqueued elements AUTOSAR also provides an invalidation operation, whose net effect is very similar to that of a data write (see axiom (21)). Whether data invalidation should count as a reception event is not clear from the specification; we have chosen not to include it as a conservative conjecture. Revising this choice would not be hard, though: all that is necessary is to add an axiom that mimics (17) but matches on {\sc inv} rather than {\sc wr} labels.
+Activation of runnables due to \emph{DataReceivedEvent}s is faithfully captured in the formal semantics for unqueued as well as queued data elements (c.f.~axioms (17) and (29) with \cite[ch.~7.5.1.6]{AR:SWC}). But for unqueued elements AUTOSAR also provides an invalidation operation, whose net effect is very similar to that of a data write (see axiom (21)). Whether data invalidation should count as a reception event is not clear from the specification; we have chosen not to include it as a conservative conjecture. Revising this choice would not be hard, though: all that is necessary is to add an axiom that mimics (17) but matches on {\sc inv} rather than {\sc wr} labels.
 
-A similar specification ambiguity concerns {\em DataReceivedEvent}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a reciever must be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
+A similar specification ambiguity concerns \emph{DataReceivedEvent}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a reciever must be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
 
 
 \subsection{Exclusive area nesting} \label{sec:ExclNest}
 
-The AUTOSAR specification is apparently ambiguous when it comes to exclusive areas, stating that "The RTE is not required to support nested invocations of [enter/exit] for the same exclusive area" \cite[ch.~5.6.28-29]{AR:RTE}. Whether entering a previously acquired area should succeed or not is thus left entirely open, something we have taken as a justification not to support it formally (axioms (9) to (12)). Still, it is interesting to ponder what would be required to actually allow this optional behavior. One aspect is that the referenced exclusive areas themselves need not really be involved in the resulting transitions; they must already be in the occupied state they should retain. Another detail is that if a runnable is already holding its referenced exclusive area, both the enter and exit commands essentially turn into {\em no-operations}. Thus, the necessary additions to the axiom set would look something like this:
+The AUTOSAR specification is apparently ambiguous when it comes to exclusive areas, stating that "The RTE is not required to support nested invocations of [enter/exit] for the same exclusive area" \cite[ch.~5.6.28-29]{AR:RTE}. Whether entering a previously acquired area should succeed or not is thus left entirely open, something we have taken as a justification not to support it formally (axioms (9) to (12)). Still, it is interesting to ponder what would be required to actually allow this optional behavior. One aspect is that the referenced exclusive areas themselves need not really be involved in the resulting transitions; they must already be in the occupied state they should retain. Another detail is that if a runnable is already holding its referenced exclusive area, both the enter and exit commands essentially turn into \emph{no-operations}. Thus, the necessary additions to the axiom set would look something like this:
 $$
 \begin{array}{lcll}
 		{\Trinst {i.r} c \Xs {\TrteEnter x k}}
@@ -740,7 +741,7 @@ $$
 \end{array}
 $$
 
-Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$, and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed nor able to flag an error due to a {\em void} return type. This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to a runnable instance about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
+Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$, and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed nor able to flag an error due to a \emph{void} return type. This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to a runnable instance about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
 $$
 \begin{array}{lcll}
 		{\Trinst {i.r} c {\Tcons y \Xs} {\TrteExit x k}}
@@ -824,9 +825,9 @@ These modelling elements only impose restrictions and demands on the values $v$ 
 
 \subsection{Minor variants}
 
-The only atomic software component type we include on our formalization is the {\em ApplicationSwComponentType}. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type ({\em SensorActuatorSwComponentType}, {\em ComplexDeviceDriverSwComponentType}, {\em ServiceSwComponentType}, {\em ServiceProxySwComponentType}), or trivial in comparison ({\em NvBlockSwComponentType}, {\em EcuAbstractionSwComponentType}, {\em ParameterSwComponentType}).
+The only atomic software component type we include on our formalization is the \emph{ApplicationSwComponentType}. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type (\emph{SensorActuatorSwComponentType}, \emph{ComplexDeviceDriverSwComponentType}, \emph{ServiceSwComponentType}, \emph{ServiceProxySwComponentType}), or trivial in comparison (\emph{NvBlockSwComponentType}, \emph{EcuAbstractionSwComponentType}, \emph{ParameterSwComponentType}).
 
-A similar argument justifies our decision to omit port types beyond the sender-receiver and client-server kinds, as well as per instance memories. A port typed by a {\em TriggerInterface} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well. Per instance memories essentially duplicate the behavior of inter-runnable variables.
+A similar argument justifies our decision to omit port types beyond the sender-receiver and client-server kinds, as well as per instance memories. A port typed by a \emph{TriggerInterface} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well. Per instance memories essentially duplicate the behavior of inter-runnable variables.
 
 Basic Software modules implement behaviors that cannot be captured as ordinary software components due to their dependency on hardware and other platform artefacts. However, our abstract treatment of computation dependencies in general confines such differences to one's choice of $k$ continuations, which elimiates the need to formalize Basic Software components through any special means.
 
@@ -836,9 +837,9 @@ Basic Software modules implement behaviors that cannot be captured as ordinary s
 A few areas of the AUTOSAR SWC and RTE specifications have been omitted for the purpose of keeping the size of the resulting formalism at a reasonable level. These are areas where a worked out formalization could prove interesting, and possibly even discover new design ambiguities. However, we also believe that the techniques required for undertaking such an effort are already demonstrated by our current work, and that making the resulting semantics accessible is an even more important goal than striving for completeness. The major omissions of this kind are:
 \begin{itemize}
 \item Implicit communication, where designated port elements are automatically read/written at the start/end the of runnables that access them.
-\item Category 2 runnables, which declare certain read or receive operations as {\em WaitPoints} that block progress until the associated events occur. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the result command that follows from calling a {\em synchronousServerCallPoint} already defines the essence of such a blocking {\em WaitPoint}.
-\item The AUTOSAR COM layer and related events and commands ({\em DataWriteCompletedEvent}, {\em DataSendCompletedEvent}, {\em DataReceiveErrorEvent}, the feedback command) \cite{AR:COM}. COM is the communication substrate between nodes in a distributed AUTOSAR system and its limited storage capacity introduces an element of resource competition among communicating components. It also leads to the separation of sending and reception into distinct events, as well as a new class of communication errors.
-\item Most details found in the {\em ComSpec} annotations that can be attached to ports (currently only {\em initValues} are acknowledged). 
+\item Category 2 runnables, which declare certain read or receive operations as \emph{WaitPoints} that block progress until the associated events occur. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the result command that follows from calling a \emph{synchronousServerCallPoint} already defines the essence of such a blocking \emph{WaitPoint}.
+\item The AUTOSAR COM layer and related events and commands (\emph{DataWriteCompletedEvent}, \emph{DataSendCompletedEvent}, \emph{DataReceiveErrorEvent}, the feedback command) \cite{AR:COM}. COM is the communication substrate between nodes in a distributed AUTOSAR system and its limited storage capacity introduces an element of resource competition among communicating components. It also leads to the separation of sending and reception into distinct events, as well as a new class of communication errors.
+\item Most details found in the \emph{ComSpec} annotations that can be attached to ports (currently only \emph{initValues} are acknowledged).
 \item The meta-programming oriented RTE Lifecycle and Callback APIs.
 \end{itemize}
 
