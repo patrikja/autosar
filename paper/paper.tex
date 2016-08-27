@@ -819,7 +819,7 @@ These modelling elements only impose restrictions and demands on the values $v$ 
 
 The only atomic software component type we include on our formalization is the {\em ApplicationSwComponentType}. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type ({\em SensorActuatorSwComponentType}, {\em ComplexDeviceDriverSwComponentType}, {\em ServiceSwComponentType}, {\em ServiceProxySwComponentType}), or trivial in comparison ({\em NvBlockSwComponentType}, {\em EcuAbstractionSwComponentType}, {\em ParameterSwComponentType}).
 
-A similar argument justifies our decision to omit port types beyond sender-receiver and client-server, as well as per instance memories. A port typed by a {\em TriggerInterface} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well. Per instance memories essentially duplicate the behavior of inter-runnable variables.
+A similar argument justifies our decision to omit port types beyond the sender-receiver and client-server kinds, as well as per instance memories. A port typed by a {\em TriggerInterface} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well. Per instance memories essentially duplicate the behavior of inter-runnable variables.
 
 Basic Software modules implement behaviors that cannot be captured as ordinary software components due to their dependency on hardware and other platform artefacts. However, our abstract treatment of computation dependencies in general confines such differences to one's choice of $k$ continuations, which elimiates the need to formalize Basic Software components through any special means.
 
@@ -829,11 +829,10 @@ Basic Software modules implement behaviors that cannot be captured as ordinary s
 A few areas of the AUTOSAR SWC and RTE specifications have been omitted for the purpose of keeping the size of the resulting formalism at a reasonable level. These are areas where a worked out formalization could prove interesting, and possibly even discover new design ambiguities. However, we also believe that the techniques required for undertaking such an effort are already demonstrated by our current work, and that making the resulting semantics accessible is an even more important goal than striving for completeness. The major omissions of this kind are:
 \begin{itemize}
 \item Implicit communication, where designated port elements are automatically read/written at the start/end the of runnables that access them.
-\item Category 2 runnables, which declare certain read or receive operations as {\em WaitPoints} that block progress until the associated events occur. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the implicit result command that follows from calling a {\em synchronousServerCallPoint} already defines the essence of such a blocking {\em WaitPoint}.
-\item Most details found in the {\em ComSpec} annotations that can be attached to ports (currently only {\em initValues} are acknowledged).
-\item COM layer
-\item DataWriteCompletedEvent, DataSendCompletedEvent, DataReceiveErrorEvent, the feedback command
-\item RTE lifecycle and callback APIs
+\item Category 2 runnables, which declare certain read or receive operations as {\em WaitPoints} that block progress until the associated events occur. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the result command that follows from calling a {\em synchronousServerCallPoint} already defines the essence of such a blocking {\em WaitPoint}.
+\item The AUTOSAR COM layer and related events and commands ({\em DataWriteCompletedEvent}, {\em DataSendCompletedEvent}, {\em DataReceiveErrorEvent}, the feedback command) \cite{AR:COM}. COM is the communication substrate between nodes in a distributed AUTOSAR system and its limited storage capacity introduces an element of resource competition among communicating components. It also leads to the separation of sending and reception into distinct events, as well as a new class of communication errors.
+\item Most details found in the {\em ComSpec} annotations that can be attached to ports (currently only {\em initValues} are acknowledged). 
+\item The meta-programming oriented RTE Lifecycle and Callback APIs.
 \end{itemize}
 
 
