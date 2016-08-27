@@ -6,6 +6,8 @@
 \usepackage{mathpartir}
 \usepackage{amssymb}
 \usepackage[makeroom]{cancel}
+\usepackage{graphicx}
+
 % \usepackage{minted}
 \title{A semantics of core AUTOSAR}
 \author{Johan Nordlander \and Patrik Jansson}
@@ -47,6 +49,12 @@ TODO: Limitations
 
 An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs) \cite{AR:SWC}. Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
 
+\begin{figure*}
+\includegraphics[page=1,scale=0.73]{Fig}
+\caption{\label{fig:model}{Example of a graphical AUTOSAR software components model.}}
+\end{figure*}
+
+
 Some components merely act as containers of other components structures, these are called \textbf{composition} SWCs. In contrast, \textbf{atomic} SWCs define their own behaviour, primarily in terms of \textbf{runnables} and \textbf{inter-runnable variables}. A runnable denotes a sequential and (normally) terminating piece of code, although its actual behavioural definition is typically relegated to external C or Matlab files rather than being part of the AUTOSAR model proper. Instead, an AUTOSAR runnable only provides constraints on what ports and inter-runnable variables the actual implementation can access; as well as \textbf{event} declarations that determine under what conditions it will get executed.
 
 A runnable under execution is called a \textbf{runnable instance}, and several instances may execute concurrently even if they belong to the same SWC. Each runnable indicates whether or not it may be instantiated concurrently with itself. Runnable code can also use \textbf{exclusive areas} (a form of mutex semaphores) to further control concurrent behaviour.
@@ -55,7 +63,6 @@ To interact with ports, inter-runnable variables and exclusive areas, runnables 
 
 AUTOSAR models are completely static, which means that all components, runnables, ports, connectors, etc, are created ahead of execution time. Runnable instances are an exception, but they are only identified by AUTOSAR for conceptual purposes and are never part of any model syntax. This static nature renders AUTOSAR models very suitable to graphical notations, which by far is the most widespread representation format for AUTOSAR models. A graphical model example is shown in Figure~\ref{fig:model}.
 
-TODO: add fig:model (from the slides)
 
 \section{Syntax and preliminaries}
 \label{sec:Calc}
