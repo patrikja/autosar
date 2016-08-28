@@ -571,7 +571,7 @@ TODO: some links from rules and choices made here to the AUTOSAR spec
 \section{Non-determinism}
 \label{sec:NonDet}
 
-The transition relation defined in Appendix~\ref{sec:Rules} is non-deterministic; i.e., it may very well be that for some process $p$,
+The transition relation defined in Appendix~\ref{sec:Rules} is non-deterministic; i.e., it may very well be that for some process~$p$,
 $$
 \begin{array}{c}
 	p \red{l_1} p_1 \hspace{10mm}\text{and}\hspace{10mm} p \red{l_2} p_2
@@ -593,7 +593,11 @@ $$
 $$
 where $q_1$ and $q_2$ are "similar" but not identical states. This non-determinism also has a concrete interpretation, either reflecting the non-deterministic nature of a system's environment (messages $l_1$ and $l_2$ just happen to arrive in some particular order) or its internals (processor speed or a scheduling choice just happens to pick $l_1$ before $l_2$). It is one of the primary merits of the process calculus approach to allow the scope of such inherent non-determinism to be precisely defined, because although a given system state may render many different behaviors possible, many more are not. A formal semantics enables us to clearly draw the line between these groups of behaviors.
 
-The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$. A scenario where two values $v_1$ and $v_2$ are sent on a port connected to $a$ may lead to the following trace:
+The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$.
+%**TODO: The explanation is rather long so it may be good to indicate in a few words what it will show already at start: "... lead to the runnable triggering once or twice"
+A scenario where two values $v_1$ and $v_2$ are sent on a port connected to $a$ may lead to the following trace:
+%
+TODO: The i.p.e in the transition label is not explained.
 $$
 \begin{array}{c}
   {\Tqelem a 2 \Teps} \Opar
@@ -650,6 +654,11 @@ $$
 \end{array}
 $$
 Here there is only one $b$ instance created and none is pending, even though $a$ correctly contains the two values received. The reason is that by swapping the order of the first instantiation and the second data reception steps, the system is put in a state where its inability to count pending instantiations becomes fatal.
+%*TODO: Perhaps abbreviate the terms to make the difference more clear: let Q(vs) = \Tqelem a 2 {vs}; R(n) = \Trunnable b 0 \Tidle n; RI = \Trinst b \Tvoid \Teps {\Code}
+
+%   Q(\Teps) \Opar R(0)  ->*  Q(\Tcons{v_1}{v_2}}) \Opar R(1) \Opar RI
+% and
+%   Q(\Teps) \Opar R(0)  ->*  Q(\Tcons{v_1}{v_2}}) \Opar R(2) \Opar RI \Opar RI
 
 Unfortunately there is very little a programmer can do to influence which of these two traces is taken. Giving $b$ a positive \emph{minimumStartInterval} just guarantees that any subsequent events are lost during that interval. Long delays between reception events will reduce the likelihood of losses, but the choice of when to take an instantiation step is still fully internal to the operating system scheduler. Moreover, when messages are produced by multiple parallel senders, maintaining control over their time distribution may be highly impractical. Non-concurrent runnables can work around the problem by iterating over all received data at each invocation, but that solution is not very attractive if concurrent processing of each received item is desired.
 
@@ -658,6 +667,8 @@ One could argue that replacing the {\bf pending}/{\bf idle} flag of runnables wi
 
 \section{Ambiguities and clarification proposals}
 \label{sec:Amb}
+
+%**TODO: The end of the previous section also seems to be a clarification proposal
 
 The formal semantics presented in this report is aimed to be a faithful capture of the AUTOSAR specification, especially its Software Components template and RTE specification \cite{AR:SWC, AR:RTE}. Still, there are several areas where we have found the specification open to interpretation, or at least in need of some further clarification. We detail a few of these areas here, as an illustration to the kind of design decisions that may surface as the result of a formalization undertaking.
 
@@ -669,6 +680,7 @@ $$
   \Tdelem {i.p.e} \Tfalse v
 $$
 for each unqueued data element $i.p.e$, where $v$ is the \emph{initValue} of $e$ if it exists, and $\TneverReceived$ otherwise.
+%*TODO: perhaps replace i.p.e by a?
 
 Inter-runnable variables can also be read before written, although here there is no special error code defined in the specification for the uninitialized case \cite[ch.~5.6.26]{AR:RTE}. Section~\ref{sec:Sem} sets each {\bf irv} contents to {\bf void} to indicate a truly non-existing value, although an entirely reasonable alternative would be
 $$
@@ -679,7 +691,7 @@ where $v$ is the \emph{initValue} of $s$ if it exists, and the error code {\bf n
 
 \subsection{Activation of server runnables}
 
-The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{OperationInvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
+The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{Operation\-InvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
 
 
 \subsection{Interleaving of timing events}
@@ -719,9 +731,9 @@ for some arbitrarily chosen non-negative $t_o$. One might even want to add the c
 
 \subsection{Interpretation of data reception events}
 
-Activation of runnables due to \emph{DataReceivedEvent}s is faithfully captured in the formal semantics for unqueued as well as queued data elements (c.f.~axioms (17) and (29) with \cite[ch.~7.5.1.6]{AR:SWC}). But for unqueued elements AUTOSAR also provides an invalidation operation, whose net effect is very similar to that of a data write (see axiom (21)). Whether data invalidation should count as a reception event is not clear from the specification; we have chosen not to include it as a conservative conjecture. Revising this choice would not be hard, though: all that is necessary is to add an axiom that mimics (17) but matches on {\sc inv} rather than {\sc wr} labels.
+Activation of runnables due to \emph{DataReceived\-Event}s is faithfully captured in the formal semantics for unqueued as well as queued data elements (c.f.~axioms (17) and (29) with \cite[ch.~7.5.1.6]{AR:SWC}). But for unqueued elements AUTOSAR also provides an invalidation operation, whose net effect is very similar to that of a data write (see axiom (21)). Whether data invalidation should count as a reception event is not clear from the specification; we have chosen not to include it as a conservative conjecture. Revising this choice would not be hard, though: all that is necessary is to add an axiom that mimics (17) but matches on {\sc inv} rather than {\sc wr} labels.
 
-A similar specification ambiguity concerns \emph{DataReceivedEvent}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a reciever must be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
+A similar specification ambiguity concerns \emph{DataReceived\-Event}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a reciever must be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
 
 
 \subsection{Exclusive area nesting} \label{sec:ExclNest}
@@ -809,7 +821,7 @@ Other design choices are of course perfectly possible, and more elaborate rules,
 
 \section{Limitations}
 
-We claim that the formalized AUTOSAR semantics of this report covers a substantial core of the Software Component Template and Specification of RTE \cite{AR:SWC, AR:RTE}. But even these two documents alone add up to almost 2000 pages of specification text in total, covering a wide range of features on many levels of abstraction. We have therefore found it necessary to further limit our scope; both by leaving out parts that have very little to do with the concurrency and communication aspects that are our primary interest, and by ignoring parts that to some extent duplicate the features that we are already covering. We discuss the chosen omissions in more detail below.
+We claim that the formalized AUTOSAR semantics of this report covers a substantial core of the Software Component Template and Specification of RTE \cite{AR:SWC, AR:RTE}. But these two documents alone add up to almost 2000 pages of specification text in total, covering a wide range of features on many levels of abstraction. We have therefore found it necessary to further limit our scope; both by leaving out parts that have very little to do with the concurrency and communication aspects that are our primary interest, and by ignoring parts that to some extent duplicate the features that we are already covering. We discuss the chosen omissions in more detail below.
 
 \subsection{Out of scope}
 
@@ -825,6 +837,7 @@ These modelling elements only impose restrictions and demands on the values $v$ 
 
 \subsection{Minor variants}
 
+%*TODO: Perhaps avoid repeating the common suffix SwComponentType (with explanation).
 The only atomic software component type we include on our formalization is the \emph{ApplicationSwComponentType}. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type (\emph{SensorActuatorSwComponentType}, \emph{ComplexDeviceDriverSwComponentType}, \emph{ServiceSwComponentType}, \emph{ServiceProxySwComponentType}), or trivial in comparison (\emph{NvBlockSwComponentType}, \emph{EcuAbstractionSwComponentType}, \emph{ParameterSwComponentType}).
 
 A similar argument justifies our decision to omit port types beyond the sender-receiver and client-server kinds, as well as per instance memories. A port typed by a \emph{TriggerInterface} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well. Per instance memories essentially duplicate the behavior of inter-runnable variables.
