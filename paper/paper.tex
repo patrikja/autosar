@@ -69,43 +69,42 @@ AUTOSAR models are completely static, which means that all components, runnables
 
 The formal approach we have chosen is that of a typical process calculus \cite{milner:ComMob}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
-Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{\V{R}}{\V{I}}$ means runnable \V{R} of component \V{I} and $\Tep{\V{E}}{\V{P}}{\V{I}}$ means element \V{E} of port \V{P} within component \V{I}. We use the following meta-variable conventions:
+Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $i.r$ means runnable $r$ of component $i$ and $i.e$ means port element $e$ within component $i$. We use the following meta-variable conventions:
 
 %
 \[
 \begin{array}{rcll}
-  \V{I} & \in & \text{Component names} \\
-  \V{R} & \in & \text{Runnable names} \\
-  \V{P} & \in & \text{Port names} \\
-  \V{E} & \in & \text{Sender-receiver element names} \\
-  \V{O} & \in & \text{Client-server operation names} \\
-  \V{S} & \in & \text{Inter-runnable variable names} \\
-  \V{X} & \in & \text{Exclusive area names} \\
+  i & \in & \text{Component names} \\
+  r & \in & \text{Runnable names} \\
+  e & \in & \text{Sender-receiver port element names} \\
+  o & \in & \text{Client-server port operation names} \\
+  s & \in & \text{Inter-runnable variable names} \\
+  x & \in & \text{Exclusive area names} \\
 \\
-  \V{A},\V{B} & \in & \text{Addresses} \\
-  \V{A},\V{B} & ::= & \Tr{\V{R}}{\V{I}}   \sep   i.p  \sep  \Tep{\V{E}}{\V{P}}{\V{I}}   \sep \Top{\V{O}}{\V{P}}{\V{I}}   \sep   \Ts{\V{S}}{\V{I}}   \sep   \Tx{\V{X}}{\V{I}}   \\
+  a,b & \in & \text{Addresses} \\
+  a,b & ::= & i.r  \sep  i.e   \sep i.o   \sep   i.s   \sep   i.x   \\
 \end{array}
 \]
 %
-Since AUTOSAR components can be arbitrarily nested, the component names \V{I} can also be considered to have a similarly nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite[ch.~3.3.1]{AR:SWC}.
+AUTOSAR elements and operations are actually only unique within the {\em ports} they belong to, so technically we ought to address them by reference to an intended {\em port name} as well, as in $i.p.e$ or $i.p.o$ for some port $p$. However, port names play no role of their own in our study, so we choose to leave them be implied by the element and operation names we reference. Moreover, component names \V{I} can also be considered to have a nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite[ch.~3.3.1]{AR:SWC}.
 
 The process terms of our calculus are as follows:
 \begin{itemize}
-\item $\Trunnable {\Tr r i} t \Act n$  \newline
+\item $\Trunnable {i.r} t \Act n$  \newline
 Dynamic state for runnable $r$ of component $i$, indicating $n$ current instances, $t$ seconds left until next possible instantiation, and activation state $\Act$.
-\item $\Trinst {\Tr r i} c \Xs \Code$ \newline
+\item $\Trinst {i.r} c \Xs \Code$ \newline
 An instance of runnable $r$ of component $i$, currently executing $\Code$ and owning the exclusive areas $\Xs$, possibly running on behalf of client $c$.
-\item $\Tirv {\Ts s i} v$ \newline
+\item $\Tirv {i.s} v$ \newline
 Inter-runnable variable $s$ of component $i$, currently holding value $v$.
-\item $\Texcl {\Tx x i} u$ \newline
+\item $\Texcl {i.x} u$ \newline
 Exclusive area $x$ of component $i$, with boolean occupation state $u$.
-\item $\Tdelem {\Tep e p i} u v$ \newline
-Non-queued sender-receiver data element $e$ in port $p$ of component $i$, currently holding value $v$ with boolean update status flag $u$.
-\item $\Tqelem {\Tep e p i} n \Vs$ \newline
-Queued sender-receiver data element $e$ in port $p$ of component $i$ with maximum capacity $n$, currently holding value sequence $\Vs$.
-\item $\Toper {\Top o p i} m \Srv$ \newline
-Client-server operation $o$ in port $p$ of component $i$, currently holding sequence number $m$ and call state $\Srv$.
-\item $\Ttimer {\Tr r i} {t_p} t$ \newline
+\item $\Tdelem {i.e} u v$ \newline
+Non-queued sender-receiver port element $e$ of component $i$, currently holding value $v$ with boolean update status flag $u$.
+\item $\Tqelem {i.e} n \Vs$ \newline
+Queued sender-receiver port element $e$ of component $i$ with maximum capacity $n$, currently holding value sequence $\Vs$.
+\item $\Toper {i.o} m \Srv$ \newline
+Client-server port operation $o$ of component $i$, currently holding sequence number $m$ and call state $\Srv$.
+\item $\Ttimer {i.r} {t_p} t$ \newline
 Periodic timer for runnable $r$ of component $i$, with a period of $t_p$ and $t$ seconds left of its current cycle.
 \end{itemize}
 
@@ -120,7 +119,7 @@ Formally,
   c        & \in & \text{Clients} \\
   \Act     & \in & \text{Activation states} \\
   \Srv     & \in & \text{Call states} \\ \\
-  c        & ::= & \Tclient {\Top o p i} m v \sep \Tvoid \\
+  c        & ::= & \Tclient {i.o} m v \sep \Tvoid \\
   \Act     & ::= & \Tidle \sep \Tpending \sep \Cs \\
   \Srv     & ::= & \Tcalling t \sep \Tdone v
 \end{array}
@@ -139,14 +138,14 @@ To this end, we have chosen to ignore all internal computations and just capture
         & |   & \Exit x \Cont                \\
         & |   & \IrvWrite s v \Cont          \\
         & |   & \IrvRead s \Cont             \\
-        & |   & \Send {\Te e p} v \Cont      \\
-        & |   & \Receive {\Te e p} \Cont     \\
-        & |   & \Write {\Te e p} v \Cont     \\
-        & |   & \Read {\Te e p} \Cont        \\
-        & |   & \Invalidate {\Te e p} \Cont  \\
-        & |   & \IsUpdated {\Te e p} \Cont   \\
-        & |   & \Call {\To o p} v \Cont      \\
-        & |   & \Result {\To o p} \Cont      \\
+        & |   & \Send e v \Cont      \\
+        & |   & \Receive e \Cont     \\
+        & |   & \Write e v \Cont     \\
+        & |   & \Read e \Cont        \\
+        & |   & \Invalidate e \Cont  \\
+        & |   & \IsUpdated e \Cont   \\
+        & |   & \Call o v \Cont      \\
+        & |   & \Result o \Cont      \\
         & |   & \Return v                    \\
 \end{array}
 \]
@@ -197,7 +196,7 @@ The label $l$ of a transition can essentially be of two kinds, indicating that t
             & |   & \Tdelta t & \hspace{4em}\text{Let \V{T} seconds pass} \\
 \end{array}
 \]
-The possible forms of the extra label information \V{D} will be introduced as the different transition rules are defined.
+The possible forms of the extra label detail \V{D} will be introduced as the different transition rules are defined.
 
 Two processes $p$ and $q$ can make transitions in parallel if they agree on what is being said or heard. Just as the saying/hearing intuition suggests, at most one of the processes can have the saying role in such an agreement. The following set of inference rules capture this intuition formally.
 {
@@ -238,30 +237,30 @@ where $v$ is the \emph{initValue} attributed to $s$ if it exists, otherwise $v$ 
 \end{array}
 \]
 
-\item For each data element $e$ of each required port $p$ of each atomic component $i$, a term
+\item For each {\em required} port element $e$ of each atomic component $i$, a term
 \[
 \begin{array}{c}
-  \Tqelem {\Tep e p i} n \epsilon
+  \Tqelem {i.e} n \epsilon
 \end{array}
 \]
 if the \emph{swImplPolicy} attribute of element $e$ is \emph{queued} (with capacity $n$); otherwise, a term
 \[
 \begin{array}{c}
-  \Tdelem {\Tep e p i} \Tfalse \TneverReceived
+  \Tdelem {i.e} \Tfalse \TneverReceived
 \end{array}
 \]
 
-\item For each operation $o$ of each required port $p$ of each atomic component $i$, a term
+\item For each {\em required} port operation $o$ of each atomic component $i$, a term
 \[
 \begin{array}{c}
-  \Toper{\Top o p i} 0 {\Tdone \Tvoid}
+  \Toper{i.o} 0 {\Tdone \Tvoid}
 \end{array}
 \]
 
 \item For each \emph{TimingEvent} of each runnable $r$ of each atomic component $i$, a term
 \[
 \begin{array}{c}
-  \Ttimer {\Tr r i } {t_p} 0
+  \Ttimer {i.r} {t_p} 0
 \end{array}
 \]
 where $\V{T_p}$ is the period of the event.
@@ -270,17 +269,11 @@ where $\V{T_p}$ is the period of the event.
 
 The AUTOSAR naming scheme guarantees that all processes terms in such an initial composition will carry unique addresses, with the exception of timer terms which share addresses with the runnables they belong to. We will later see how runnable instances reuse the address of their runnables in the same manner.
 
-Some further static model information will also be referenced by the transition rules. We refer to the connectors of a model using a binary relation $\Tconnect{}{}$ on port addresses, where the arrow points in the \emph{provided-to-required} direction. We also assume that $\Tconnect{}{}$ is transitively closed (i.e., it expresses end-to-end connectivity across \emph{Delegation-} as well as \emph{AssemblySwConnector}s), and that every connection $\Tconnect{a}{b}$ is lifted to the \emph{DataElement}s and \emph{ClientServerOperation}s of the connected ports such that
-\[
-\begin{array}{lll}
-  \Tconnect{a.e}{b.e} & \text{for all elements $e$ common to $a$ and $b$} \\
-  \Tconnect{a.o}{b.o} & \text{for all operations $o$ common to $a$ and $b$} \\
-\end{array}
-\]
+Some further static model information will also be referenced by the transition rules. We refer to the connectors of a model using a binary relation $\Tconnect{}{}$ on port elements and operations, where the arrow points in the \emph{provided-to-required} direction. Although connectors are tecnically defined for ports, we assume $\Tconnect{}{}$ is lifted to the common elements and operations of connected ports, and that it is transitively closed (i.e., expresses end-to-end connectivity across \emph{Delegation-} as well as \emph{AssemblySwConnector}s).
 
 We expect the implementation of a runnable to be available as a continuation function $\Cont$, even though the real AUTOSAR model will be referring to concrete functions in external C/Matlab files. We will further abstract away from actual numbers of input and output parameters to these functions by assuming that records (structs) are used as the single continuation argument and result whenever the arity so requires. Absent arguments or results will be replaced by the unit value $\Tvoid$.
 
-We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\TdataReceivedEvent {i.r} {i.p.e}$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port $i.p.e$. Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
+We write $\Timplementation{i.r}{k}$ to state the assumption that the static AUTOSAR model under study assigns implementation function $k$ to runnable $i.r$. Similar notations will be used to express other references to the underlying static model; for example $\TdataReceivedEvent {i.r} {i.e}$ to state that the model allows runnable $i.r$ to be triggered by data reception events on port element $i.e$. Although the chosen notation is sometimes significantly shorter than the UML/XML-based syntax used in the AUTOSAR specification, the intended meaning should nevertheless be clear.
 
 The semantic transition axioms are written in full in Appendix~\ref{sec:Rules}. We will discuss each group of axioms in turn, starting with the relatively simple behaviour of inter-runnable variables and exclusive areas. In most cases, the driving force behind a transition is some runnable instance wishing to say something which other processes either react to or ignore. How the runnable instances themselves come into existence will be detailed in Section~\ref{sect:SpawnTerm}.
 
@@ -349,24 +342,24 @@ This means that any runnable instance in $p$ wishing to enter $i.x$ is effective
 
 \subsection{Unbuffered sending/receiving}
 
-Axioms (13) and (15) define unbuffered inter-process communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (7)). A data element (\textbf{delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (14) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-condition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns to be one-to-many (such as $\Tconnect {i.p.e} a$ and $\Tconnect {i.p.e} b$), parallel data element updates like the following are possible:
+Axioms (13) and (15) define unbuffered inter-process communication from a runnable instance point of view. These transitions are just syntactic variants of shared variable reading and writing (axioms (5) and (7)). A data element (\textbf{delem}) process term contains two pieces of state in addition to its address: a communicated data value and a boolean flag for keeping track of unread writes. Axioms (14) and (16) capture reads and writes to the data value and also set the update flag accordingly. The side-condition in axiom (16) makes the rule apply only if there is a static connection from the data element being written and the address of the matched term (recall that data element storage is associated with the receiving side of a connection). Because AUTOSAR allows sender-receiver communication patterns to be one-to-many (such as $\Tconnect {i.e} a$ and $\Tconnect {i.e} b$), parallel data element updates like the following are possible:
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
   {\Tdelem a \_ \_} \Opar {\Tdelem b \_ \_} \vspace{0.6ex} \\
-  \red{\say{i.p.e}{\Twr v}} \\
+  \red{\say{i.e}{\Twr v}} \\
   \Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
   {\Tdelem a \Ttrue v} \Opar {\Tdelem b \Ttrue v}
 \end{array}
 $$
 As an aside, note that the ordering of terms in a parallel composition is made entirely irrelevant by the symmetric formulation of transition rules (1) and (2).
 
-Axiom (17) provides another means of interpreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $a$ should be marked as \textbf{pending} whenever a write occurs on an element connected to $a$. An example may be as follows (assuming $\Tconnect {i.p.e} a$ and $\TdataReceivedEvent b a$:
+Axiom (17) provides another means of interpreting a data element write. It expresses that a runnable set up to trigger on data reception on required data element $a$ should be marked as \textbf{pending} whenever a write occurs on an element connected to $a$. An example may be as follows (assuming $\Tconnect {i.e} a$ and $\TdataReceivedEvent b a$:
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteWrite {p.e} v k} \,\Opar  \\
   {\Tdelem a \_ \_} \Opar {\Trunnable b t \_ n} \vspace{0.6ex} \\
-  \red{\say{i.p.e}{\Twr v}} \\
+  \red{\say{i.e}{\Twr v}} \\
   \Trinst {i.r} c \Xs {\Tap k \Tvoid} \,\Opar \\
   {\Tdelem a \Ttrue v} \Opar {\Trunnable b t \Tpending n}
 \end{array}
@@ -381,12 +374,12 @@ Buffered inter-process communication (axioms (22) - (30)) is just a minor varian
 
 However, the AUTOSAR specification requires the send command to inform its caller whether all connected buffers were able to successfully store the communicated value or whether some buffers had it dropped. Such information is naturally expressed as an additional parameter $\Tvar{as}$ in the \emph{snd} transition, listing the addresses of connected \textbf{qelem} processes that have no spare capacity. The preconditions of axioms (27) and (28) ensure that $\Tvar{as}$ reflects the truth, and axioms (25) and (26) feed different error codes to the sender's continuation depending on whether $\Tvar{as}$ is empty or not. By requiring connectivity for all $a$ in $\Tvar{as}$ in axiom (26), the possibility of letting irrelevant addresses in $\Tvar{as}$ cause bogus \textbf{limit} results is ruled out.
 
-The following example illustrates a scenario where a sent value is only stored in a subset of the connected buffers. Assuming $\Tconnect {\Tep e p i} a$ and $\Tconnect {\Tep e p i} b$:
+The following example illustrates a scenario where a sent value is only stored in a subset of the connected buffers. Assuming $\Tconnect {i.e} a$ and $\Tconnect {i.e} b$:
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
   {\Tqelem a 2 \Teps} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
-  \red{\say{i.p.e}{\Tsnd v b}} \\
+  \red{\say{i.e}{\Tsnd v b}} \\
   \Trinst {i.r} c \Xs {\Tap k \Tlimit} \,\Opar \\
   {\Tqelem a 2 v} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}}
 \end{array}
@@ -399,16 +392,16 @@ The behaviour of client-server communication in AUTOSAR depends on whether a cli
 
 The AUTOSAR specification restricts client-server connections to the many-to-one pattern only, assigning a dedicated runnable responsible for implementing the offered service. It furthermore forbids runnables to be triggered by any events other than operation invocations of compatible signatures, making it natural to associate the state needed to buffer up server invocations with the server runnables themselves. On the other hand, the specification also introduces timeouts and sequence counters that are private to each connection, which is why our calculus needs process terms that correspond to each required (i.e., client-side) operation as well. Axiom (33) shows how the current sequence counter $m$ blazes a call transition if the client-side operation is not already busy, while the busy case is detected in axiom (36). In axiom (34), a successful call transition causes the client identifier $a$ to be buffered up in the server runnable together with sequence number $m$ and call parameter $v$. Axiom (37) lets a server runnable ignore an aborted call attempt.
 
-Here is an example of how a client runnable instance, a client port operation, and a server runnable interact during a call transition (assuming $\ToperationInvokedEvent b a$, $\Tconnect a {i.p.o}$, and $\TserverCallPointTimeout{i.p.o} t $).
+Here is an example of how a client runnable instance, a client port operation, and a server runnable interact during a call transition (assuming $\ToperationInvokedEvent b a$, $\Tconnect a {i.o}$, and $\TserverCallPointTimeout{i.o} t $).
 $$
 \begin{array}{c}
   {\Trinst {i.r} c \Xs {\TrteCall {p.o} v k}} \,\Opar  \\
-  {\Toper {i.p.o} m {\Tdone \Tnodata}} \Opar \\
+  {\Toper {i.o} m {\Tdone \Tnodata}} \Opar \\
   {\Trunnable b 0 \Cs 0} \vspace{0.6ex} \\
-  \red{\say{i.p.o}{\Tcall m v}} \\
+  \red{\say{i.o}{\Tcall m v}} \\
   {\Trinst {i.r} c \Xs {\Tap k \Tok}} \,\Opar \\
-  {\Toper {i.p.o} m {\Tcalling t}} \Opar \\
-  {\Trunnable b 0 {\Tcons \Cs {\Tclient {i.p.o} m v}}  0}
+  {\Toper {i.o} m {\Tcalling t}} \Opar \\
+  {\Trunnable b 0 {\Tcons \Cs {\Tclient {i.o} m v}}  0}
 \end{array}
 $$
 
@@ -426,31 +419,31 @@ Because of call timeouts, server runnables run the risk of producing results tha
 An example of a normal server result interaction can look as follows:
 $$
 \begin{array}{c}
-  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-  {\Toper {i.p.o} {91} {\Tcalling t}} \vspace{0.6ex} \\
-  \red{\say{i.p.o}{\Tret {91} v}} \\
+  {\Trinst b {\Tclient {i.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
+  {\Toper {i.o} {91} {\Tcalling t}} \vspace{0.6ex} \\
+  \red{\say{i.o}{\Tret {91} v}} \\
   {\Trinst b \Tvoid \Xs {\Treturn \Tvoid}} \,\Opar \\
-  {\Toper {i.p.o} {92} {\Tdone v}}
+  {\Toper {i.o} {92} {\Tdone v}}
 \end{array}
 $$
 As a contrast, this is the behaviour observed when a call timeout occurs:
 $$
 \begin{array}{c}
-  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-  {\Toper {i.p.o} {91} {\Tcalling 0}} \vspace{0.6ex} \\
-  \red{\say{i.p.o}{\Tret {91} \Ttimeout}} \\
-  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-  {\Toper {i.p.o} {92} {\Tdone \Ttimeout}}
+  {\Trinst b {\Tclient {i.o} {91} {v_0}} \Xs \Code} \,\Opar  \\
+  {\Toper {i.o} {91} {\Tcalling 0}} \vspace{0.6ex} \\
+  \red{\say{i.o}{\Tret {91} \Ttimeout}} \\
+  {\Trinst b {\Tclient {i.o} {91} {v_0}} \Xs \Code} \,\Opar  \\
+  {\Toper {i.o} {92} {\Tdone \Ttimeout}}
 \end{array}
 $$
-The processes are now in a state where runnable instance $b$ is prohibited from doing a normal return. Progress is only possible via axioms (46) and (47).
+The processes are now in a state where runnable instance $b$ is prohibited from doing a normal return. Termination of $b$ is only possible via axioms (46) and (47).
 $$
 \begin{array}{c}
-  {\Trinst b {\Tclient {i.p.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
-  {\Toper {i.p.o} {92} {\Tdone \Ttimeout}} \vspace{0.6ex} \\
-  \red{\say{i.p.o}{\Tskip {91}}} \\
+  {\Trinst b {\Tclient {i.o} {91} {v_0}} \Xs {\Treturn v}} \,\Opar  \\
+  {\Toper {i.o} {92} {\Tdone \Ttimeout}} \vspace{0.6ex} \\
+  \red{\say{i.o}{\Tskip {91}}} \\
   {\Trinst b \Tvoid \Xs {\Treturn \Tvoid}} \,\Opar \\
-  {\Toper {i.p.o} {92} {\Tdone \Ttimeout}}
+  {\Toper {i.o} {92} {\Tdone \Ttimeout}}
 \end{array}
 $$
 
@@ -480,7 +473,7 @@ $$
 \begin{array}{c}
   {\Trunnable b t \Act 3} \Opar
   {\Trinst b \Tvoid \Teps {\Treturn v}} \vspace{0.6ex} \\
-  \red{\say{i.p.o}{\Tterm}} \\
+  \red{\say{i.o}{\Tterm}} \\
   {\Trunnable b t \Act 2} \Opar \Tzero \\
   \equiv \\
   {\Trunnable b t \Act 2}
@@ -545,12 +538,12 @@ Instead we need a more restrictive rule, that applies to processes not addressed
 Runnable instances and timers can ignore everything being said by others, as they define no hearing transitions proper that need to be excluded here (axioms (65) and (66)). Exclusive areas, inter-runnable variables and operation terms have hearing transitions previously defined, but only for label addresses matching their own; they can thus safely ignore transitions labelled with any other address.
 Axioms (70) to (72) constitute the non-trivial cases, because here there are multiple earlier definitions to exclude, which also link label and process addresses via static model references. Still, it can be verified that each of the axioms (70) to (72) is guarded by an exact negation of the addressing conditions of any previously defined hearing transition for the same process type.
 
-As an concrete illustration, consider the example of Section~\ref{sect:BufSndRcv}. The axioms that enable each individual process transition in that example are (26), (27) and (28), respectively (and rules (1) and (3) allow them to be combined). In particular, axiom (28) is applicable because of the assumption $\Tconnect {i.p.e} b$, which simultaneously blocks applicability of axiom (70). However, under the different assumption that there is no connection from ${i.p.e}$ to $b$, axioms (28) and (70) must trade places. This also forces the removal of $b$ from the second argument of the \payload{snd} payload (i.e., the list of connected buffers not able to store the value sent). As a consequence, axiom (26) is no longer applicable and must be replaced by axiom (25). The resulting parallel transition looks as follows, illustrating the correct generation of an \Tatom{ok} result despite the presence of a full (but unconnected) buffer.
+As an concrete illustration, consider the example of Section~\ref{sect:BufSndRcv}. The axioms that enable each individual process transition in that example are (26), (27) and (28), respectively (and rules (1) and (3) allow them to be combined). In particular, axiom (28) is applicable because of the assumption $\Tconnect {i.e} b$, which simultaneously blocks applicability of axiom (70). However, under the different assumption that there is no connection from ${i.e}$ to $b$, axioms (28) and (70) must trade places. This also forces the removal of $b$ from the second argument of the \payload{snd} payload (i.e., the list of connected buffers not able to store the value sent). As a consequence, axiom (26) is no longer applicable and must be replaced by axiom (25). The resulting parallel transition looks as follows, illustrating the correct generation of an \Tatom{ok} result despite the presence of a full (but unconnected) buffer.
 $$
 \begin{array}{c}
   \Trinst {i.r} c \Xs {\TrteSend {p.e} v k} \,\Opar  \\
   {\Tqelem a 2 \Teps} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}} \vspace{0.6ex} \\
-  \red{\say{i.p.e}{\Tsnd v \Teps}} \\
+  \red{\say{i.e}{\Tsnd v \Teps}} \\
   \Trinst {i.r} c \Xs {\Tap k \Tok} \,\Opar \\
   {\Tqelem a 2 v} \Opar {\Tqelem b 2 {\Tcons {v_1} {v_2}}}
 \end{array}
@@ -585,13 +578,13 @@ $$
 $$
 where $q_1$ and $q_2$ are "similar" but not identical states. This non-determinism also has a concrete interpretation, either reflecting the non-deterministic nature of a system's environment (messages $l_1$ and $l_2$ just happen to arrive in some particular order) or its internals (processor speed or a scheduling choice just happens to pick $l_1$ before $l_2$). It is one of the primary merits of the process calculus approach to allow the scope of such inherent non-determinism to be precisely defined, because although a given system state may render many different behaviors possible, many more are not. A formal semantics enables us to clearly draw the line between these groups of behaviors.
 
-The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$. A scenario where two values $v_1$ and $v_2$ are sent on a port element $i.p.e$ connected to $a$ may lead to the following trace:
+The AUTOSAR specification contains a very subtle sensitivity to this kind of non-deterministism that is worth examplifying. Consider a queued data element $a$ together with a runnable $b$ set up to trigger on data reception events for $a$. A scenario where two values $v_1$ and $v_2$ are sent on a port element $i.e$ connected to $a$ may lead to the following trace:
 $$
 \begin{array}{c}
   {\Tqelem a 2 \Teps} \Opar
   {\Trunnable b 0 \Tidle 0} \vspace{0.6ex} \\
 
-  \red{\hear{i.p.e}{\Tsnd {v_1} \Teps}} \\
+  \red{\hear{i.e}{\Tsnd {v_1} \Teps}} \\
 
   {\Tqelem a 2 {v_1}} \Opar
   {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
@@ -602,7 +595,7 @@ $$
   {\Trunnable b 0 \Tidle 1} \,\Opar  \\
   {\Trinst b \Tvoid \Teps {\Code}} \vspace{0.6ex} \\
 
-  \red{\hear{i.p.e}{\Tsnd {v_2} \Teps}} \\
+  \red{\hear{i.e}{\Tsnd {v_2} \Teps}} \\
 
   {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar
   {\Trunnable b 0 \Tpending 1} \,\Opar  \\
@@ -624,12 +617,12 @@ $$
   {\Tqelem a 2 \Teps} \Opar
   {\Trunnable b 0 \Tidle 0} \vspace{0.6ex} \\
 
-  \red{\hear{i.p.e}{\Tsnd {v_1} \Teps}} \\
+  \red{\hear{i.e}{\Tsnd {v_1} \Teps}} \\
 
   {\Tqelem a 2 {v_1}} \Opar
   {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
 
-  \red{\hear{i.p.e}{\Tsnd {v_2} \Teps}} \\
+  \red{\hear{i.e}{\Tsnd {v_2} \Teps}} \\
 
   {\Tqelem a 2 {\Tcons{v_1}{v_2}}} \Opar
   {\Trunnable b 0 \Tpending 0} \vspace{0.6ex} \\
@@ -667,9 +660,9 @@ The formal semantics presented in this report is aimed to be a faithful capture 
 
 Unqueued data elements that are read before first written should return the error code {\bf neverReceived} \cite[ch.~5.6.10]{AR:RTE}. Since no exceptions to this rule are mentioned in the specification, our intepretation is that this holds even when a data element possesses an \emph{initValue} attribute  (initial {\bf delem} state in Section~\ref{sec:Sem}). However, as this renders any such initial value assignments entirely redundant, an alternative interpretation would be to create a term
 $$
-  \Tdelem {i.p.e} \Tfalse v
+  \Tdelem {i.e} \Tfalse v
 $$
-for each unqueued data element $i.p.e$, where $v$ is the \emph{initValue} of $e$ if it exists, and $\TneverReceived$ otherwise.
+for each unqueued data element $i.e$, where $v$ is the \emph{initValue} of $e$ if it exists, and $\TneverReceived$ otherwise.
 
 Inter-runnable variables can also be read before written, although here there is no special error code defined in the specification for the uninitialized case \cite[ch.~5.6.26]{AR:RTE}. Section~\ref{sec:Sem} sets each {\bf irv} contents to {\bf void} to indicate a truly non-existing value, although an entirely reasonable alternative would be
 $$

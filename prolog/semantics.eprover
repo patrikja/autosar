@@ -66,20 +66,20 @@ endgroup(ExclusiveAreas).
 
 begingroup(ReadingWriting).
 
-step( rinst(r(R,I), C, Xs, rte_Read(e(E,P),K)),          say(ep(E,P,I),rd(V)),           rinst(r(R,I), C, Xs, ap(K,V))         ).
+step( rinst(r(R,I), C, Xs, rte_Read(E,K)),               say(e(E,I),rd(V)),              rinst(r(R,I), C, Xs, ap(K,V))         ).
 step( delem(A, _, V),                                    hear(A,rd(V)),                  delem(A, false, V)                    ).
 
-step( rinst(r(R,I), C, Xs, rte_Write(e(E,P),V,K)),       say(ep(E,P,I),wr(V)),           rinst(r(R,I), C, Xs, ap(K,void))      ).
+step( rinst(r(R,I), C, Xs, rte_Write(E,V,K)),            say(e(E,I),wr(V)),              rinst(r(R,I), C, Xs, ap(K,void))      ).
 step( delem(B, _, _),                                    hear(A,wr(V)),                  delem(B, true, V)                     ) :-
     connect(A,B).
 step( runnable(r(R,I), T, _, N),                         hear(A,wr(_)),                  runnable(r(R,I), T, pending, N)       ) :-
     connect(A,B),
     dataReceivedEvent(r(R,I),B).
 
-step( rinst(r(R,I), C, Xs, rte_IsUpdated(e(E,P),K)),     say(ep(E,P,I),up(U)),           rinst(r(R,I), C, Xs, ap(K,U))         ).
+step( rinst(r(R,I), C, Xs, rte_IsUpdated(E,K)),          say(e(E,I),up(U)),              rinst(r(R,I), C, Xs, ap(K,U))         ).
 step( delem(A, U, V),                                    hear(A,up(U)),                  delem(A, U, V)                        ).
 
-step( rinst(r(R,I), C, Xs, rte_Invalidate(e(E,P),K)),    say(ep(E,P,I),inv),             rinst(r(R,I), C, Xs, ap(K,void))      ).
+step( rinst(r(R,I), C, Xs, rte_Invalidate(E,K)),         say(e(E,I),inv),                rinst(r(R,I), C, Xs, ap(K,void))      ).
 step( delem(B, _, _),                                    hear(A,inv),                    delem(B, true, invalid)               ) :-
     connect(A,B).
 
@@ -89,14 +89,14 @@ endgroup(ReadingWriting).
 
 begingroup(SendingReceiving).
 
-step( rinst(r(R,I), C, Xs, rte_Receive(e(E,P),K)),       say(ep(E,P,I),rcv(V)),          rinst(r(R,I), C, Xs, ap(K,V))         ).
+step( rinst(r(R,I), C, Xs, rte_Receive(E,K)),            say(e(E,I),rcv(V)),             rinst(r(R,I), C, Xs, ap(K,V))         ).
 step( qelem(A, N, cons(V,Vs)),                           hear(A,rcv(V)),                 qelem(A, N, Vs)                       ).
 step( qelem(A, N, eps),                                  hear(A,rcv(nodata)),            qelem(A, N, eps)                      ).
 
-step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,eps)),      rinst(r(R,I), C, Xs, ap(K,ok))        ).
-step( rinst(r(R,I), C, Xs, rte_Send(e(E,P),V,K)),        say(ep(E,P,I),snd(V,As)),       rinst(r(R,I), C, Xs, ap(K,limit))     ) :-
+step( rinst(r(R,I), C, Xs, rte_Send(E,V,K)),             say(e(E,I),snd(V,eps)),         rinst(r(R,I), C, Xs, ap(K,ok))        ).
+step( rinst(r(R,I), C, Xs, rte_Send(E,V,K)),             say(e(E,I),snd(V,As)),          rinst(r(R,I), C, Xs, ap(K,limit))     ) :-
     notequal(As,eps),
-    connectAll(ep(R,P,I),As).
+    connectAll(e(E,I),As).
 step( qelem(B, N, Vs),                                   hear(A,snd(V,As)),              qelem(B, N, seq(Vs,V))                ) :-
     connect(A,B),
     less(length(Vs),N),
@@ -120,17 +120,17 @@ endgroup(SendingReceiving).
 
 begingroup(CallServer).
 
-step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(_,V)),           rinst(r(R,I), C, Xs, rte_Result(o(O,P),K))    ) :-
-    synchronousServerCallPoint(r(R,I),op(O,P,I)).
-step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),call(_,V)),           rinst(r(R,I), C, Xs, ap(K,ok))                ) :-
-    asynchronousServerCallPoint(r(R,I),op(O,P,I)).
+step( rinst(r(R,I), C, Xs, rte_Call(O,V,K)),        say(o(O,I),call(_,V)),              rinst(r(R,I), C, Xs, rte_Result(O,K))         ) :-
+    synchronousServerCallPoint(r(R,I),o(O,I)).
+step( rinst(r(R,I), C, Xs, rte_Call(O,V,K)),        say(o(O,I),call(_,V)),              rinst(r(R,I), C, Xs, ap(K,ok))                ) :-
+    asynchronousServerCallPoint(r(R,I),o(O,I)).
 step( oper(A, M, done(_)),                          hear(A,call(M,V)),                  oper(A, M, calling(T))                        ) :-
     serverCallPointTimeout(A,T).
 step( runnable(r(R,I), T, Cs, N),                   hear(A,call(M,V)),                  runnable(r(R,I), T, seq(Cs,client(A,M,V)), N) ) :-
     operationInvokedEvent(r(R,I),B),
     connect(B,A).
 
-step( rinst(r(R,I), C, Xs, rte_Call(o(O,P),V,K)),   say(op(O,P,I),busy),                rinst(r(R,I), C, Xs, ap(K,limit))             ).
+step( rinst(r(R,I), C, Xs, rte_Call(O,V,K)),        say(o(O,I),busy),                   rinst(r(R,I), C, Xs, ap(K,limit))             ).
 step( oper(A, M, calling(T)),                       hear(A,busy),                       oper(A, M, calling(T))                        ).
 step( runnable(r(R,I), T, Cs, N),                   hear(A,busy),                       runnable(r(R,I), T, Cs, N)                    ) :-
     operationInvokedEvent(r(R,I),B),
@@ -142,11 +142,11 @@ endgroup(CallServer).
 
 begingroup(ServerResult).
 
-step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),              rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
-    synchronousServerCallPoint(r(R,I),op(O,P,I)),
+step( rinst(r(R,I), C, Xs, rte_Result(O,K)),        say(o(O,I),res(V)),                 rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
+    synchronousServerCallPoint(r(R,I),o(O,I)),
     notequal(V,nodata).
-step( rinst(r(R,I), C, Xs, rte_Result(o(O,P),K)),   say(op(O,P,I),res(V)),              rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
-    asynchronousServerCallPoint(r(R,I),op(O,P,I)).
+step( rinst(r(R,I), C, Xs, rte_Result(O,K)),        say(o(O,I),res(V)),                 rinst(r(R,I), C, Xs, ap(K,V))                 ) :-
+    asynchronousServerCallPoint(r(R,I),o(O,I)).
 
 step( oper(A, M, calling(T)),                       hear(A,res(nodata)),                oper(A, M, calling(T))                        ).
 step( oper(A, M, done(V)),                          hear(A,res(V)),                     oper(A, M, done(V))                           ).

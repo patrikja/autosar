@@ -120,26 +120,18 @@
 \newcommand{\Tpar}    [2]{#1 \Opar #2}
 \newcommand{\TparLong}[2]{\begin{array}{@{}l} ~~#1 \\ \Opar #2 \end{array}}
 
-%\newcommand{\Tr}    [2]{\mathrm{r}(#1,#2)}
-%\newcommand{\Tx}    [2]{\mathrm{x}(#1,#2)}
-%\newcommand{\Ts}    [2]{\mathrm{s}(#1,#2)}
 \newcommand{\Tr}    [2]{\emph{#2.#1}}
 \newcommand{\Tx}    [2]{\emph{#2.#1}}
 \newcommand{\Ts}    [2]{\emph{#2.#1}}
 \newcommand{\Te}    [2]{\emph{#2.#1}}
 \newcommand{\To}    [2]{\emph{#2.#1}}
-\newcommand{\Tp}    [2]{\emph{#2.#1}}
-\newcommand{\Tep}   [3]{\emph{#3.#2.#1}}
-\newcommand{\Top}   [3]{\emph{#3.#2.#1}}
 
-%\newcommand{\Tcons}         [2]{\mathrm{cons}(#1,#2)}
 \newcommand{\Tcons}         [2]{#1{:}#2}
 \newcommand{\Tap}           [2]{#1(#2)}
-%\newcommand{\Tseq}          [2]{#1\mathbin{\plusplus}#2}
+
 \newcommand{\Tsnoc}{\Tseq}
 \newcommand{\Tseq}          [2]{#1{:}#2}
 
-%\newcommand{\Tconnect}      [2]{\mathrm{connect}(#1,#2)}
 \newcommand{\TconnectAll}   [2]{\ensuremath{#1 \Rightarrow a \text{~for all $\Tmember{a}{#2}$}}}
 \newcommand{\Tconnect}      [2]{\ensuremath{#1 \Rightarrow #2}}
 \newcommand{\Tnotconnect}   [2]{\ensuremath{#1 \nRightarrow #2}}
