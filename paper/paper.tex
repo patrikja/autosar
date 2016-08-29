@@ -72,7 +72,7 @@ AUTOSAR models are completely static, which means that all components, runnables
 
 The formal approach we have chosen is that of a typical process calculus \cite{milner:ComMob}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
-Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $i.r$ means runnable $r$ of component $i$ and $i.e$ means port element $e$ within component $i$. We use the following meta-variable conventions:
+Components do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $i.r$ means runnable $r$ of component $i$ and $i.e$ means port element $e$ within component $i$. We use the following meta-variable conventions:
 
 %
 \[
@@ -393,9 +393,9 @@ $$
 
 The behaviour of client-server communication in AUTOSAR depends on whether a client lists the required server port operation as a synchronous or an asynchronous callpoint (which are mutually exclusive model attributes). In the former case, the call command is treated as if it were immediately followed by a command for retrieving the server result (axiom (31)), whereas in the latter case, the call succeeds immediately and the result has to be retrieved explicitly by the client's continuation code (axiom (32)). In both cases, however, an attempt to call the server before it is done processing a previous asynchronous call leads to immediate abortion with the error code \textbf{limit} (axiom (35)).
 
-The AUTOSAR specification restricts client-server connections to the many-to-one pattern only, assigning a dedicated runnable responsible for implementing the offered service. It furthermore forbids runnables to be triggered by any events other than operation invocations of compatible signatures, making it natural to associate the state needed to buffer up server invocations with the server runnables themselves. On the other hand, the specification also introduces timeouts and sequence counters that are private to each connection, which is why our calculus needs process terms that correspond to each required (i.e., client-side) operation as well. Axiom (33) shows how the current sequence counter $m$ blazes a call transition if the client-side operation is not already busy, while the busy case is detected in axiom (36). In axiom (34), a successful call transition causes the client identifier $a$ to be buffered up in the server runnable together with sequence number $m$ and call parameter $v$. Axiom (37) lets a server runnable ignore an aborted call attempt.
+The AUTOSAR specification restricts client-server connections to the many-to-one pattern only, assigning a dedicated runnable responsible for implementing the offered service. It furthermore forbids runnables to be triggered by any events other than operation invocations of compatible signatures, making it natural to associate the state needed to buffer up server invocations with the server runnables themselves. On the other hand, the specification also introduces timeouts and sequence counters that are private to each connection, which is why our calculus also needs process terms that correspond to each required (i.e., client-side) operation. Axiom (33) shows how the current sequence counter $m$ blazes a call transition if the client-side operation is not already busy, while the busy case is detected in axiom (36). In axiom (34), a successful call transition causes the client identifier $a$ to be buffered up in the server runnable together with sequence number $m$ and call parameter $v$. Axiom (37) lets a server runnable ignore an aborted call attempt.
 
-Here is an example of how a client runnable instance, a client port operation, and a server runnable interact during a call transition (assuming $\ToperationInvokedEvent b a$, $\Tconnect a {i.o}$, and $\TserverCallPointTimeout{i.o} t $).
+Here is an example of how a client runnable instance, a client port operation and a server runnable interact during a call transition (assuming $\ToperationInvokedEvent b a$, $\Tconnect a {i.o}$, and $\TserverCallPointTimeout{i.o} t $).
 $$
 \begin{array}{c}
   {\Trinst {i.r} c \Xs {\TrteCall {p.o} v k}} \,\Opar  \\
@@ -415,9 +415,9 @@ The \emph{result} command can appear as an implicit effect of a previous call co
 
 The state keeping track of a call's status resides in the \textbf{oper} term of a connection. Axiom (40) defines that \textbf{nodata} is the result provided while a call is open, whereas axiom (41) returns the stored result once a call has completed.
 
-A server runnable instance is identified by a client parameter distinct from $\Tvoid$. Axiom (42) says that when such a runnable instance reaches the end of its code sequence, it must emit the produced value together with the sequence number and \textbf{oper} address of its current invocation, before it is allowed to terminate (see Section~\ref{sect:SpawnTerm}). The addressed \textbf{oper} term reacts according to axiom (43), by completing the call, storing the produced value and increasing its sequence counter in preparation for the next call. However, should the \textbf{oper} timeout counter reach zero before a transition according to (43) can be taken, the client is obliged to unilaterally terminate the call and set the result to error code \textbf{timeout} (axiom (44)). Axiom (45) enables the completion of a call---successfully or via a timeout---to trigger a subscribing runnable (can be distinct from the original client).
+A server runnable instance is identified by a client parameter distinct from $\Tvoid$. Axiom (42) says that when such a runnable instance reaches the end of its code sequence, it must announce the produced value, together with the sequence number and \textbf{oper} address of its current invocation, before it is allowed to terminate (to be defined in Section~\ref{sect:SpawnTerm}). The addressed \textbf{oper} term reacts according to axiom (43), by completing the call, storing the produced value and increasing its sequence counter in preparation for the next call. However, should the \textbf{oper} timeout counter reach zero before a transition according to (43) can be taken, the client is obliged to unilaterally terminate the call and set the result to error code \textbf{timeout} (axiom (44)). Axiom (45) enables the completion of a call---successfully or via a timeout---to trigger a subscribing runnable (can be distinct from the original client).
 
-Because of call timeouts, server runnables run the risk of producing results that the original client is not waiting for anymore. Detecting such mismatches is the job of sequence numbers, as witnessed by the requirement in axiom (43) that the sequence numbers returned by the server and expected by the client must be identical (variable $m$). However, there must also exist a means for server runnables to simply discard their results, otherwise they would not be able to terminate. Axiom (46) therefore defines an alternative transition for finished servers, applicable on the condition that the returned sequence number does \emph{not} match what the client expects (axiom (47)). By means of axiom (48), runnables can ignore the corresponding transition.
+Because of call timeouts, server runnables run the risk of producing results that the original client is not waiting for anymore. Detecting such mismatches is the job of the sequence numbers, as witnessed by the requirement in axiom (43): the sequence number returned by the server and the one expected by the client must be identical (variable $m$). However, there must also exist a means for server runnables to simply discard their results, otherwise they would not be able to terminate. Axiom (46) therefore defines an alternative transition for finished servers, applicable on the condition that the returned sequence number does \emph{not} match what the client expects (axiom (47)). By means of axiom (48), subscribing runnables are allowed to ignore the corresponding transition.
 
 An example of a normal server result interaction can look as follows:
 $$
@@ -639,14 +639,14 @@ $$
 $$
 Here there is only one $b$ instance created and none is pending, even though $a$ correctly contains the two values received. The reason is that by swapping the order of the first instantiation and the second data reception steps, the system is put in a state where its inability to count pending instantiations becomes fatal.
 
-So, in an abbreviated form, both the following derivations are possible:
+So, in an abbreviated form, both the following derivations are possible for the same reception event sequence:
 $$
 \begin{array}{l}
   q \Opar p \rightarrow \cdots \rightarrow q_1 \Opar p_1 \Opar p_{\text{inst}} \\
   q \Opar p \rightarrow \cdots \rightarrow q_1 \Opar p_2 \Opar p_{\text{inst}} \Opar p_{\text{inst}}
 \end{array}
 $$
-That is, two data reception events in sequence can lead to the creation of either one or two runnable instances, and both behaviors are equally correct according to the AUTOSAR semantics.
+That is, the system can respond by creating either one or two runnable instances, and both behaviors are equally correct according to the AUTOSAR semantics.
 
 Unfortunately there is very little a programmer can do to influence which of these two traces is taken. Giving $b$ a positive \emph{minimumStartInterval} just guarantees that any subsequent events are lost during that interval. Long delays between reception events reduce the likelihood of losses, but the choice of when to take an instantiation step is still fully internal to the operating system scheduler. Moreover, when messages are produced by multiple parallel senders, maintaining control over their time distribution may be highly impractical. Non-concurrent runnables can work around the problem by iterating over all received data at each invocation, but that solution is not very attractive if concurrent processing of each received item is desired.
 
@@ -701,17 +701,17 @@ Although the AUTOSAR specification only motivates timed runnable activation with
 \end{center}
 If the timers were activating two distinct runnables, the fragment above would be guaranteed to result in eight instantiations in total. But if directed towards a single runnable, the number of instances created could be seven as well as eight, with no means for the programmer to control the outcome.
 
-This anomaly may lead to the conclusion that the AUTOSAR specification does not really intend more than one timing event to be defined per runnable. Luckily, our formalization is also compatible with this interpretation, as the restriction only concerns what set of static models to expect as starting states, not their dynamic behavior.
+This anomaly may lead to the conclusion that the AUTOSAR specification does not really intend to allow more than one timing event per runnable. Luckily, our formalization is also compatible with this interpretation, as the restriction only concerns what set of static models to expect as starting states, not their dynamic behavior.
 
-Closely related to the interleaving of timing events, and of interest even if only distinct runnables are being triggered, is the notion of initial timer offsets. That is, at what time will each timer tick for the first time --- immediately at startup or at some other (later) time? The AUTOSAR specification only introduces the notion of timing offset in relation to the operating system tasks that are expected to implement runnables; the Software Component Template itself is totally silent on the issue \cite{AR:SWC}. Lacking an abstract definition of runnable offsets, we have chosen to simply fire all timers simultaneously at $0$ seconds from startup (hence the value $0$ in the initial {\bf timer} term definition in Section~\ref{sec:Sem}). It is not hard to see that other values may be equally reasonable, though, like
+Closely related to the interleaving of timing events, and of interest even if only distinct runnables are being triggered, is the notion of initial timer offsets. That is, at what time will each timer tick for the first time --- immediately at startup or at some other (later) time? The AUTOSAR specification only introduces a concept of timing offsets in relation to the operating system tasks that are expected to implement runnables; the Software Component Template itself is totally silent on the issue \cite{AR:SWC}. Lacking an abstract definition of runnable offsets, we have chosen to simply fire all timers simultaneously at $0$ seconds from startup (hence the value $0$ in the initial {\bf timer} term definition in Section~\ref{sec:Sem}). It is not hard to see that other values may be equally reasonable, though, like
 $$
 	\Ttimer {i.r} {t_p} {t_p}
 $$
-which lets each timer wait one full cycle before triggering for the first time. However, should we really want to take the assumed implementation offsets into account, the initial timer state would rather be
+which lets each timer wait one full cycle before triggering for the first time. However, should we really want to take the assumed task offsets into account, the initial timer state would rather be
 $$
 	\Ttimer {i.r} {t_p} {t_o}
 $$
-for some chosen non-negative $t_o$. One might even want to add the condition $t_o < t_p$, but it must be emphasized that all these initilization options are speculative --- the AUTOSAR Software Component Template must be clarified before a sufficiently abstract model of timed behavior can be obtained.
+for some non-negative $t_o$. One might even want to add the condition $t_o < t_p$, but it must be emphasized that all these initilization options are speculative --- the AUTOSAR Software Component Template must be clarified before a sufficiently abstract model of timed behavior can be obtained.
 
 
 \subsection{Interpretation of data reception events}
@@ -738,7 +738,7 @@ $$
 \end{array}
 $$
 
-Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$, and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed nor able to flag an error due to a \emph{void} return type. This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to a runnable instance about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
+Another concern regarding exclusive areas is that although the specification clearly demands that exiting is done in the reverse order of entering, it does not provide any means for the exit command to report detected violations of that condition \cite[ch.~5.6.29]{AR:RTE}. This means that if a runnable instance tries to exit exclusive area $x$, and $x$ is not the latest exclusive area acquired by that instance, the operation is neither allowed to succeed, nor able to flag an error (due to a \emph{void} return type). This leaves our transition semantics with no other option than to indefinitely block progress for such a runnable, which is the consequence of providing no transition alternative besides axiom (11) to runnable instances about to execute the exit command. Had the specification allowed for an error result, however, the following axioms could have been added to resolve the order violation cases:
 $$
 \begin{array}{lcll}
 		{\Trinst {i.r} c {\Tcons y \Xs} {\TrteExit x k}}
@@ -756,7 +756,7 @@ $$
 
 \subsection{Failing runnables}
 
-A transition semantics like the one defined in this report provides rules for deriving the correct behaviors, while leaving the incorrect behaviors without derivation alternatives. This has the effect that a process term which attempts to do something illegal is assigned no meaningful remaining trace; it appears indefinitely stuck in its current state as if it were deadlocked and can participate in subsequent transitions only by ignoring what is being said.
+A transition semantics like the one defined in this report provides rules for deriving the correct behaviors, while leaving the incorrect behaviors without derivation alternatives. This has the effect that a process term which attempts to do something illegal is assigned no meaningful remaining trace; it appears indefinitely stuck in its current state as if it were deadlocked, and can participate in subsequent transitions only by ignoring what is being said.
 
 An alternative way of handling program failures in general is of course to throw exceptions or trigger some other non-local error-handling mechanism. AUTOSAR actually specifies a set of such generic error-handling approaches, but it does so in terms of implementation artefacts like tasks and memory partitions only, rather than the software component concepts under study in this report \cite{AR:ERR}. Still, the presence of exceptional errors raises a string of questions when combined with the concurrency and communication features of software components, and a clarification of this aspect could go a long way towards making AUTOSAR a self-contained programming model in its own right. We outline one possible way of formalizing the semantics of failing runnables below.
 
@@ -768,7 +768,7 @@ $$
         & |   & \Throw
 \end{array}
 $$
-A "throw" command has no continuation and is thus similar to the exception generating commands of many modern programming languages. It could be given an informative value parameter as well, but this will not be needed in this simplistic proposal. Throw commands can appear explicitly in the code to indicate software-detected errors, or they can be the result of special failure transitions, like the following alternative resolution of an exit order violation:
+A "throw" command has no continuation and is thus similar to the exception generating commands of many modern programming languages. It could be given an informative value parameter as well, but this will not be needed in our simplistic proposal. Throw commands can appear explicitly in the code to indicate software-detected errors, or they can be the result of special failure transitions, like the following alternative resolution of an exit order violation:
 $$
 \begin{array}{lcll}
 		{\Trinst {i.r} c {\Tcons y \Xs} {\TrteExit x k}}
