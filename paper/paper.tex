@@ -42,7 +42,6 @@ The semantics has been formalized with the intent to accurately capture the info
 
 TODO: Limitations
 
-%TODO: Some simple (informal) example early to give the reader an early view of flavour of the results.
 
 \section{AUTOSAR}
 \label{sec:autosar}
@@ -68,7 +67,7 @@ AUTOSAR models are completely static, which means that all components, runnables
 \section{Syntax and preliminaries}
 \label{sec:Calc}
 
-The formal approach we have chosen is that of a typical process calculus \cite{TODO}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
+The formal approach we have chosen is that of a typical process calculus \cite{milner:ComMob}, where a system of concurrent processes evolves in a sequence of atomic steps, as determined by a global set of transition rules. Our process terms correspond to the individual state-carrying parts of an AUTOSAR system, like the runnables, runnable instances, inter-runnable variables and port elements. Each such term is also assigned a constant address parameter for identification purposes.
 
 Components and ports do not carry any dynamic state besides the state of their constituent parts, so they need no explicit representation as process terms. However, in order to still be able to talk about model elements using their locally scoped names, we employ a hierarchical addressing scheme, such that address $\Tr{\V{R}}{\V{I}}$ means runnable \V{R} of component \V{I} and $\Tep{\V{E}}{\V{P}}{\V{I}}$ means element \V{E} of port \V{P} within component \V{I}. We use the following meta-variable conventions:
 
@@ -88,7 +87,7 @@ Components and ports do not carry any dynamic state besides the state of their c
 \end{array}
 \]
 %
-Since AUTOSAR components can be arbitrarily nested, the component names \V{I} can also be considered to have a similarly nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite{TODO2}.
+Since AUTOSAR components can be arbitrarily nested, the component names \V{I} can also be considered to have a similarly nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite[ch.~3.3.1]{AR:SWC}.
 
 The process terms of our calculus are as follows:
 \begin{itemize}
@@ -210,7 +209,7 @@ Two processes $p$ and $q$ can make transitions in parallel if they agree on what
 }
 
 
-The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition. This behaviour serves us well, because in general, what one AUTOSAR runnable does may have impact on many (if not all) parts of the executing system. It is, however, important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over the parallel composition operator is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
+The effect of these agreement rules closely resembles the idea of a \emph{broadcast}: what one process says may be heard by every other process in a large parallel composition \cite{prasad:cbs}. This behaviour serves us well, because in general, what one AUTOSAR runnable does may have impact on many (if not all) parts of the executing system. It is, however, important not to confuse this broadcasting notion with any particular form of AUTOSAR communication. The way transition labels distribute over the parallel composition operator is merely a technical aspect of our process calculus, and will be used to express several different AUTOSAR communication semantics, among other things.
 
 The initial process $p_0$ is determined fully by the AUTOSAR model under study, as the parallel composition of the following terms:
 \begin{enumerate}
@@ -660,8 +659,6 @@ One could argue that replacing the {\bf pending}/{\bf idle} flag of runnables wi
 
 \section{Ambiguities and clarification proposals}
 \label{sec:Amb}
-
-%**TODO: The end of the previous section also seems to be a clarification proposal
 
 The formal semantics presented in this report is aimed to be a faithful capture of the AUTOSAR specification, especially its Software Components template and RTE specification \cite{AR:SWC, AR:RTE}. Still, there are several areas where we have found the specification open to interpretation, or at least in need of some further clarification. We detail a few of these areas here, as an illustration to the kind of design decisions that may surface as the result of a formalization undertaking.
 
