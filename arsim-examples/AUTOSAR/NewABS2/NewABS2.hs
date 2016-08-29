@@ -73,8 +73,8 @@ data BangBang = BangBang
 -- of the system uses, since the actuator pulses need to be of a fairly high
 -- resolution. This also means that this is the bottleneck of the ACC example
 -- (since the rest of the system runs on a 20 ms period).
-bangBangCtrl :: AUTOSAR BangBang
-bangBangCtrl = atomic $ 
+bangBangCtrl :: Time -> Task -> AUTOSAR BangBang
+bangBangCtrl deltaT task = atomic $ 
   do valvePort <- providedPort
      slips     <- requiredPort 
      pidCall   <- requiredPort
@@ -82,14 +82,14 @@ bangBangCtrl = atomic $
 
      carrier <- interRunnableVariable (0 :: Int)
  
-     let width = 20 -- Maximum pulse width.
+     let width = 20 -- Maximum pulse width. Whatever resolution we have in the
+                    -- timing event in the runnable.
      
---      runnable (MinInterval 0) [TimingEvent 1e-3] $
-     runnableT ["core1" :>> (2, 1)] (MinInterval 0) [TimingEvent 1e-3] $ 
+     runnableT [task] (MinInterval 0) [TimingEvent deltaT] $ 
        do Ok c  <- rteIrvRead carrier
           Ok s0 <- rteRead slips
           Ok s  <- rteCall pidCall (0.2, s0)
-
+          
           -- Control signal modulation
           -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           -- Cut-off to @[-1, 1]@. If width * |u0| exceeds carrier 
@@ -168,10 +168,10 @@ data WheelCtrl = WheelCtrl
 -- | Wheel control module. Connects the pressure valves to the ABS controller
 -- and the carrier wave unit. Better results are achieved when the PID uses a
 -- time step below the rest of the system. 
-wheelCtrl :: Index -> AUTOSAR WheelCtrl
-wheelCtrl i = composition $ 
-  do bang <- bangBangCtrl
-     pid  <- pdController 1e-4 1e-3 6
+wheelCtrl :: Time -> Task -> Index -> AUTOSAR WheelCtrl
+wheelCtrl deltaT task i = composition $ 
+  do bang <- bangBangCtrl deltaT task
+     pid  <- pdController (deltaT / 10) 1e-2 6
 
      connect (pidOp pid) (pidCall bang)
      
@@ -199,16 +199,15 @@ data MainLoop = MainLoop
 
 -- | The main loop of the ABS algorithm approximates wheel slip ratios and sends
 -- these to the PWM.
-mainLoop :: AUTOSAR MainLoop
-mainLoop = atomic $ 
+mainLoop :: Task -> AUTOSAR MainLoop
+mainLoop task = atomic $ 
   do velosIn  <- replicateM 4 requiredPort
      slipsOut <- replicateM 4 providedPort
      velo     <- requiredPort
       
      mapM_ (`comSpec` InitValue 0.0) slipsOut
       
---      runnable (MinInterval 0) [DataReceivedEvent velo] $
-     runnableT ["core1" :>> (1, 10)] (MinInterval 0) [DataReceivedEvent velo] $ 
+     runnableT [task] (MinInterval 0) [DataReceivedEvent velo] $ 
        do velos <- mapM (fmap fromOk . rteRead) velosIn
           Ok v1 <- rteRead velo
           forM (velos `zip` slipsOut) $ \(v, p) -> rteWrite p (slipRatio v1 v)
@@ -249,13 +248,16 @@ data ABS = ABS
 -- | The ABS system connects the @mainLoop@ component for each wheel with a
 -- wheel controller. Each controller is also connected to the carrier wave
 -- sequencer.
-absSystem :: AUTOSAR ABS
-absSystem = composition $ 
+absSystem :: Time 
+          -> Task 
+          -> Task 
+          -> AUTOSAR ABS
+absSystem deltaT absT bangT = composition $ 
   do -- Main loop
-     MainLoop velosIn slipsOut veloIn <- mainLoop
+     MainLoop velosIn slipsOut veloIn <- mainLoop absT
      
      -- Wheel controllers
-     wheelCtrls <- forM [1..4] wheelCtrl
+     wheelCtrls <- forM [1..4] (wheelCtrl deltaT bangT)
 
      -- Connect slips to wheel controllers
      connectEach slipsOut (map slip wheelCtrls)

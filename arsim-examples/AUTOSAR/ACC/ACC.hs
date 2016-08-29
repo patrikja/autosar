@@ -13,6 +13,7 @@ module AUTOSAR.ACC.ACC
 import AUTOSAR.ACC.Revlimit 
 import AUTOSAR.Shared.Generic
 import AUTOSAR.Shared.PID
+import Control.Arrow
 import Control.Monad
 import Data.Maybe
 import NewARSim
@@ -38,18 +39,22 @@ data ACCSystem = ACCSystem
   }
 
 -- | Adaptive Cruise Control system.
-accSystem :: Time -> AUTOSAR ACCSystem
-accSystem timeStep = composition $
+accSystem :: Time 
+          -- ^ Sample time
+          -> Task 
+          -- ^ Task assignment for the cruise control
+          -> AUTOSAR ACCSystem
+accSystem deltaT task = composition $
   do -- Sample time resolution of the entire system. Inherited 
      -- by the target vehicle sensor and the ACC ECU.
     
-     accECU <- cruiseCtrl timeStep
+     accECU <- cruiseCtrl deltaT task
 
      -- PD controller
      -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
      -- Create a PD controller for the ACC. Parameters are 
      -- found by trial-and-error.
-     pidCtrl <- pdController (timeStep / 10) 5e-3 5e-1
+     pidCtrl <- pdController (deltaT / 10) 5e-3 5e-1
 
      -- Connections
      connect (pidOp pidCtrl)    (ctrl accECU)
@@ -89,8 +94,10 @@ data CruiseCtrl = CruiseCtrl
 -- | The cruise control apparatus.
 cruiseCtrl :: Time 
            -- ^ Sample time
+           -> Task
+           -- ^ Task assignment
            -> AUTOSAR CruiseCtrl
-cruiseCtrl deltaT = atomic $ 
+cruiseCtrl deltaT task = atomic $ 
   do crVel   <- requiredPort
      vhVel   <- requiredPort
      target  <- requiredPort
@@ -107,11 +114,11 @@ cruiseCtrl deltaT = atomic $
 
      -- Cruise control mode.
      -- ~~~~~~~~~~~~~~~~~~~~
-     runnableT ["core1" :>> (3, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
+     runnableT [task] (MinInterval 0) [TimingEvent deltaT] $ 
        do Ok c <- rteRead crVel
           Ok v <- rteRead vhVel
           Ok m <- rteRead target
-          let (vt, st) = maybe (c, 100) (\(r, d) -> (v + r, d)) m
+          let (vt, st) = maybe (c, 100) (first (+v)) m
 
           Ok sig <- if v > vt then 
                       rteCall ctrl (0.95 * vt, v)

@@ -29,8 +29,8 @@ data RadarCtrl = RadarCtrl
   , radarOutput :: DataElem Unqueued (Maybe (Double, Double)) Provided
   }
 
-radarCtrl :: Time -> Double -> AUTOSAR RadarCtrl
-radarCtrl deltaT thresh = atomic $ do
+radarCtrl :: Time -> Task -> Double -> AUTOSAR RadarCtrl
+radarCtrl deltaT task thresh = atomic $ do
   distIn <- requiredPort
   relIn  <- requiredPort
   out    <- providedPort
@@ -39,7 +39,7 @@ radarCtrl deltaT thresh = atomic $ do
   comSpec distIn (InitValue 100)
   comSpec relIn  (InitValue 0.0)
 
-  runnable (MinInterval 0) [TimingEvent deltaT] $ do
+  runnableT [task] (MinInterval 0) [TimingEvent deltaT] $ do
     Ok d <- rteRead distIn
     Ok r <- rteRead relIn
     let output
@@ -61,8 +61,8 @@ data ThrottleCtrl = ThrottleCtrl
 
 -- Vehicle throttle controller. Limits throughput signal to the @[-1, 1]@
 -- range. Makes use of the rev-limiter.
-throttleCtrl :: AUTOSAR ThrottleCtrl 
-throttleCtrl = atomic $ do 
+throttleCtrl :: Task -> AUTOSAR ThrottleCtrl 
+throttleCtrl task = atomic $ do 
   thrIn  <- requiredPort
   rpmIn  <- requiredPort
   revLim <- requiredPort
@@ -70,7 +70,7 @@ throttleCtrl = atomic $ do
 
   comSpec thrOut (InitValue 0.0)
 
-  runnableT ["core1" :>> (5, 10)] (MinInterval 0) [DataReceivedEvent thrIn] $ do
+  runnableT [task] (MinInterval 0) [DataReceivedEvent thrIn] $ do
     Ok thr0 <- rteRead thrIn
     Ok rpm  <- rteRead rpmIn
     Ok thr1 <- rteCall revLim (thr0, rpm)
@@ -83,8 +83,8 @@ throttleCtrl = atomic $ do
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 -- Vehicle brake controller. Limits throughput signal to the @[0, 1]@ range.
-brakeCtrl :: AUTOSAR (Feedthrough Throttle Throttle)
-brakeCtrl = feedthroughT ["core1" :>> (4, 10)] (min 1) 0.0
+brakeCtrl :: Task -> AUTOSAR (Feedthrough Throttle Throttle)
+brakeCtrl task = feedthroughT [task] (min 1) 0.0
 
 -- * Vehicle module
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -132,20 +132,30 @@ instance External IOModule where
     ]
 
 -- | Vehicle IO module.
-vehicleIO :: AUTOSAR IOModule
-vehicleIO = composition $
-  do let timeStep = 1e-2
-
+--
+-- The model is parametrized on the task assignmens of the runnables, as well as
+-- the minimum sample time in the model. You will still need to take into
+-- account which runnables are triggered by timers or data reception events when
+-- you give a task assignment (see this module, as well as "AUTOSAR.ACC",
+-- "AUTOSAR.Gearbox" and "AUTOSAR.Revlimit").
+vehicleIO :: Time 
+          -> [Task]
+          -> AUTOSAR IOModule
+vehicleIO deltaT tasks = composition $
+  do -- Specific task assignments
+     -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     let [veloT, absT, bangT, radarT, accT, brkT, thrT, gearT] = tasks
+    
      -- Car subsystems
      -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     brakes   <- brakeCtrl
-     engine   <- throttleCtrl
-     gearCtrl <- gearController timeStep
-     veloCtrl <- velocityCtrl   timeStep
-     radar    <- radarCtrl      timeStep 50
-     acc      <- accSystem      timeStep 
+     brakes   <- brakeCtrl                    brkT
+     engine   <- throttleCtrl                 thrT
+     gearCtrl <- gearController (10 * deltaT) gearT
+     veloCtrl <- velocityCtrl   deltaT        veloT 
+     radar    <- radarCtrl      (10 * deltaT) radarT 50
+     acc      <- accSystem      (10 * deltaT) accT
      rpmLimit <- revLimit       5500
-     absCtrl  <- absSystem 
+     absCtrl  <- absSystem      deltaT        absT bangT
     
      -- Connections
      connect (radarOutput radar)   (accTarget acc)
@@ -168,7 +178,6 @@ vehicleIO = composition $
                                      ]
      
      -- Strip ports and wheels from ABS system.
-     -- TODO: Tidy up, unify with ABS example.
      let ws = wheels veloCtrl `zip` map veloIn (wheelPorts absCtrl)
      wheelsIn  <- forM ws $ \(vc, wp) -> requiredDelegate [vc, wp]
      valvesOut <- forM (map valveOut (wheelPorts absCtrl)) $ \vp ->

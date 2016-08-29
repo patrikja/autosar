@@ -35,8 +35,10 @@ data VelocityCtrl = VelocityCtrl
 -- chapter 5.
 velocityCtrl :: Time 
              -- ^ Sample time 
+             -> Task
+             -- ^ Task assignment
              -> AUTOSAR VelocityCtrl
-velocityCtrl deltaT = atomic $ 
+velocityCtrl deltaT task = atomic $ 
   do wheels   <- replicateM 4 requiredPort
      accel    <- requiredPort 
      velocity <- providedPort
@@ -45,7 +47,7 @@ velocityCtrl deltaT = atomic $
      comSpec accel    (InitValue 0.0)
      comSpec velocity (InitValue 0.0)
       
-     let memory = 100
+     let memory = 200
     
      -- Keep acceleration memory for backwards integration phase.
      accMem  <- interRunnableVariable (replicate memory 0.0)
@@ -53,7 +55,7 @@ velocityCtrl deltaT = atomic $
      veloMem <- interRunnableVariable 0.0 
      state   <- interRunnableVariable S0
 
-     runnableT ["core1" :>> (0, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
+     runnableT [task] (MinInterval 0) [TimingEvent deltaT] $ 
        do velos  <- mapM (fmap fromOk . rteRead) wheels
           Ok acc <- rteRead accel
           Ok s0  <- rteIrvRead state
@@ -151,7 +153,7 @@ stateTrans v a state =
         | a >= -beta + ha -> S0
         | otherwise       -> S1
   where
-    vMin   = 0.5              -- Low velocity threshold  (m/s)
+    vMin   = 0.01             -- Low velocity threshold  (m/s)
     hv     = 0.2              -- Velocity hysteresis     (m/s)
     ha     = 0.1              -- Acceleration hysteresis (m/s^2)
     beta   = 0.8              -- Deceleration threshold  (m/s^2)

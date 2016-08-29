@@ -21,12 +21,16 @@ instance External Vehicle where
   toExternal = toExternal . valvesOut 
 
 -- | Export wheel ports and accelerometer connection from the ABS system.
--- TODO: Export tasks + time delta
 vehicleIO :: AUTOSAR Vehicle
 vehicleIO = do
-  declareTask "core1" (TimingEvent 1e-3)
-  absCtrl  <- absSystem
-  veloCtrl <- velocityCtrl 1e-2
+  let delta = 1e-3
+      veloT = "core1" :-> 0
+      absT  = "core1" :-> 1
+      bangT = "core1" :-> 2
+  declareTask "core1" (TimingEvent delta)
+
+  absCtrl  <- absSystem    delta absT  bangT
+  veloCtrl <- velocityCtrl delta veloT
 
   connect (velocity veloCtrl) (absVeloIn absCtrl)
   

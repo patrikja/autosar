@@ -25,8 +25,12 @@ data GearCtrl = GearCtrl
 
 -- | @'gearController' dt@ creates a gear controller reading RPM inputs
 -- periodically with an interval length of @dt@. 
-gearController :: Time -> AUTOSAR GearCtrl
-gearController deltaT = 
+gearController :: Time 
+               -- ^ Sample time
+               -> Task
+               -- ^ Task assignment
+               -> AUTOSAR GearCtrl
+gearController deltaT task = 
   let initialGear = -1   -- Initial gear setting
       timerLimit  = 0.5  -- Time delay after a gear change has been made.
   in atomic $ 
@@ -40,8 +44,7 @@ gearController deltaT =
      gears <- interRunnableVariable initialGear
      timer <- interRunnableVariable (True, 0.8 * timerLimit)
 
---      runnable (MinInterval 0) [TimingEvent deltaT] $
-     runnableT ["core1" :>> (6, 10)] (MinInterval 0) [TimingEvent deltaT] $ 
+     runnableT [task] (MinInterval 0) [TimingEvent deltaT] $ 
        do res <- rteRead engineRPM
           case res of 
             Ok rpm1 -> do
