@@ -1,3 +1,9 @@
+2016-08-28: Fininshed one pass through the full paper
+
+  Changed to the IEEE class required by the DATE conference.
+
+  Page limit: 6 pages(!) - we have 12 + appendix.
+
 2016-08-16: Possible venues?
 
   DATE: http://dblp.uni-trier.de/db/conf/date/index.html
