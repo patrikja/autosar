@@ -1,4 +1,4 @@
-# NewARSim
+# ARSim
 
 (Something here)
 
@@ -20,6 +20,9 @@ mySWC = atomic $ do
   -- A runnable with a task assignment with privilege @p@, that runs
   -- every @n@:th activation of the task:
   runnableT ["my_task" :>> (p, n)] myInvocation3 myEvents3 myRteCode3
+
+  -- A concurrent runnable assigned to several tasks:
+  runnableT ["task", :-> p1, "task2" :>> (p2, n)] Concurrent myEvents4 $ ...
 
   ...
 ```
