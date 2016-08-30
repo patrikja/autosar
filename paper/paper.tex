@@ -8,10 +8,15 @@
 \usepackage{amssymb}
 \usepackage[makeroom]{cancel}
 \usepackage{graphicx}
+\usepackage{authblk}
 
 % \usepackage{minted}
 \title{A semantics of core AUTOSAR}
-\author{Johan Nordlander \and Patrik Jansson}
+\author{Johan Nordlander \quad\quad Patrik Jansson}
+
+
+\affil{Chalmers University of Technology}
+
 %%%%%%%
 \input{macros.tex}
 \input{semantics.tex}
@@ -37,14 +42,16 @@ The standard has a rather wide scope and covers many features normally associate
 
 Unfortunately, the AUTOSAR specification is not very rigorous, despite a sheer size of more than 12,500 pages of text and UML diagrams in total. It is also not very abstract, in that it makes frequent references to assumed implementation techniques for the purpose of defining its semantics. In practice, the AUTOSAR standard becomes blurred with the specific behaviour of one's chosen platform and development tools. And because the standard is open to interpretation, the interoperability of software components across tools and platforms is often seriously hampered. What is more, a single software component cannot easily be studied and understood in isolation, since its interactive behaviour is only indirectly defined in terms of the concrete C-code and OS tasks that realize it and its interaction environment.
 
-This paper takes a first step towards a remedy to these problems, by contributing a formal specification of a substantial core of the AUTOSAR standard. The formalization covers most of the Software Component Template and its accompanying Run-Time Environment (RTE) (Section~\ref{sec:Calc}), and is able to directly express every legal way a system of software components can evolve at run-time on an arbitrarily fast platform (Section~\ref{sec:Sem}). It can thus serve as a basis for both a concrete AUTOSAR implementation on a specific platform (whose supported behaviours must be a subset of those defined by the formal semantics), and a platform-independent AUTOSAR simulator (where behaviours from the legal set can be picked at random). Examples of semantic derivations and their applications can be found throughout the presentation.
+In this paper we take a first step towards a remedy to these problems, by contributing a formal specification of a substantial core of the AUTOSAR standard. AUTOSAR itself is summarized in Section~\ref{sec:autosar}. The formalization covers most of the Software Component Template and its accompanying Run-Time Environment (RTE) (Section~\ref{sec:Calc}), and is able to directly express every legal way a system of software components can evolve at run-time on an arbitrarily fast platform (Section~\ref{sec:Sem}). It can thus serve as a basis for both a concrete AUTOSAR implementation on a specific platform (whose supported behaviours must be a subset of those defined by the formal semantics), and a platform-independent AUTOSAR simulator (where behaviours from the legal set can be picked at random). 
+Non-determinism and concurrency is emphasized in Section~\ref{sec:NonDet}, together with an example of an unfortunate consequence of the specified standard. Section~\ref{sec:Amb} identifies some areas where the AUTOSAR documents has been found unclear; here our chosen readings are put in relation to alternative interpretations. Section~\ref{sec:Lim}, finally, gives a detailed account on the scope limitations we have imposed on our work.
 
-The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behaviour. At some points, the standard documents are clear but the resulting semantics is dubious. These cases will be emphasised and discussed, together with suggested ways forward (Section~\ref{sec:NonDet}). At other points, the AUTOSAR documents have been found unclear; here a specific choice has been made but alternative interpretations will be discussed separately (Section~\ref{sec:Amb}).
+The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behaviour. Examples of questions that can be firmly resolved on basis of our formalized semantics include:
+\begin{itemize}
+\item {\em How many runnable instances will a sequence of buffered data receptions give rise to?}
+\item {\em What values may ever be returned when an inter-runnable variable is first read?}
+\item {\em At what times will two timing events coincide, if at all?}
+\end{itemize}
 
-TODO: Limitations
-
-%TODO: Some simple (informal) example early to give the reader an early view of flavour of the results.
-%  Suggestion: use something like the "two values sent to a queue with a trigger runnable can lead to the runnable triggering once or twice" example
 
 \section{AUTOSAR}
 \label{sec:autosar}
@@ -671,7 +678,7 @@ where $v$ is the \emph{initValue} of $s$ if it exists, and the error code {\bf n
 
 \subsection{Activation of server runnables}
 
-The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{Operation\-InvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with ambiguous response values as a would one-to-many client-server connection pattern. %It is not easy to see what could constitute an alternative interpretation without introducing some programmer option for selecting among server results.
+The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{Operation\-InvokedEvent}s refering to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with conflicting response values as a would one-to-many client-server connection pattern. It is actually not easy to see what could constitute an alternative interpretation here, without introducing a need for some new programming mechanism for selecting among server results.
 
 
 \subsection{Interleaving of timing events}
@@ -799,7 +806,7 @@ $$
 Other design choices are of course perfectly possible, and more elaborate rules, for example involving an explicit exception-catching mechanism, could be considered as well. We must emphasize, though, that the rules in this section are just hypothetical examples; they are not based on the current AUTOSAR specification and are only presented to illustrate the succinctness and level of detail that can be obtained by a formal semantics aproach.
 
 
-\section{Limitations}
+\section{Limitations} \label{sec:Lim}
 
 We claim that the formalized AUTOSAR semantics of this report covers a substantial core of the Software Component Template and Specification of RTE \cite{AR:SWC, AR:RTE}. But these two documents alone add up to almost 2000 pages of specification text in total, covering a wide range of features on many levels of abstraction. We have therefore found it necessary to further limit our scope; both by leaving out parts that have very little to do with the concurrency and communication aspects that are our primary interest, and by ignoring parts that to some extent duplicate the features that we are already covering. We discuss the chosen omissions in more detail below.
 
@@ -821,18 +828,18 @@ The only atomic software component type we include on our formalization is the \
 
 A similar argument justifies our decision to omit port types beyond the sender-receiver and client-server kinds \cite[ch.~4.2]{AR:SWC}, as well as per instance memories \cite[ch.~7.7]{AR:SWC}. A port typed by a \emph{TriggerInterface} \cite[ch.~4.4.7]{AR:SWC} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well \cite[ch.~4.4.6]{AR:SWC}. Per instance memories essentially duplicate the behavior of inter-runnable variables.
 
-Basic Software modules implement behaviors that cannot be captured as ordinary software components due to their dependency on hardware and other platform artefacts. However, our abstract treatment of computation dependencies in general confines such differences to one's choice of $k$ continuations, which elimiates the need to formalize Basic Software components through any special means.
+Basic Software modules implement behaviors that cannot be captured as ordinary software components due to their dependency on hardware and other platform artefacts \cite{AR:BSW} \cite[ch.~4.2]{AR:RTE}. However, our abstract treatment of computation dependencies in general confines such differences to one's choice of $k$ continuations, which elimiates the need to formalize Basic Software components through any special means.
 
 
 \subsection{Left out for brevity}
 
 A few areas of the AUTOSAR SWC and RTE specifications have been omitted for the purpose of keeping the size of the resulting formalism at a reasonable level. These are areas where a worked out formalization could prove interesting, and possibly even discover new design ambiguities. However, we also believe that the techniques required for undertaking such an effort are already demonstrated by our current work, and that making the resulting semantics accessible is an even more important goal than striving for completeness. The major omissions of this kind are:
 \begin{itemize}
-\item Implicit communication, where designated port elements are automatically read/written at the start/end the of runnables that access them.
-\item Category 2 runnables, which declare certain read or receive operations as \emph{WaitPoints} that block progress until the associated events occur. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the result command that follows from calling a \emph{synchronousServerCallPoint} already defines the essence of such a blocking \emph{WaitPoint}.
-\item The AUTOSAR COM layer and related events and commands (\emph{DataWriteCompleted}, \emph{DataSendCompleted}, \emph{DataReceiveError}, the {\em Feedback} command) \cite{AR:COM}. COM is the communication substrate between nodes in a distributed AUTOSAR system and its limited storage capacity introduces an element of resource competition among communicating components. It also leads to the separation of sending and reception into distinct events, as well as a new class of communication errors.
-\item Most details found in the \emph{ComSpec} annotations that can be attached to ports (currently only \emph{initValues} are acknowledged).
-\item The meta-programming oriented RTE {\em Lifecycle} and {\em Callback} APIs.
+\item Implicit communication, where designated port elements are automatically read/written at the start/end the of runnables that access them \cite[ch.~4.3.1.5]{AR:RTE}.
+\item Category 2 runnables, which declare certain read or receive operations as \emph{WaitPoints} that block progress until the associated events occur \cite[ch.~7.2.4.4]{AR:SWC}. While this form of event handling is fundamentally different from the standard mechansim of activating runnables, it may be noted that the result command that follows from calling a \emph{synchronousServerCallPoint} already defines the essence of such a blocking \emph{WaitPoint}.
+\item The AUTOSAR COM layer \cite{AR:COM} and related events and commands (\emph{DataWriteCompleted}, \emph{DataSendCompleted}, \emph{DataReceiveError}, the {\em Feedback} command \cite[ch.~5.7.5, 5.6.8]{AR:RTE}). COM is the communication substrate between nodes in a distributed AUTOSAR system and its limited storage capacity introduces an element of resource competition among communicating components. It also leads to the separation of sending and reception into distinct events, as well as additional communication errors.
+\item Most details found in the \emph{ComSpec} annotations that can be attached to ports (currently only \emph{initValues} are acknowledged) \cite[ch.~4.5]{AR:SWC}.
+\item The meta-programming oriented RTE {\em Lifecycle} and {\em Callback} APIs \cite[ch.~5.8-9]{AR:RTE}.
 \end{itemize}
 
 
