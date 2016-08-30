@@ -15,7 +15,7 @@
 \author{Johan Nordlander \quad\quad Patrik Jansson}
 
 
-\affil{Chalmers University of Technology}
+\affil{Department of Computer Science and Engineering, Chalmers University of Technology}
 
 %%%%%%%
 \input{macros.tex}
@@ -29,8 +29,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-TODO
-
+The AUTOSAR system architecture for the automotive industry is rich in features and large in size, but lacks a comprehensive definition that allows its Software Components and Runtime Environment to be treated as an abstract programming model in its own right. As a result, AUTOSAR components are hard to analyze, test and evaluate without first committing to a particular execution platform and component context. This paper addresses this shortcoming by means of a formalization of the core AUTOSAR specification as a labelled transition system. The resulting semantic rules can be used to clarify the specification, emphasize design tradeoffs and serve as a foundation for simulation tools that fulfill the AUTOSAR promise of platform- and vendor-independent automotive software development.
 \end{abstract}
 
 \section{Introduction}
@@ -846,7 +845,14 @@ A few areas of the AUTOSAR SWC and RTE specifications have been omitted for the 
 \section{Conclusions and Future Work}
 \label{sec:Conc}
 
-Return to the limitation - what is the next step (which can be lifted more easily)
+In this paper we have provided a formal specification of a substantial core of the AUTOSAR specification. Transition rules and axioms have been defined and linked to the AUTOSAR specification documents, and issues related to choices or ambiguities in the specification have been discussed.
+
+The next step forward for this work is to seek involvement of the AUTOSAR community, in order to gain feedback on our formal interpretation, stimulate clarifying discussions on open design choices, and concievably also arrive at a consensus regarding the semantics of AUTOSAR as a programming model of its own.
+
+Another line of work is obviously to lift more of the scope limitations listed in Section~\ref{sec:Lim}. A formalization of omitted component, port and event types is likely to present very few problems besides an inevitable size increase, which could be mitigated by a compartementalization of the semantics into independent fragments. More serious work may be required to incorporate the COM layer and the added set of behaviors that follow from component distribution, but the effort would also lead to a significantly better formal coverage of the AUTOSAR specification.
+
+The formal semantics may also lay the foundation of tools that analyze or transform AUTOSAR models. One such example is our AUTOSAR simulator \cite{ARSim}, which interprets AUTOSAR models entirely on basis of the transition system, utilizing truly random scheduling and a maximum progress assumption to select among available transitions at each step. The benefit of this simulator is its ability to dynamically execute AUTOSAR Software Component models as they are, without prior selection of a particular platform or translation into a low level C representation. A further avenue of exploration concerns the potential to prove properties of AUTOSAR system on basis of their semantics. To prepare for this opportunity, we have defined the transition system used in this paper as a Horn clause file readable by common theorem provers \cite{AR.eprover}, and in fact produced Appendix~\ref{sec:Rules} through a simple formatting translation of this file.
+
 
 \bibliography{refs}
 
