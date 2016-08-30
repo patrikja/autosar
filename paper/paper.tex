@@ -29,7 +29,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-The AUTOSAR system architecture for the automotive industry is rich in features and large in size, but lacks a comprehensive definition that allows its Software Components and Runtime Environment to be treated as an abstract programming model in its own right. As a result, AUTOSAR components are hard to analyze, test and evaluate without first committing to a particular execution platform and component context. This paper addresses this shortcoming by means of a formalization of the core AUTOSAR specification as a labelled transition system. The resulting semantic rules can be used to clarify the specification, emphasize design tradeoffs and serve as a foundation for simulation tools that fulfill the AUTOSAR promise of platform- and vendor-independent automotive software development.
+The AUTOSAR system architecture for the automotive industry is rich in features and large in size, but lacks a comprehensive definition that allows its Software Components and Runtime Environment to be treated as an abstract programming model in its own right. As a result, AUTOSAR components are hard to analyze, test and evaluate without first committing to a particular execution platform and component context. This paper addresses this shortcoming by means of a formalization of the core AUTOSAR specification as a labelled transition system. The resulting semantic rules can be used to clarify the specification, emphasize design tradeoffs and serve as a foundation for tools that fulfill the AUTOSAR promise of platform- and vendor-independent automotive software development.
 \end{abstract}
 
 \section{Introduction}
@@ -46,7 +46,7 @@ Non-determinism and concurrency is emphasized in Section~\ref{sec:NonDet}, toget
 
 The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behavior. Examples of questions that can be firmly resolved on basis of our formalized semantics include:
 \begin{itemize}
-\item {\em How many runnable instances will a sequence of buffered data receptions give rise to?}
+\item {\em How many runnable instances will a sequence of received values give rise to?}
 \item {\em What values may ever be returned when an inter-runnable variable is first read?}
 \item {\em At what times will two timing events coincide, if at all?}
 \end{itemize}
