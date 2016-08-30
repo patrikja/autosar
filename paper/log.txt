@@ -11,7 +11,7 @@
 
 2016-04-30:
 
-  Done: re-translate the semantics to LaTeX: now from ../prolog/semantics.eprover
+  Done: re-translate the semantics to LaTeX: now from ../sem/semantics.eprover
 
 2015-12-16:
 
@@ -50,7 +50,7 @@
 
 2014-11-05: Paper skeleton
 
-The semantics is currently a Prolog file in ../prolog/semantics.pl.
+The semantics is currently a Prolog file in ../sem/semantics.pl.
 The appendix and perhaps also the main paper sections could include
 parts genertaed from that file if we can (with small effort) make a
 "prolog->LaTeX" converter. It might be good to start from this:
