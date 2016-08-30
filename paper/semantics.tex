@@ -56,7 +56,7 @@
 \Pfact{\Tstep{\Toper{\Tvar{A}}{\Tvar{M}}{\Tcalling{\_}}}{\Thear{\Tvar{A}}{\Tret{\Tvar{M}}{\Tvar{V}}}}{\Toper{\Tvar{A}}{\Tplus{\Tvar{M}}{1}}{\Tdone{\Tvar{V}}}}}
 \Pfact{\Tstep{\Toper{\Tvar{A}}{\Tvar{M}}{\Tcalling{0}}}{\Tsay{\Tvar{A}}{\Tret{\Tvar{M}}{\Ttimeout}}}{\Toper{\Tvar{A}}{\Tplus{\Tvar{M}}{1}}{\Tdone{\Ttimeout}}}}
 \Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{T}}{\_}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tret{\_}{\_}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{T}}{\Tpending}{\Tvar{N}}}}{\TasynchronousServerCallReturnsEvent{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{A}}}
-\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tclient{\Tvar{B}}{\Tvar{M}}{\_}}{\Tvar{Xs}}{\Treturn{\_}}}{\Tsay{\Tvar{B}}{\Tskip{\Tvar{M}}}}{\Trinst{\Tvar{A}}{\Tvoid}{\Tvar{Xs}}{\Treturn{\Tvoid}}}}
+\Pfact{\Tstep{\Trinst{\Tvar{A}}{\Tclient{\Tvar{B}}{\Tvar{M}}{\_}}{\Tvar{Xs}}{\Treturn{\Tvar{V}}}}{\Tsay{\Tvar{B}}{\Tskip{\Tvar{M}}}}{\Trinst{\Tvar{A}}{\Tvoid}{\Tvar{Xs}}{\Treturn{\Tvar{V}}}}}
 \Prule{\Tstep{\Toper{\Tvar{A}}{\Tvar{M}}{\Tvar{Srv}}}{\Thear{\Tvar{A}}{\Tskip{\Tvar{N}}}}{\Toper{\Tvar{A}}{\Tvar{M}}{\Tvar{Srv}}}}{\Tnotequal{\Tvar{M}}{\Tvar{N}}}
 \Prule{\Tstep{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}{\Thear{\Tvar{A}}{\Tskip{\_}}}{\Trunnable{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{T}}{\Tvar{Act}}{\Tvar{N}}}}{\TasynchronousServerCallReturnsEvent{\Tr{\Tvar{R}}{\Tvar{I}}}{\Tvar{A}}}
 }

@@ -159,7 +159,7 @@ step( oper(A, M, calling(0)),                       say(A,ret(M,timeout)),      
 step( runnable(r(R,I), T, _, N),                    hear(A,ret(_,_)),                   runnable(r(R,I), T, pending, N)               ) :-
     asynchronousServerCallReturnsEvent(r(R,I),A).
 
-step( rinst(A, client(B,M,_), Xs, return(_)),       say(B,skip(M)),                     rinst(A, void, Xs, return(void))              ).
+step( rinst(A, client(B,M,_), Xs, return(V)),       say(B,skip(M)),                     rinst(A, void, Xs, return(V))                 ).
 step( oper(A, M, Srv),                              hear(A,skip(N)),                    oper(A, M, Srv)                               ) :-
     notequal(M,N).
 step( runnable(r(R,I), T, Act, N),                  hear(A,skip(_)),                    runnable(r(R,I), T, Act, N)                   ) :-
