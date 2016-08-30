@@ -41,7 +41,7 @@ The standard has a rather wide scope and covers many features normally associate
 
 Unfortunately, the AUTOSAR specification is not very rigorous, despite a sheer size of more than 12,500 pages of text and UML diagrams in total. It is also not very abstract, in that it makes frequent references to assumed implementation techniques for the purpose of defining its semantics. In practice, the AUTOSAR standard becomes blurred with the specific behavior of one's chosen platform and development tools. And because the standard is open to interpretation, the interoperability of software components across tools and platforms is often seriously hampered. What is more, a single software component cannot easily be studied and understood in isolation, since its interactive behavior is only indirectly defined in terms of the concrete C-code and OS tasks that realize it and its interaction environment.
 
-In this paper we take a first step towards a remedy to these problems, by contributing a formal specification of a substantial core of the AUTOSAR standard. AUTOSAR itself is summarized in Section~\ref{sec:autosar}. The formalization covers most of the Software Component Template and its accompanying Run-Time Environment (RTE) (Section~\ref{sec:Calc}), and is able to directly express every legal way a system of software components can evolve at run-time on an arbitrarily fast platform (Section~\ref{sec:Sem}). It can thus serve as a basis for both a concrete AUTOSAR implementation on a specific platform (whose supported behaviors must be a subset of those defined by the formal semantics), and a platform-independent AUTOSAR simulator (where behaviors from the legal set can be picked at random). 
+In this paper we take a first step towards a remedy to these problems, by contributing a formal specification of a substantial core of the AUTOSAR standard. AUTOSAR itself is summarized in Section~\ref{sec:autosar}. The formalization covers most of the Software Component Template and its accompanying Run-Time Environment (RTE) (Section~\ref{sec:Calc}), and is able to directly express every legal way a system of software components can evolve at run-time on an arbitrarily fast platform (Section~\ref{sec:Sem}). It can thus serve as a basis for both a concrete AUTOSAR implementation on a specific platform (whose supported behaviors must be a subset of those defined by the formal semantics), and a platform-independent AUTOSAR simulator (where behaviors from the legal set can be picked at random).
 Non-determinism and concurrency is emphasized in Section~\ref{sec:NonDet}, together with an example of an unfortunate consequence of the specified standard. Section~\ref{sec:Amb} identifies some areas where the AUTOSAR documents has been found unclear; here our chosen readings are put in relation to alternative interpretations. Section~\ref{sec:Lim}, finally, gives a detailed account on the scope limitations we have imposed on our work.
 
 The semantics has been formalized with the intent to accurately capture the informal meaning of the AUTOSAR standard, although mistakes and misunderstandings are certainly both possible and plausible. A formal notation is nevertheless a good starting point for any discussion on the resolution of such issues. The semantics is furthermore written to be unambiguous, except where concurrent execution should allow for more than one observed behavior. Examples of questions that can be firmly resolved on basis of our formalized semantics include:
@@ -863,46 +863,49 @@ The formal semantics may also provide a foundation for tools that analyze or tra
 
 \setcounter{equation}{0}
 
+
 \subsection{Parallel composition}
 {
-\renewcommand{\Prule}[2]{#1 \quad \Pif\; #2\\}
+\renewcommand{\Prule}[2]{#1 \quad &\Pif\; #2\\}
 \renewcommand{\Tstep}[3]{#1 \red{#2} #3}
 \renewcommand\Pcomma{\;\text{and}\;}
 
-\begin{eqnarray}  \CombRed  \notag \end{eqnarray}
+\begin{align}  \CombRed  \notag \end{align}
 }
 
 \subsection{Inter-runnable variables}
-\begin{eqnarray}      \InterrunnableVariables  \notag \end{eqnarray}
+\begin{align}      \InterrunnableVariables  \notag \end{align}
 
 \subsection{Exclusive areas}
-\begin{eqnarray}      \ExclusiveAreas          \notag \end{eqnarray}
+\begin{align}      \ExclusiveAreas          \notag \end{align}
 
 \subsection{Unbuffered sending/receiving}
-\begin{eqnarray}      \ReadingWriting          \notag \end{eqnarray}
+\begin{align}      \ReadingWriting          \notag \end{align}
 
 \subsection{Buffered sending/receiving}
-\begin{eqnarray}      \SendingReceiving        \notag \end{eqnarray}
+\begin{align}      \SendingReceiving        \notag \end{align}
 
 \subsection{Calling a server}
 
 \renewcommand\Pcomma{\nonumber \;\text{and}\;}
 
-\begin{eqnarray}      \CallServer              \notag \end{eqnarray}
+\begin{align}      \CallServer              \notag \end{align}
 
-\renewcommand\Pcomma{\nonumber \\&&\text{and}\;\;}
+\renewcommand\Pcomma{\nonumber \\&\text{and}\;\;}
 
 \subsection{Passing back a server result}
-\begin{eqnarray}      \ServerResult            \notag \end{eqnarray}
+\begin{align}      \ServerResult            \notag \end{align}
 
 \subsection{Spawning and terminating}
-\begin{eqnarray}      \SpawnTerminate          \notag \end{eqnarray}
+\begin{align}      \SpawnTerminate          \notag \end{align}
 
 \subsection{Passing time}
-\begin{eqnarray}      \PassingTime             \notag \end{eqnarray}
+\begin{align}      \PassingTime             \notag \end{align}
 
 %\renewcommand{\Prule}[2]{#1 & \Pif \;\; #2\\}
+%**TODO: check page-break
+\newpage
 \subsection{Ignoring broadcasts}
-\begin{eqnarray}      \IgnoreBroadcast         \notag \end{eqnarray}
+\begin{align}      \IgnoreBroadcast         \notag \end{align}
 
 \end{document}

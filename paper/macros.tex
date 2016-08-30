@@ -1,3 +1,5 @@
+\allowdisplaybreaks
+
 \newcommand{\sep}{\hspace{2ex}|\hspace{2ex}}
 
 
@@ -82,7 +84,7 @@
 
 \newcommand{\Treturn}       {\Return}
 
-\newcommand{\Tstep}      [3]{#1 &\red{#2}& #3}
+\newcommand{\Tstep}      [3]{#1 &\red{#2} #3}
 \newcommand{\Tsay}          {\say}
 \newcommand{\Thear}         {\hear}
 \newcommand{\Tdelta}     [1]{\ensuremath{\delta(#1)}}
@@ -107,12 +109,12 @@
 %\newcommand{\Pif}{\ensuremath{\mathbin{:\!\!-}}}
 \newcommand{\Pif}{\text{if}}
 
-\newcommand{\Prule}[2]{#1 \\ & & \Pif \;\; #2 \nonumber\\}
+\newcommand{\Prule}[2]{#1 \\ &  \Pif \;\; #2 \nonumber\\}
 %\newcommand{\Pcomma}{,}
 \newcommand\Pcomma{\;\,\text{and}\;\,}
 %\newcommand{\Pcontline}[1]{\\\multicolumn{3}{l}{\qquad #1}}
 \newcommand{\Pcontline}[1]{\\ #1}
-\newcommand{\PruleLong}[2]{#1 \Pcontline{&&\Pif \;\; #2}\\}
+\newcommand{\PruleLong}[2]{#1 \Pcontline{&\Pif \;\; #2}\\}
 \newcommand{\Pfact}[1]{#1\\}
 \newcommand{\Pnegate}[1]{\neg(#1)}
 
