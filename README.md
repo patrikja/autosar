@@ -9,7 +9,7 @@ A simplified model of programming in autosar
 | ---------- | ------- |
 | ARSim/  | Simulator (written in Haskell) + DSL examples + MATLAB interface |
 | ARXML/     | Translator from AUTOSAR XML to Haskell (in progress)    |
-| prolog/    | Semantics (in Prolog) |
+| sem/       | Semantics (in eprover syntax - similar to Prolog) |
 | tptp/      | FOL syntax for the semantics |
 | paper/     | Research paper draft about the AUTOSAR core calculus    |
 | doc/       | documentation slides etc. |

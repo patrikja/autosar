@@ -1,8 +1,8 @@
-paper.pdf: paper.tex semantics.tex macros.tex
+paper.pdf: paper.tex semantics.tex macros.tex refs.bib
 	latexmk -pdf paper.tex
 
-semantics.tex: ../prolog/semantics.eprover ../prolog/tool/LaTeX.hs
-	make -C ../prolog/tool/
+semantics.tex: ../sem/semantics.eprover ../sem/tool/LaTeX.hs
+	make -C ../sem/tool/
 
 clean:
 	latexmk -C paper.tex
