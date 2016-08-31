@@ -56,7 +56,7 @@ The semantics has been formalized with the intent to accurately capture the info
 \section{AUTOSAR}
 \label{sec:autosar}
 
-An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs) \cite{AR:SWC}. Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each give the signature of a procedure call and the possible errors that may result.
+An AUTOSAR model is primarily a structure of interconnected \textbf{software components} (SWCs) \cite{AR:SWC}. Links between SWCs are called \textbf{connectors}, which attach to \textbf{ports} exposed by the SWCs. A port is either \textbf{required} or \textbf{provided}, and then classified according to what \textbf{interface} it exposes: \textbf{sender-receiver}, \textbf{client-server}, \textbf{trigger} and \textbf{mode-switch} are common interface types. A sender-receiver interface is an aggregation of one or more \textbf{data-elements}, with each element characterized by the type of data it carries and optional further communication specification details. A client-server interface likewise consists of one or more \textbf{operations}, that each gives the signature of a procedure call and the possible errors that may result.
 
 \begin{figure*}
 \includegraphics[page=1,width=\textwidth]{Fig}
@@ -96,7 +96,7 @@ Components do not carry any dynamic state besides the state of their constituent
 \end{array}
 \]
 %
-AUTOSAR elements and operations are actually only unique within the {\em ports} they belong to, so technically we ought to address them by reference to an intended {\em port name} as well, as in $i.p.e$ or $i.p.o$ for some port $p$. However, port names play no role of their own in our study, so we choose to leave them implied by the element and operation names we reference. Moreover, component names \V{I} can also be considered to have a nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can fully ignore this detail here, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite[ch.~3.3.1]{AR:SWC}.
+AUTOSAR elements and operations are actually only unique within the {\em ports} they belong to, so technically we ought to address them by reference to an intended {\em port name} as well, as in $i.p.e$ or $i.p.o$ for some port $p$. However, port names play no role of their own in our study, so we choose to leave them implied by the element and operation names we reference. Moreover, component names \V{I} can also be considered to have a nested internal structure (component \V{I_1} within component \V{I_2} within component \V{I_3}, etc). We can ignore this detail too, though, as the hierarchical layout of components in an AUTOSAR system has no run-time implications \cite[ch.~3.3.1]{AR:SWC}.
 
 The process terms of our calculus are as follows:
 \begin{itemize}
@@ -287,7 +287,7 @@ The semantic transition rules and axioms  are written in full in Appendix~\ref{s
 
 \subsection{Inter-runnable variables}
 
-An inter-runnable variable (irv) represents state that is local to a particular component and accessible by all runnables of that component \cite[ch.~4.3.3.1]{AR:RTE}. Axioms (5) and (7) show the \emph{say} transitions taken by a runnable instance wishing to read and write an irv $s$. In both cases the embedded continuation $k$ is applied to the command result. The corresponding \emph{hear} transitions of an irv appear as rules (6) and (8). Thanks to inference rule (1), a runnable instance and an irv can now engage in a parallel transition, for example expressing the writing of shared data.
+An inter-runnable variable (irv) represents state that is local to a particular component and accessible by all runnables of that component \cite[ch.~4.3.3.1]{AR:RTE}. Axioms (5) and (7) show the \emph{say} transitions taken by a runnable instance wishing to read and write an irv $s$. In both cases the embedded continuation $k$ is applied to the command result. The corresponding \emph{hear} transitions of an irv appear as axioms (6) and (8). Thanks to inference rule (1), a runnable instance and an irv can now engage in a parallel transition, for example expressing the writing of shared data.
 $$
 \begin{array}{c}
   \Tpar {\Trinst {i.r} c \Xs {\TrteIrvWrite s v k}}
