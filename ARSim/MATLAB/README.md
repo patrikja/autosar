@@ -48,7 +48,8 @@ Simulink Coder                                        Version 8.10        (R2016
 ```
 
 Performing code generationg *might* require some extra MATLAB packages. In that
-case it's possible to add packages post-installation.
+case it's possible to add packages post-installation. You can verify what
+packages you have installed by calling `ver` in the MATLAB command window.
 
 ## Setting up MEX
 
@@ -101,4 +102,16 @@ easiest way to achieve this is to copy one of the S-function blocks from either
 of the ACC or ABS models. Mux/demux outputs and block ports will need to be 
 created and connected manually within Simulink (you will be provided with warning 
 messages if you fail).
+
+## Troubleshooting
+
+The error handling in the C code is far from perfect. A particular issue exists
+where pipes are not cleaned up properly if the code catches an error too early
+on. In particular, this will occur if you try to run the model when the
+path parameter of the S-function points to a non-existing executable/otherwise
+bad path. In this case the pipes will linger and subsequent attempts to run
+the simulation will fail because these cannot be created. In such a case you
+will have to manually unlink the pipes after fixing whatever caused the error:
+
+    $ rm /tmp/infifo /tmp/outfifo
 
