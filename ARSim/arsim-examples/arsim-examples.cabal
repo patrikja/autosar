@@ -72,7 +72,7 @@ executable ticket
   build-depends:
     base       >= 4.9 && <4.10,
     arsim      >= 0.3 && <0.4,
-    QuickCheck >= 2.9 && <2.10,
+    QuickCheck >= 2.8 && <2.10,
     random     >= 1.1 && <1.2
   hs-source-dirs:      Examples
 
