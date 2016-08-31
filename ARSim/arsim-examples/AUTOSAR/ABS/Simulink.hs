@@ -21,13 +21,9 @@ instance External Vehicle where
   toExternal = toExternal . valvesOut 
 
 -- | Export wheel ports and accelerometer connection from the ABS system.
-vehicleIO :: AUTOSAR Vehicle
-vehicleIO = do
-  let delta = 1e-3
-      veloT = "core1" :-> 0
-      absT  = "core1" :-> 1
-      bangT = "core1" :-> 2
-  declareTask "core1" (TimingEvent delta)
+vehicleIO :: Time -> [Task] -> AUTOSAR Vehicle
+vehicleIO delta tasks = composition $ do
+  let [veloT, absT, bangT] = tasks
 
   absCtrl  <- absSystem    delta absT  bangT
   veloCtrl <- velocityCtrl delta veloT
@@ -43,8 +39,35 @@ vehicleIO = do
 
   return $ sealBy Vehicle wheelsIn accelIn valvesOut 
 
-main :: IO ()
-main = do
-  simulateUsingExternal True vehicleIO
-  return ()
+
+-- | Entire system assigned to a single task:
+--
+--      ORDER    Runnable       Execution policy
+--      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+--      0        velocityCtrl   Every cycle, 1 ms 
+--      1        mainLoop       (Data reception)
+--      2        bangBang       Every cycle, 1 ms
+--
+--  Sample time set to 1 ms.
+tasks1 :: [Task]
+tasks1 =
+  [ "core1" :-> 0
+  , "core1" :-> 1 
+  , "core1" :-> 2
+  ]
+
+-- | System using the task assignment in 'tasks1'.
+singleTaskGood :: AUTOSAR Vehicle
+singleTaskGood = do
+  let delta = 1e-3
+  declareTask "core1" (TimingEvent delta)
+  vehicleIO delta tasks1
+
+-- | System using the task assignment in 'tasks1', but with an (obviously) bad
+-- triggering event for the task.
+singleTaskBad :: AUTOSAR Vehicle
+singleTaskBad = do
+  let delta = 1e-3
+  declareTask "core1" (TimingEvent (1.5 * delta))
+  vehicleIO delta tasks1
 
