@@ -1,7 +1,7 @@
-module AUTOSAR.NewABS2.Simulink where
+module AUTOSAR.ABS.Simulink where
 
 import AUTOSAR.ARSim
-import AUTOSAR.NewABS2.NewABS2
+import AUTOSAR.ABS.ABS
 import AUTOSAR.Shared.Velocity
 import Control.Monad
 import System.Random

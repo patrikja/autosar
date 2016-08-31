@@ -6,7 +6,7 @@ function setMaskLabel(block_path, label, num, mode, init)
 %   This is called from swrapper.c to set port labels for the mask
 %   surrounding the S-function. For this to work properly the S-function
 %   will need to be connected to MUX and DEMUX blocks. Either of the masks
-%   used in CarModel.slx or ACCModel.slx can be used as templates.
+%   used in ABS_demo.slx or ACC_demo.slx could be used as templates. 
 %
 %   This function overwrites all previous mask initialization commands when
 %   called from swrapper.c.
@@ -19,7 +19,7 @@ function setMaskLabel(block_path, label, num, mode, init)
   % set_param(mask, 'Mask', 'on');
   if strcmp(bdroot, mask)
     fprintf(['[ERROR] setMaskLabel: S-function block %s not properly ', ...
-             'masked.\nPlease refer to CarModel.slx or ACCModel.slx ',  ...
+             'masked.\nPlease refer to ABS_demo.slx or ACC_demo.slx ',  ...
              'for usage examples.\n'], block_path); 
     return
   end

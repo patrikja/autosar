@@ -8,11 +8,11 @@ module AUTOSAR.ACC.Vehicle
   , vehicleIO
   ) where
 
+import AUTOSAR.ABS.ABS
 import AUTOSAR.ACC.ACC
 import AUTOSAR.ACC.Gearbox
 import AUTOSAR.ACC.Revlimit
 import AUTOSAR.ARSim 
-import AUTOSAR.NewABS2.NewABS2
 import AUTOSAR.Shared.Generic
 import AUTOSAR.Shared.Velocity
 

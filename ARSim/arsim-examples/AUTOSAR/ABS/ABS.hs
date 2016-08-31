@@ -27,11 +27,11 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -}
 
-{-# LANGUAGE TypeFamilies       #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE FlexibleInstances #-}
 
-module AUTOSAR.NewABS2.NewABS2
+module AUTOSAR.ABS.ABS
   ( -- * ABS system
     ABS(..)
   , absSystem

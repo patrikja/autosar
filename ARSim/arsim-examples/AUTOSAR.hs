@@ -1,7 +1,6 @@
 module AUTOSAR
-  ( -- * NewABS, NewABS2
-    standaloneNewABS
-  , simulinkNewABS2
+  ( -- * ABS example
+    simulinkABS
     -- * ACC example
   , simulinkACCgood1
   , simulinkACCbad1
@@ -9,22 +8,21 @@ module AUTOSAR
   , simulateUsingExternal, simulateStandalone
   ) where
 
-import qualified AUTOSAR.NewABS.Standalone
-import qualified AUTOSAR.NewABS2.Simulink
+import qualified AUTOSAR.ABS.Simulink
 import qualified AUTOSAR.ACC.Simulink
 import           AUTOSAR.ACC.Vehicle
 import           AUTOSAR.ARSim
 
+
+-- TODO: Good/bad for ABS
+
 -- * ABS examples
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--- | Standalone ABS example. No task mapping.
-standaloneNewABS :: IO ()
-standaloneNewABS = AUTOSAR.NewABS.Standalone.main
-
+-- TODO: Do this like ACC
 -- | Simulink ABS example, one task, good task mapping.
-simulinkNewABS2 :: IO ()
-simulinkNewABS2 = AUTOSAR.NewABS2.Simulink.main
+simulinkABS :: IO ()
+simulinkABS = AUTOSAR.ABS.Simulink.main
 
 -- * ACC examples
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

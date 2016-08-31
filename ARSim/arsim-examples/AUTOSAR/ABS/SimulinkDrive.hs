@@ -1,7 +1,7 @@
-module Main where
+module AUTOSAR.ABS.SimulinkDrive where
 
 import AUTOSAR.ARSim
-import AUTOSAR.NewABS2.NewABS2
+import AUTOSAR.ABS.ABS
 import System.Random
 import Test.QuickCheck
 import Test.QuickCheck.Monadic

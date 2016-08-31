@@ -1,23 +1,25 @@
-# ARSIM MATLAB utils
+# ARSim MATLAB interface + examples
 
-Utilities for connecting Simulink to ARSIM through the pipes interface.
+Utilities for connecting Simulink to ARSim through the pipes interface, plus
+some example models for use with the [arsim-examples](../arsim-examples)
+package.
 
 ## Contents
 
-| File           | Comment                                                     |
-| -------------- | ----------------------------------------------------------- | 
-| ABS_demo.slx   | ABS demo model. Requires [arsim-examples](../arsim-examples)|
-| ABS_dict.sldd  | ABS demo variable dictionary.                               |
-| ACC_demo.slx   | ACC demo model. Requires [arsim-examples](../arsim-examples)|
-| ACC_dict.sldd  | ACC demo variable dictionary.                               | 
-|                |                                                             |
-| debugm.h       | Some debug macros used by [protocol.c](protocol.c)          | 
-| protocol.c     | Transfer protocol for communicating with ARSIM.             |
-| protocol.h     |                                                             |
-| swrapper.c     | S-function for including AUTOSAR components.                |
-|                |                                                             |
-| setMaskLabel.m | Script for setting mask labels, called by the S-function.   |
-
+| File           | Comment                                                      |
+| -------------- | ------------------------------------------------------------ | 
+| ABS_demo.slx   | ABS demo model. Requires [arsim-examples](../arsim-examples).|
+| ABS_dict.sldd  | ABS demo variable dictionary.                                |
+| ACC_demo.slx   | ACC demo model. Requires [arsim-examples](../arsim-examples).|
+| ACC_dict.sldd  | ACC demo variable dictionary.                                | 
+|                |                                                              |
+| debugm.h       | Some debug macros used by [protocol.c](protocol.c).          | 
+| protocol.c     | Transfer protocol for communicating with ARSIM.              |
+| protocol.h     |                                                              |
+| swrapper.c     | S-function for including AUTOSAR components.                 |
+|                |                                                              |
+| setMaskLabel.m | Script for setting mask labels, called by the S-function.    |
+ 
 ## Preliminaries
 
 The code relies on named UNIX pipes (although sockets probably could be used in 

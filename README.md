@@ -7,8 +7,7 @@ A simplified model of programming in autosar
 
 | Directory  | Comment |
 | ---------- | ------- |
-| arsim-examples/ | Package containing DSL examples: ACC, NewABS and NewABS2 + shared SWCs. |
-| NewARSim/  | Simulator (written in Haskell) |
+| ARSim/  | Simulator (written in Haskell) + DSL examples + MATLAB interface |
 | ARXML/     | Translator from AUTOSAR XML to Haskell (in progress)    |
 | prolog/    | Semantics (in Prolog) |
 | tptp/      | FOL syntax for the semantics |

@@ -4,7 +4,7 @@ Some examples written in the AUTOSAR DSL.
 
 ## Installation
 
-The package requires that [arsim](../ARSim) is installed somewhere where 
+The package requires that [arsim](../arsim) is installed somewhere where 
 cabal can find it. Using the `add-source` option to `cabal sandbox` seems to be 
 the easiest way to achieve this:
 

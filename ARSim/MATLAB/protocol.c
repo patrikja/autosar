@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "protocol.h"
+#include "protocol.h" // what
 #include "debugm.h"
 
 char PROTOCOL_MAGIC_NUMBERS[2] = {0, 1};

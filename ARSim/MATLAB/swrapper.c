@@ -2,7 +2,7 @@
  *
  * Oskar Abrahamsson, <aboskar@chalmers.se> 
  *
- * S-function wrapper for ARSIM. Connects to the pipe-based interface of ARSIM
+ * S-function wrapper for ARSim. Connects to the pipe-based interface of ARSim
  * allowing for Simulink to replace external components in the simulated AUTOSAR 
  * system.
  *
@@ -20,6 +20,10 @@
  * ARSim with empty inputs one time before proceeding with regular
  * simulation. This is done in init_simulator() which is called from
  * mdlInitializeSizes.
+ *
+ * NOTE: Most of the transmissions use read/write directly on file descriptors.
+ * The same goes Haskell-side, meaning that we pipes could probably be replaced
+ * by sockets fairly easily.
  *
  */
 #include <fcntl.h>
