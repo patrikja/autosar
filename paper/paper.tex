@@ -872,46 +872,46 @@ Strategic Research.
 
 \subsection{Parallel composition}
 {
-\renewcommand{\Prule}[2]{#1 \quad &\Pif\; #2\\}
+\renewcommand{\Prule}[2]{#1 \quad \Pif\; #2\\}
 \renewcommand{\Tstep}[3]{#1 \red{#2} #3}
 \renewcommand\Pcomma{\;\text{and}\;}
 
-\begin{align}  \CombRed  \notag \end{align}
+\begin{eqnarray}  \CombRed  \notag \end{eqnarray}
 }
 
 \subsection{Inter-runnable variables}
-\begin{align}      \InterrunnableVariables  \notag \end{align}
+\begin{eqnarray}      \InterrunnableVariables  \notag \end{eqnarray}
 
 \subsection{Exclusive areas}
-\begin{align}      \ExclusiveAreas          \notag \end{align}
+\begin{eqnarray}      \ExclusiveAreas          \notag \end{eqnarray}
 
 \subsection{Unbuffered sending/receiving}
-\begin{align}      \ReadingWriting          \notag \end{align}
+\begin{eqnarray}      \ReadingWriting          \notag \end{eqnarray}
 
 \subsection{Buffered sending/receiving}
-\begin{align}      \SendingReceiving        \notag \end{align}
+\begin{eqnarray}      \SendingReceiving        \notag \end{eqnarray}
 
 \subsection{Calling a server}
 
 \renewcommand\Pcomma{\nonumber \;\text{and}\;}
 
-\begin{align}      \CallServer              \notag \end{align}
+\begin{eqnarray}      \CallServer              \notag \end{eqnarray}
 
-\renewcommand\Pcomma{\nonumber \\&\text{and}\;\;}
+\renewcommand\Pcomma{\nonumber \\&&\text{and}\;\;}
 
 \subsection{Passing back a server result}
-\begin{align}      \ServerResult            \notag \end{align}
+\begin{eqnarray}      \ServerResult            \notag \end{eqnarray}
 
 \subsection{Spawning and terminating}
-\begin{align}      \SpawnTerminate          \notag \end{align}
+\begin{eqnarray}      \SpawnTerminate          \notag \end{eqnarray}
 
 \subsection{Passing time}
-\begin{align}      \PassingTime             \notag \end{align}
+\begin{eqnarray}      \PassingTime             \notag \end{eqnarray}
 
 %\renewcommand{\Prule}[2]{#1 & \Pif \;\; #2\\}
 %**TODO: check page-break
 \newpage
 \subsection{Ignoring broadcasts}
-\begin{align}      \IgnoreBroadcast         \notag \end{align}
+\begin{eqnarray}      \IgnoreBroadcast         \notag \end{eqnarray}
 
 \end{document}
