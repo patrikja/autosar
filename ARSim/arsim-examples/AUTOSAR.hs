@@ -1,6 +1,7 @@
 module AUTOSAR
   ( -- * ABS example
-    simulinkABS
+    simulinkABSgood1
+  , simulinkABSbad1
     -- * ACC example
   , simulinkACCgood1
   , simulinkACCbad1
@@ -10,19 +11,20 @@ module AUTOSAR
 
 import qualified AUTOSAR.ABS.Simulink
 import qualified AUTOSAR.ACC.Simulink
+import           AUTOSAR.ABS.Simulink (Vehicle(..))
 import           AUTOSAR.ACC.Vehicle
 import           AUTOSAR.ARSim
-
-
--- TODO: Good/bad for ABS
 
 -- * ABS examples
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--- TODO: Do this like ACC
 -- | Simulink ABS example, one task, good task mapping.
-simulinkABS :: IO ()
-simulinkABS = AUTOSAR.ABS.Simulink.main
+simulinkABSgood1 :: AUTOSAR Vehicle
+simulinkABSgood1 = AUTOSAR.ABS.Simulink.singleTaskGood
+
+-- | Simulink ABS example, one task, bad task mapping.
+simulinkABSbad1 :: AUTOSAR Vehicle
+simulinkABSbad1 = AUTOSAR.ABS.Simulink.singleTaskBad
 
 -- * ACC examples
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
