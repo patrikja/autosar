@@ -713,7 +713,7 @@ which lets each timer wait one full cycle before triggering for the first time. 
 $$
 	\Ttimer {i.r} {t_p} {t_o}
 $$
-for some non-negative $t_o$. One might even want to add the condition $t_o < t_p$, but it must be emphasized that all these initialization options are speculative --- the AUTOSAR Software Component Template must be clarified before a sufficiently abstract model of timed behavior can be obtained.
+for some non-negative $t_o$. One might even want to add the condition $t_o \leq t_p$, but it must be emphasized that all these initialization options are speculative --- the AUTOSAR Software Component Template must be clarified before a sufficiently abstract model of timed behavior can be obtained.
 
 
 \subsection{Interpretation of data reception events}
@@ -852,7 +852,7 @@ The next step forward for this work is to seek involvement of the AUTOSAR commun
 
 Another line of work is to lift more of the scope limitations listed in Section~\ref{sec:Lim}. A formalization of omitted component, port and event types is likely to present very few problems besides an inevitable size increase, which could be mitigated by a compartmentalization of the semantics into independent fragments. More serious work may be required to incorporate the COM layer and the added set of behaviors that follow from component distribution, but the effort would also lead to a significantly better formal coverage of the AUTOSAR specification.
 
-The formal semantics may also provide a foundation for tools that analyze or transform AUTOSAR models. One such example is our AUTOSAR simulator \cite{ARSim}, which interprets AUTOSAR models entirely on basis of the transition system, utilizing truly random scheduling and a maximum progress assumption to select among available transitions at each step. The benefit of this simulator is its ability to dynamically execute AUTOSAR Software Component models as they are, without prior commitment to a particular platform, or translation into a low level representation. A further avenue of exploration concerns the potential of proving properties of AUTOSAR systems on the basis of their semantics. To prepare for this opportunity, we have defined the transition system used in this paper as a Horn clause file readable by common theorem provers, and, in fact, Appendix~\ref{sec:Rules} is automatically produced through a simple formatting translation of this file \cite{AR.eprover}.
+The formal semantics may furthermore provide a foundation for tools that analyze or transform AUTOSAR models. One such example is our AUTOSAR simulator \cite{ARSim}, which interprets AUTOSAR models entirely on basis of the transition system, utilizing truly random scheduling and a maximum progress assumption to select among available transitions at each step. The benefit of this simulator is its ability to dynamically execute AUTOSAR Software Component models as they are, without prior commitment to a particular platform or translation into a low level representation. A further avenue of exploration concerns the potential of proving properties of AUTOSAR systems on the basis of their semantics. To prepare for this opportunity, we have defined the transition system used in this paper as a Horn clause file readable by common theorem provers, and, in fact, Appendix~\ref{sec:Rules} is automatically produced through a simple formatting translation of this file \cite{AR.eprover}.
 
 \section{Acknowledgements}
 
