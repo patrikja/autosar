@@ -77,7 +77,7 @@ Provided that MEX has been set up properly, build the S-function from MATLAB:
 
 Examples are located in the [arsim-examples](../arsim-examples) package. Once
 built, pick either the [ABS](ABS_demo.slx) or [ACC](ACC_demo.slx) example, and
-double-click the S-function block (these will be named "NewABS" or "ACC"). From
+double-click the S-function block (these will be named "ABS" or "ACC"). From
 here you set the *absolute* path to whatever executable you just built.
 (Remember the ' ticks or MATLAB won't know it's a string).
 
