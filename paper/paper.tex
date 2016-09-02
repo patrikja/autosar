@@ -491,7 +491,7 @@ $$
 
 \subsection{Passing time}
 
-In common with most real-time process calculi, the concept of passing time in our calculus is kept separate from the computational work expressed by the say/hear transitions \cite{Baeten00processalgebra}. This has the advantage of freeing the semantics from possessing a particular computation speed, as any finite number of computation steps can be performed before time must advance. On the other hand, it also means that the  limitations of a particular platform cannot be directly studied unless the calculus is complemented with some form of constraint on the work-time relationship. Such an extension is beyond the scope of the current report, though.
+In common with most real-time process calculi, the concept of passing time in our calculus is kept separate from the computational work expressed by the say/hear transitions \cite{Baeten00processalgebra}. This has the advantage of freeing the semantics from possessing a particular computation speed, as any finite number of computation steps can be performed before time must advance. On the other hand, it also means that the  limitations of a particular platform cannot be directly studied unless the calculus is complemented with some form of constraint on the work/time relationship. Such an extension is beyond the scope of the current report, though.
 
 The passage of time is captured as a special transition relation $\red {\Tdelta t}$, whose only effect on the related process terms is to decrement any contained time variables by $t$. For some processes, time cannot advance until a particular work transition has been taken; this corresponds to time events that must be noted (although not necessarily acted upon) at the exact time instance when they occur. Yet other processes can only take time transitions, which simply means that they represent an idle system that currently has no work to do. Mostly, though, work and time transitions are simultaneously available, indicating that the semantics considers the slightly slower and slightly faster behavior alternatives to be equally correct.
 
@@ -678,7 +678,7 @@ where $v$ is the \emph{initValue} of $s$ if it exists, and the error code {\bf n
 
 \subsection{Activation of server runnables}
 
-The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{Operation\-InvokedEvent}s referring to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with conflicting response values as a would one-to-many client-server connection pattern. It is actually not easy to see what could constitute an alternative interpretation here, without introducing a need for some new programming mechanism for selecting among server results.
+The specification restricts client-server connections such that a client may not be connected to multiple servers, for the purpose of avoiding an operation call to be handled by more than one server runnable \cite[ch.~4.2.3]{AR:RTE}. However, this restriction does not explicitly forbid multiple \emph{Operation\-InvokedEvent}s referring to the same client-server operation to trigger separate runnables. Our formulation of client-server communication is based on the assumption that this is just an oversight, as allowing multiple events on a server operation would have the same problem with conflicting response values as would a one-to-many client-server connection pattern. It is actually not easy to see what could constitute an alternative interpretation here, without introducing a need for some new programming mechanism for selecting among server results.
 
 
 \subsection{Interleaving of timing events}
@@ -720,7 +720,7 @@ for some non-negative $t_o$. One might even want to add the condition $t_o \leq 
 
 Activation of runnables due to \emph{DataReceived\-Event}s is faithfully captured in the formal semantics for unqueued as well as queued data elements (c.f.~axioms (17) and (29) with \cite[ch.~7.5.1.6]{AR:SWC}). But for unqueued elements AUTOSAR also provides an invalidation operation, whose net effect is very similar to that of a data write (see axiom (21)). Whether data invalidation should count as a reception event is not clear from the specification; we have chosen not to include it as a conservative conjecture. Revising this choice would not be hard, though: all that is necessary is to add an axiom that mimics (17) but matches on {\sc inv} rather than {\sc wr} labels.
 
-A similar specification ambiguity concerns \emph{DataReceived\-Event}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a receiver must be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
+A similar specification ambiguity concerns \emph{DataReceived\-Event}s in the presence of a full receiver buffer. We have chosen to block these events from activating connected runnables (axiom (30)), although the opposite choice could also be justified on grounds that activation of a receiver might be even more pressing when its buffer is overflowing. Expressing this formally would amount to simply deleting axiom (30) together with the last precondition of axiom (29).
 
 
 \subsection{Exclusive area nesting} \label{sec:ExclNest}
@@ -783,7 +783,7 @@ $$
 		{\Trinst {i.r} c \Teps \Throw}
 \end{array}
 $$
-Because a failed runnable instance now has an explicit representation, we can specify details of how such a process should interact with its environment. We may for example wish to define that a special error code is returned if our runnable is running on behalf of a client, and that any exclusive areas held are automatically exited in the right order (c.f.~axioms (42) and (11)):
+Because a failed runnable instance now has an explicit representation, we can specify details of how such a process should interact with its environment. We may for example wish to define that a special error code is returned if our runnable is a server running on behalf of a client, and that any held exclusive areas are automatically exited in the right order (c.f.~axioms (42) and (11)):
 $$
 \begin{array}{lcll}
 		{\Trinst a {\Tclient b m \_} \Xs \Throw}
@@ -819,12 +819,12 @@ All aspects of the AUTOSAR specification that concern representation and selecti
 \item Measurements and calibration parameters \cite[ch.~2.2]{AR:SWC}.
 \item Variant handling \cite[ch.~2.4]{AR:SWC}.
 \end{itemize}
-These modeling elements only impose restrictions and demands on the values $v$ and continuations $k$ we reference in our semantics, and which we in turn do not constrain in any way.
+These modeling elements only impose restrictions and demands on the values $v$ and continuations $k$ we reference in our semantics, and which we, in our turn, do not constrain or interpret in any way.
 
 
 \subsection{Minor variants}
 
-The only atomic software component type we include on our formalization is the \emph{Application} software component type. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type (\emph{SensorActuator}, \emph{ComplexDeviceDriver}, \emph{Service}, \emph{ServiceProxy}), or trivial in comparison (\emph{NvBlock}, \emph{EcuAbstraction}, \emph{Parameter}) \cite[ch.~3.2.3]{AR:SWC}.
+The only atomic software component type we include in our formalization is the \emph{Application} software component type. Other atomic component types describe dynamic behaviors that are either just minor variants of the formalized component type (\emph{SensorActuator}, \emph{ComplexDeviceDriver}, \emph{Service}, \emph{ServiceProxy}), or trivial in comparison (\emph{NvBlock}, \emph{EcuAbstraction}, \emph{Parameter}) \cite[ch.~3.2.3]{AR:SWC}.
 
 A similar argument justifies our decision to omit port types beyond the sender-receiver and client-server kinds \cite[ch.~4.2]{AR:SWC}, as well as per instance memories \cite[ch.~7.7]{AR:SWC}. A port typed by a \emph{TriggerInterface} \cite[ch.~4.4.7]{AR:SWC} is essentially a sender-receiver port with no data contents. Mode management is arguably a much more complex concept in principle, but since the related AUTOSAR mechanism is limited to communication of integer-valued mode requests and acknowledgements, it can be seen as an instance of sender-receiver communication as well \cite[ch.~4.4.6]{AR:SWC}. Per instance memories essentially duplicate the behavior of inter-runnable variables.
 
