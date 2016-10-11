@@ -1,3 +1,9 @@
+2016-09-13: Possible venues (for next year)
+
+  http://www.aston.ac.uk/eas/about-eas/academic-groups/computer-science/iceccs-2016/
+  http://icfem2016.xyz/
+
+
 2016-08-28: Fininshed one pass through the full paper
 
   Changed to the IEEE class required by the DATE conference.
