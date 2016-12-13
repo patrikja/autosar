@@ -14,6 +14,7 @@ data Vehicle = Vehicle
   , accelIn   :: DataElem Unqueued Double Required 
   , valvesOut :: [ValveP Provided]
   }
+  deriving Show
 
 instance External Vehicle where
   fromExternal vh = relabel "ACCEL" (fromExternal (accelIn vh)) ++
@@ -37,7 +38,7 @@ vehicleIO delta tasks = composition $ do
   
   accelIn <- requiredDelegate [accel veloCtrl]
 
-  return $ sealBy Vehicle wheelsIn accelIn valvesOut 
+  return $ Vehicle wheelsIn accelIn valvesOut
 
 
 -- | Entire system assigned to a single task:

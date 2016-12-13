@@ -45,6 +45,7 @@ module AUTOSAR.ARSim
   , Data
   , mkStdGen
   , StdGen
+  , newTFGen
   ) where
 
 import           Control.Monad.Catch
@@ -76,6 +77,7 @@ import           System.IO
 import           System.IO.Error
 import           System.IO.Unsafe
 import           System.Random
+import           System.Random.TF
 import           System.Posix               hiding (getEnvironment)
 import           System.Process                    ( ProcessHandle
                                                    , createProcess
@@ -86,9 +88,16 @@ import qualified Unsafe.Coerce
 import           Test.QuickCheck            hiding (collect)
 import           Test.QuickCheck.Property          (unProperty)
 import qualified Test.QuickCheck.Property       as QCP
+import           Test.QuickCheck.Gen               (Gen(MkGen))
 import qualified Test.QuickCheck.Text           as QCT
 import qualified Test.QuickCheck.Exception      as QCE
 import qualified Test.QuickCheck.State          as QCS
+import           Test.QuickCheck.Random            (QCGen (QCGen))
+import qualified Test.QuickCheck.Monadic        as QCM
+import           Test.QuickCheck.Monadic           (PropertyM (MkPropertyM)
+                                                   , monadicIO
+                                                   , run
+                                                   , forAllM)
 
 -- The RTE monad -------------------------------------------------------------
 
@@ -154,6 +163,7 @@ data StdRet a               = Ok a
                             deriving Show
 
 newtype DataElement q a r c             = DE Address      -- Async channel of "a" data
+  deriving Show
 type    DataElem q a r                  = DataElement q a r Closed
 
 newtype ClientServerOperation a b r c   = OP Address      -- Sync channel of an "a->b" service
@@ -1496,8 +1506,8 @@ replaySimulation tc m = swap $ evalState m' tc
 -- is pre ++ [x] ++ suf
 type ListZipper a = ([a], a, [a])
 
-shrinkTrace :: AUTOSAR a -> Trace -> [Trace]
-shrinkTrace code tc@(init, tx) = map (\tx' -> fst $ replaySimulation(init, tx') code) $
+shrinkTrace :: AUTOSAR a -> (a, Trace) -> [(a, Trace)]
+shrinkTrace code (x, tc@(init, tx)) = map (\tx' -> (x, fst $ replaySimulation(init, tx') code)) $
   -- Remove a dynamic process and shift all later processes
   [ 
     [ if a == b && j > i then tr { transActive = RInstAddr b (j - 1) } else tr
@@ -1550,15 +1560,44 @@ counterexample' s =
         Right () ->
           return ()
 
-tracePropS :: (Testable p) => (AUTOSAR a -> Gen (a, Trace)) -> AUTOSAR a -> (Trace -> p) -> Property
+tracePropS :: forall a p. (Show a, Testable p) => (AUTOSAR a -> Gen (a, Trace)) -> AUTOSAR a -> (a -> Trace -> p) -> Property
 tracePropS sim code prop = property $ sized $ \n -> do
   let limit = (1+n*10)
-      gen :: Gen Trace
-      gen = fmap (limitTrans limit . snd) $ sim code
-  unProperty $ forAllShrink gen (shrinkTrace code) prop
+      gen :: Gen (a, Trace)
+      gen = do
+        (x, t) <- sim code
+        return (x, limitTrans limit t)
+  unProperty $ forAllShrink gen (shrinkTrace code) (\(x, t) -> prop x t)
 
-traceProp :: (Testable p) => AUTOSAR a -> (Trace -> p) -> Property
+traceProp :: (Show a, Testable p) => AUTOSAR a -> (a -> Trace -> p) -> Property
 traceProp code prop = tracePropS simulationRandG code prop
+
+-- Custom version of QuickCheck.Monadic.Pick, with shrinking
+myPick :: (Monad m, Show a) => PropertyM m a -> (a -> [a]) -> PropertyM m a
+myPick gen shr = do
+  a <- gen
+  MkPropertyM $ \k ->
+    do mp <- k a
+       return (do p <- mp
+                  return (forAllShrink (return a) shr (const p)))
+
+myForAllShrinkM :: (Monad m, Show a) => PropertyM m a -> (a -> [a]) -> (a -> PropertyM m b) -> PropertyM m b
+myForAllShrinkM gen shr k = myPick gen shr >>= k
+
+tfGenGen :: Gen TFGen
+tfGenGen = MkGen $ \(QCGen r) _ -> r
+
+tracePropIOS :: forall a p. (Show a, Testable p) =>
+                (AUTOSAR a -> TFGen -> IO (a, Trace)) -> AUTOSAR a -> (a -> Trace -> p) -> Property
+tracePropIOS sim code prop = property $ sized $ \n -> do
+  let limit = (1+n*10)
+      gen :: TFGen -> IO (a, Trace)
+      gen r = do
+        (x, t) <- sim code r
+        return (x, limitTrans limit t)
+  unProperty $ monadicIO $ do
+    forAllM tfGenGen $ \rng -> do
+      myForAllShrinkM (run $ gen rng) (shrinkTrace code) (\(x, t) -> return $ prop x t)
 
 limitTrans :: Int -> Trace -> Trace
 limitTrans t (a,trs) = (a,take t trs)
@@ -1878,7 +1917,7 @@ vectorToProcs vec prev idx = map toProc $ filter diff es
 
 -- | External simulator state.
 data RandState = RandState
-  { gen     :: StdGen
+  { gen     :: TFGen
   , prevIn  :: SV.Vector CDouble
   , prevOut :: SV.Vector CDouble
   , addrIn  :: Map Int Address
@@ -1886,7 +1925,7 @@ data RandState = RandState
   }
 
 -- | Initial external simulator state. Currently fixed to random scheduling.
-rstate0 :: StdGen -> RandState
+rstate0 :: TFGen -> RandState
 rstate0 g = RandState
   { gen     = g
   , prevIn  = SV.empty
@@ -2073,20 +2112,20 @@ simulateStandalone ts time f sched = f . limitTime time . execSim ts sched
 
 -- | Use this function to create a runnable @main@ for the simulator software
 -- when connecting with external software, i.e. Simulink.
-simulateUsingExternal :: External a => Bool -> AUTOSAR a -> IO (a, Trace)
-simulateUsingExternal useTasks sys =
+simulateUsingExternal :: External a => Bool -> AUTOSAR a -> TFGen -> IO (a, Trace)
+simulateUsingExternal useTasks sys rng =
   do args <- getArgs
      case args of
-      [inFifo, outFifo] -> runWithFIFOs useTasks inFifo outFifo sys
+      [inFifo, outFifo] -> runWithFIFOs useTasks rng inFifo outFifo sys
       _ ->
         do logWrite $ "Wrong number of arguments. Proceeding with default " ++
                       "FIFOs."
-           runWithFIFOs useTasks "/tmp/infifo" "/tmp/outfifo" sys
+           runWithFIFOs useTasks rng "/tmp/infifo" "/tmp/outfifo" sys
 
 -- | Run the simulation with external software (i.e. Simulink) by
 -- starting the external component from Haskell, and clean up afterwards.
-simulateDriveExternal :: External a => FilePath -> AUTOSAR a -> IO (a, Trace)
-simulateDriveExternal ext sys =
+simulateDriveExternal :: External a => Bool -> FilePath -> AUTOSAR a -> TFGen -> IO (a, Trace)
+simulateDriveExternal useTasks ext sys rng =
   do args <- getArgs
      (inFifo, outFifo) <- case args of
        [inFifo, outFifo] -> return (inFifo, outFifo)
@@ -2101,16 +2140,17 @@ simulateDriveExternal ext sys =
          cur_env <- getEnvironment
          let procSpec = (proc ext []) { env = Just $ cur_env ++ [("ARSIM_DRIVER", "")] }
          bracket (createProcess procSpec) (\ (_, _, _, h) -> terminateProcess h) $ \_ -> 
-           runWithFIFOs True inFifo outFifo sys
+           runWithFIFOs useTasks rng inFifo outFifo sys
 
 -- | The external simulation entry-point. Given two file descriptors for
 -- input/output FIFOs we can start the simulation of the AUTOSAR program.
 entrypoint :: External a
            => Bool
+           -> TFGen
            -> AUTOSAR a                      -- ^ AUTOSAR program.
            -> (Fd, Fd)                       -- ^ (Input, Output)
            -> IO (a, Trace)
-entrypoint useTasks system fds =
+entrypoint useTasks rng system fds =
   do -- Fix the system, initialize to get information about AUTOSAR components
      -- so that we can pick up port adresses and all other information we need.
      let (res, _)               = initialize system
@@ -2131,24 +2171,24 @@ entrypoint useTasks system fds =
                    )
 
      -- It's possible to fix this if you'd like.
-     gen <- newStdGen
-     ((res, trace), _) <- runStateT (simulationExt useTasks fds system idx_in idx_out) (rstate0 gen)
+     ((res, trace), _) <- runStateT (simulationExt useTasks fds system idx_in idx_out) (rstate0 rng)
      return (res, trace)
 
 -- | Run simulation of the system using the provided file descriptors as
 -- FIFOs.
 runWithFIFOs :: External a
              => Bool
+             -> TFGen
              -> FilePath
              -> FilePath
              -> AUTOSAR a
              -> IO (a, Trace)
-runWithFIFOs useTasks inFifo outFifo sys =
+runWithFIFOs useTasks rng inFifo outFifo sys =
   do logWrite $ "Input FIFO:  " ++ inFifo
      logWrite $ "Output FIFO: " ++ outFifo
      fdInput  <- openFd inFifo  ReadOnly Nothing defaultFileFlags
      fdOutput <- openFd outFifo WriteOnly Nothing defaultFileFlags
-     entrypoint useTasks sys (fdInput, fdOutput)
+     entrypoint useTasks rng sys (fdInput, fdOutput)
 
 -- Exception handling for 'simulateUsingExternal'.
 exceptionHandler :: IO () -> IO ()

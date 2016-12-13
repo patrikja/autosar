@@ -5,6 +5,7 @@ import AUTOSAR
 -- | Set this flag to @False@ to disable all task assignments.
 main :: IO ()
 main = do
-  simulateUsingExternal True simulinkACCgood1
---   simulateUsingExternal True simulinkACCbad1
+  rng <- newTFGen
+  simulateUsingExternal True rng simulinkACCgood1
+--   simulateUsingExternal True rng simulinkACCbad1
   return ()

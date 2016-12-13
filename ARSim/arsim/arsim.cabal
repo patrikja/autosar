@@ -46,7 +46,8 @@ library
     random      >=1.1  && <1.2,
     syb         >=0.6  && <0.7,
     unix        >=2.7  && <2.8,
-    vector      >=0.11 && <0.12
+    vector      >=0.11 && <0.12,
+    tf-random   >=0.5 && <0.6
 
   default-language:    Haskell2010
 

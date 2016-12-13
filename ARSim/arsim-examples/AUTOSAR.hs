@@ -6,14 +6,18 @@ module AUTOSAR
   , simulinkACCgood1
   , simulinkACCbad1
     -- * Re-export simulation functions
-  , simulateUsingExternal, simulateStandalone
+  , simulateUsingExternal, simulateDriveExternal, simulateStandalone
+  , tracePropIOS
+  , newTFGen
   ) where
 
+import           AUTOSAR.ABS.ABS (ABS)
 import qualified AUTOSAR.ABS.Simulink
 import qualified AUTOSAR.ACC.Simulink
 import           AUTOSAR.ABS.Simulink (Vehicle(..))
 import           AUTOSAR.ACC.Vehicle
 import           AUTOSAR.ARSim
+import           System.Random.TF (newTFGen)
 
 -- * ABS examples
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

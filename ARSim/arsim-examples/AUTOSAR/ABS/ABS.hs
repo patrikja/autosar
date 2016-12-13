@@ -119,6 +119,7 @@ data ValvePort r c = ValvePort
   { relief   :: DataElement Unqueued Valve r c
   , pressure :: DataElement Unqueued Valve r c
   }
+  deriving Show
 
 type ValveP r = ValvePort r Closed
 
